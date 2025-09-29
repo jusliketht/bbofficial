@@ -1,0 +1,17 @@
+
+FORM 16
+Certificate under section 203 of the Income-tax Act, 1961 for tax deducted at source
+
+Employee PAN: ABCDE1234F
+Employer PAN: XYZYZ9876A
+
+Employer Name: Tech Solutions Pvt Ltd
+Financial Year: 2023-2024
+
+Gross Salary: ₹8,50,000
+TDS Deducted: ₹75,000
+Standard Deduction: ₹50,000
+Professional Tax: ₹2,400
+
+Net Salary: ₹7,72,600
+    

@@ -1,0 +1,169 @@
+// =====================================================
+// SERVER ENTRY POINT - HTTP SERVER CONFIGURATION;
+// Enterprise-grade HTTP server setup and startup;
+// =====================================================
+
+// Load environment variables first;
+require('dotenv').config();
+
+const http = require('http');
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
+const enterpriseLogger = require('./utils/logger');
+const app = require('./app');
+
+// =====================================================
+// SERVER CONFIGURATION;
+// =====================================================
+
+const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
+const NODE_ENV = process.env.NODE_ENV || 'development';
+
+// =====================================================
+// SSL CONFIGURATION (FOR PRODUCTION)
+// =====================================================
+
+let server;
+
+if (NODE_ENV === 'production' && process.env.SSL_ENABLED === 'true') {
+  // HTTPS server configuration;
+  const sslOptions = {
+    key: fs.readFileSync(
+      process.env.SSL_KEY_PATH || path.join(__dirname, '../ssl/private.key')
+    ),
+    cert: fs.readFileSync(
+      process.env.SSL_CERT_PATH ||
+        path.join(__dirname, '../ssl/certificate.crt')
+    ),
+    ca: process.env.SSL_CA_PATH
+      ? fs.readFileSync(process.env.SSL_CA_PATH)
+      : undefined,
+  };
+
+  server = https.createServer(sslOptions, app);
+
+  enterpriseLogger.info('HTTPS server configured', {
+    sslEnabled: true,
+    keyPath: process.env.SSL_KEY_PATH,
+    certPath: process.env.SSL_CERT_PATH,
+  });
+} else {
+  // HTTP server configuration;
+  server = http.createServer(app);
+
+  enterpriseLogger.info('HTTP server configured', {
+    sslEnabled: false,
+  });
+}
+
+// =====================================================
+// SERVER EVENT HANDLERS;
+// =====================================================
+
+// Server error handler;
+server.on('error', error => {
+  if (error.syscall !== 'listen') {
+    throw error;
+  }
+
+  const bind = typeof PORT === 'string' ? 'Pipe ' + PORT : 'Port ' + PORT;
+
+  switch (error.code) {
+    case 'EACCES':
+      enterpriseLogger.error(`${bind} requires elevated privileges`);
+      process.exit(1);
+      break;
+    case 'EADDRINUSE':
+      enterpriseLogger.error(`${bind} is already in use`);
+      process.exit(1);
+      break;
+    default:
+      throw error;
+  }
+});
+
+// Server listening handler;
+server.on('listening', () => {
+  const addr = server.address();
+  const bind = typeof addr === 'string' ? 'pipe ' + addr : 'port ' + addr.port;
+
+  enterpriseLogger.info('Server started successfully', {
+    host: HOST,
+    port: PORT,
+    bind: bind,
+    environment: NODE_ENV,
+    ssl: NODE_ENV === 'production' && process.env.SSL_ENABLED === 'true',
+    nodeVersion: process.version,
+    platform: process.platform,
+    pid: process.pid,
+  });
+
+  // Emit ready event;
+  app.emit('ready');
+});
+
+// =====================================================
+// GRACEFUL SHUTDOWN HANDLING;
+// =====================================================
+
+// Graceful shutdown function;
+const gracefulShutdown = signal => {
+  enterpriseLogger.info(`${signal} received, starting graceful shutdown`);
+
+  server.close(err => {
+    if (err) {
+      enterpriseLogger.error('Error during server shutdown', {
+        error: err.message,
+      });
+      process.exit(1);
+    }
+
+    enterpriseLogger.info('Server closed successfully');
+    process.exit(0);
+  });
+
+  // Force close after 30 seconds;
+  setTimeout(() => {
+    enterpriseLogger.error('Forced shutdown after timeout');
+    process.exit(1);
+  }, 30000);
+};
+
+// Signal handlers;
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// =====================================================
+// SERVER STARTUP;
+// =====================================================
+
+// Start the server;
+server.listen(PORT, HOST, () => {
+  enterpriseLogger.info('Server listening', {
+    host: HOST,
+    port: PORT,
+    environment: NODE_ENV,
+  });
+});
+
+// =====================================================
+// HEALTH CHECK ENDPOINT (FOR LOAD BALANCERS)
+// =====================================================
+
+// Simple health check for load balancers;
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    pid: process.pid,
+  });
+});
+
+// =====================================================
+// EXPORT SERVER;
+// =====================================================
+
+module.exports = server;

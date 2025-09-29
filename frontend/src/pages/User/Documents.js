@@ -1,0 +1,461 @@
+// =====================================================
+// MOBILE-FIRST DOCUMENTS PAGE
+// Touch-friendly document management for all devices
+// =====================================================
+
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { 
+  ArrowLeft, 
+  Upload, 
+  Download, 
+  Eye, 
+  Trash2, 
+  FileText, 
+  Image, 
+  File, 
+  Search, 
+  Filter, 
+  Calendar, 
+  User, 
+  MoreVertical,
+  CheckCircle,
+  AlertCircle,
+  Clock,
+  Plus,
+  Folder,
+  FolderOpen,
+  ChevronRight,
+  ChevronDown,
+  Grid,
+  List,
+  SortAsc,
+  SortDesc,
+  Settings
+} from 'lucide-react';
+import api from '../../services/api';
+
+const Documents = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState('all');
+  const [filterCategory, setFilterCategory] = useState('all');
+  const [sortBy, setSortBy] = useState('date');
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [viewMode, setViewMode] = useState('list');
+  const [showFilters, setShowFilters] = useState(false);
+  const [expandedFolders, setExpandedFolders] = useState(new Set());
+
+  // Fetch documents
+  const { data: documentsData, isLoading } = useQuery({
+    queryKey: ['documents', user?.user_id],
+    queryFn: async () => {
+      const response = await api.get('/documents/user-documents');
+      return response.data;
+    },
+    enabled: !!user?.user_id,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  const documents = documentsData?.documents || [];
+
+  // Upload document mutation
+  const uploadDocumentMutation = useMutation({
+    mutationFn: async (formData) => {
+      const response = await api.post('/documents/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['documents', user?.user_id]);
+    }
+  });
+
+  // Delete document mutation
+  const deleteDocumentMutation = useMutation({
+    mutationFn: async (documentId) => {
+      const response = await api.delete(`/documents/${documentId}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['documents', user?.user_id]);
+    }
+  });
+
+  const handleFileUpload = async (event) => {
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
+
+    const formData = new FormData();
+    files.forEach((file, index) => {
+      formData.append(`files`, file);
+    });
+
+    try {
+      await uploadDocumentMutation.mutateAsync(formData);
+      // Show success message
+    } catch (error) {
+      console.error('Error uploading documents:', error);
+    }
+  };
+
+  const handleDeleteDocument = (documentId) => {
+    if (window.confirm('Are you sure you want to delete this document?')) {
+      deleteDocumentMutation.mutate(documentId);
+    }
+  };
+
+  const getFileIcon = (fileType) => {
+    if (fileType.startsWith('image/')) {
+      return <Image className="h-4 w-4 text-blue-600" />;
+    } else if (fileType.includes('pdf')) {
+      return <FileText className="h-4 w-4 text-red-600" />;
+    } else {
+      return <File className="h-4 w-4 text-gray-600" />;
+    }
+  };
+
+  const getFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const filteredDocuments = documents.filter(doc => {
+    const matchesSearch = doc.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         doc.description?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesType = filterType === 'all' || doc.type === filterType;
+    const matchesCategory = filterCategory === 'all' || doc.category === filterCategory;
+    
+    return matchesSearch && matchesType && matchesCategory;
+  });
+
+  const sortedDocuments = [...filteredDocuments].sort((a, b) => {
+    let aValue, bValue;
+    
+    switch (sortBy) {
+      case 'name':
+        aValue = a.name?.toLowerCase() || '';
+        bValue = b.name?.toLowerCase() || '';
+        break;
+      case 'size':
+        aValue = a.size || 0;
+        bValue = b.size || 0;
+        break;
+      case 'date':
+      default:
+        aValue = new Date(a.created_at || 0);
+        bValue = new Date(b.created_at || 0);
+        break;
+    }
+    
+    if (sortOrder === 'asc') {
+      return aValue > bValue ? 1 : -1;
+    } else {
+      return aValue < bValue ? 1 : -1;
+    }
+  });
+
+  // Group documents by category
+  const groupedDocuments = sortedDocuments.reduce((groups, doc) => {
+    const category = doc.category || 'Other';
+    if (!groups[category]) {
+      groups[category] = [];
+    }
+    groups[category].push(doc);
+    return groups;
+  }, {});
+
+  const toggleFolder = (folderName) => {
+    const newExpanded = new Set(expandedFolders);
+    if (newExpanded.has(folderName)) {
+      newExpanded.delete(folderName);
+    } else {
+      newExpanded.add(folderName);
+    }
+    setExpandedFolders(newExpanded);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-burnblack-white flex items-center justify-center p-4">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="loading-spinner"></div>
+          <p className="text-sm text-neutral-600">Loading documents...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-burnblack-white">
+      {/* Mobile Header */}
+      <header className="header-burnblack sticky top-0 z-50">
+        <div className="px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="p-2 rounded-lg hover:bg-neutral-100 active:scale-95 transition-transform"
+              >
+                <ArrowLeft className="h-5 w-5 text-burnblack-black" />
+              </button>
+              <div>
+                <h1 className="text-lg font-semibold text-burnblack-black">Documents</h1>
+                <p className="text-xs text-neutral-500">{sortedDocuments.length} files</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
+                className="p-2 rounded-lg hover:bg-neutral-100 active:scale-95 transition-transform"
+              >
+                {viewMode === 'list' ? <Grid className="h-5 w-5 text-burnblack-black" /> : <List className="h-5 w-5 text-burnblack-black" />}
+              </button>
+              <label className="btn-burnblack p-2 rounded-lg active:scale-95 transition-transform cursor-pointer">
+                <Upload className="h-4 w-4" />
+                <input
+                  type="file"
+                  multiple
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif"
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="px-4 py-4 space-y-4">
+        {/* Search and Filters */}
+        <div className="space-y-3">
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search documents..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          {/* Filter and Sort Controls */}
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex-1 flex items-center justify-center space-x-2 p-3 bg-white rounded-xl border border-gray-200 hover:bg-gray-50 active:scale-95 transition-transform"
+            >
+              <Filter className="h-4 w-4 text-gray-600" />
+              <span className="text-sm font-medium text-gray-900">Filters</span>
+            </button>
+            
+            <button
+              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+              className="flex items-center justify-center space-x-2 p-3 bg-white rounded-xl border border-gray-200 hover:bg-gray-50 active:scale-95 transition-transform"
+            >
+              {sortOrder === 'asc' ? <SortAsc className="h-4 w-4 text-gray-600" /> : <SortDesc className="h-4 w-4 text-gray-600" />}
+            </button>
+          </div>
+
+          {/* Filter Options */}
+          {showFilters && (
+            <div className="bg-white rounded-xl p-4 border border-gray-200 space-y-3">
+              {/* Type Filter */}
+              <div>
+                <label className="text-xs font-medium text-gray-700 mb-2 block">File Type</label>
+                <select
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">All Types</option>
+                  <option value="pdf">PDF</option>
+                  <option value="image">Images</option>
+                  <option value="document">Documents</option>
+                </select>
+              </div>
+
+              {/* Category Filter */}
+              <div>
+                <label className="text-xs font-medium text-gray-700 mb-2 block">Category</label>
+                <select
+                  value={filterCategory}
+                  onChange={(e) => setFilterCategory(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">All Categories</option>
+                  <option value="tax">Tax Documents</option>
+                  <option value="income">Income Proof</option>
+                  <option value="investment">Investment</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              {/* Sort By */}
+              <div>
+                <label className="text-xs font-medium text-gray-700 mb-2 block">Sort By</label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="date">Date</option>
+                  <option value="name">Name</option>
+                  <option value="size">Size</option>
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Documents List */}
+        <div className="space-y-3">
+          {sortedDocuments.length === 0 ? (
+            <div className="dashboard-card-burnblack p-8 text-center">
+              <Folder className="h-12 w-12 text-neutral-400 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-burnblack-black mb-2">No documents</h3>
+              <p className="text-sm text-neutral-500 mb-4">
+                {searchTerm || filterType !== 'all' || filterCategory !== 'all' 
+                  ? 'No documents match your filters' 
+                  : 'Upload your first document to get started'}
+              </p>
+              <label className="btn-burnblack px-4 py-2 rounded-lg active:scale-95 transition-transform cursor-pointer">
+                <Plus className="h-4 w-4 inline mr-2" />
+                Upload Document
+                <input
+                  type="file"
+                  multiple
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif"
+                />
+              </label>
+            </div>
+          ) : (
+            Object.entries(groupedDocuments).map(([category, docs]) => (
+              <div key={category} className="dashboard-card-burnblack">
+                {/* Category Header */}
+                <button
+                  onClick={() => toggleFolder(category)}
+                  className="w-full flex items-center justify-between p-4 hover:bg-gray-50 active:scale-95 transition-transform"
+                >
+                  <div className="flex items-center space-x-3">
+                    {expandedFolders.has(category) ? (
+                      <FolderOpen className="h-5 w-5 text-blue-600" />
+                    ) : (
+                      <Folder className="h-5 w-5 text-gray-600" />
+                    )}
+                    <div className="text-left">
+                      <h3 className="text-sm font-semibold text-gray-900">{category}</h3>
+                      <p className="text-xs text-gray-500">{docs.length} files</p>
+                    </div>
+                  </div>
+                  <ChevronRight className={`h-4 w-4 text-gray-400 transition-transform ${
+                    expandedFolders.has(category) ? 'rotate-90' : ''
+                  }`} />
+                </button>
+
+                {/* Documents in Category */}
+                {expandedFolders.has(category) && (
+                  <div className="px-4 pb-4 space-y-2">
+                    {docs.map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 active:scale-95 transition-transform"
+                      >
+                        <div className="flex items-center space-x-3 flex-1 min-w-0">
+                          {getFileIcon(doc.type)}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{doc.name}</p>
+                            <div className="flex items-center space-x-3 text-xs text-gray-500">
+                              <span>{getFileSize(doc.size)}</span>
+                              <span>•</span>
+                              <span>{new Date(doc.created_at).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center space-x-1">
+                          <button
+                            onClick={() => window.open(doc.url, '_blank')}
+                            className="p-1 rounded hover:bg-blue-100 active:scale-95 transition-transform"
+                            title="View"
+                          >
+                            <Eye className="h-4 w-4 text-blue-600" />
+                          </button>
+                          <button
+                            onClick={() => window.open(doc.url, '_blank')}
+                            className="p-1 rounded hover:bg-green-100 active:scale-95 transition-transform"
+                            title="Download"
+                          >
+                            <Download className="h-4 w-4 text-green-600" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteDocument(doc.id)}
+                            className="p-1 rounded hover:bg-red-100 active:scale-95 transition-transform"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4 text-red-600" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </main>
+
+      {/* Bottom Navigation - Mobile Only */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-2 md:hidden">
+        <div className="flex justify-around">
+          <button 
+            onClick={() => navigate('/dashboard')}
+            className="flex flex-col items-center p-2 text-gray-600 hover:text-blue-600"
+          >
+            <FileText className="h-5 w-5 mb-1" />
+            <span className="text-xs">Dashboard</span>
+          </button>
+          <button className="flex flex-col items-center p-2 text-blue-600">
+            <Folder className="h-5 w-5 mb-1" />
+            <span className="text-xs font-medium">Documents</span>
+          </button>
+          <button 
+            onClick={() => navigate('/profile')}
+            className="flex flex-col items-center p-2 text-gray-600 hover:text-blue-600"
+          >
+            <User className="h-5 w-5 mb-1" />
+            <span className="text-xs">Profile</span>
+          </button>
+          <button 
+            onClick={() => navigate('/settings')}
+            className="flex flex-col items-center p-2 text-gray-600 hover:text-blue-600"
+          >
+            <Settings className="h-5 w-5 mb-1" />
+            <span className="text-xs">Settings</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* Bottom padding for mobile navigation */}
+      <div className="h-20 md:hidden"></div>
+    </div>
+  );
+};
+
+export default Documents;

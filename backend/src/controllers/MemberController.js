@@ -1,0 +1,830 @@
+// =====================================================
+// MEMBER CONTROLLER - CANONICAL FAMILY MEMBER MANAGEMENT
+// Handles CRUD operations for family members
+// =====================================================
+
+const { FamilyMember, User, ITRFiling, Document } = require('../models');
+const { Op } = require('sequelize');
+const { sequelize } = require('../config/database');
+const enterpriseLogger = require('../utils/logger');
+const { AppError } = require('../middleware/errorHandler');
+const auditService = require('../services/AuditService');
+
+class MemberController {
+  constructor() {
+    this.maxMembersPerUser = 5; // Maximum family members per user
+    enterpriseLogger.info('MemberController initialized');
+    
+    // Bind methods to preserve 'this' context
+    if (this.getMembers) this.getMembers = this.getMembers.bind(this);
+    if (this.createMember) this.createMember = this.createMember.bind(this);
+    if (this.updateMember) this.updateMember = this.updateMember.bind(this);
+    if (this.deleteMember) this.deleteMember = this.deleteMember.bind(this);
+  }
+
+  // =====================================================
+  // MEMBER CRUD OPERATIONS
+  // =====================================================
+
+  /**
+   * Get all members for a user
+   * GET /api/members
+   */
+  async getMembers(req, res, next) {
+    try {
+      const userId = req.user.userId;
+      const { status, search } = req.query;
+
+      const whereClause = { userId };
+      if (status) {
+        whereClause.status = status;
+      }
+      if (search) {
+        whereClause[Op.or] = [
+          { fullName: { [Op.iLike]: `%${search}%` } },
+          { pan: { [Op.iLike]: `%${search}%` } },
+          { relationship: { [Op.iLike]: `%${search}%` } }
+        ];
+      }
+
+      const members = await FamilyMember.findAll({
+        where: whereClause,
+        order: [['createdAt', 'DESC']],
+        attributes: [
+          'id', 'userId', 'fullName', 'pan', 'relationship', 'dateOfBirth',
+          'gender', 'status', 'createdAt', 'updatedAt', 'metadata'
+        ]
+      });
+
+      const memberList = members.map(member => ({
+        id: member.id,
+        userId: member.userId,
+        fullName: member.fullName,
+        pan: member.pan,
+        relationship: member.relationship,
+        relationshipLabel: this.getRelationshipLabel(member.relationship),
+        dateOfBirth: member.dateOfBirth,
+        gender: member.gender,
+        genderLabel: this.getGenderLabel(member.gender),
+        status: member.status,
+        statusLabel: this.getStatusLabel(member.status),
+        statusColor: this.getStatusColor(member.status),
+        createdAt: member.createdAt,
+        updatedAt: member.updatedAt,
+        metadata: member.metadata
+      }));
+
+      enterpriseLogger.info('Members retrieved for user', { userId, count: memberList.length });
+
+      res.status(200).json({
+        success: true,
+        message: 'Members retrieved successfully',
+        data: {
+          members: memberList,
+          count: memberList.length,
+          maxMembers: this.maxMembersPerUser
+        }
+      });
+
+    } catch (error) {
+      enterpriseLogger.error('Failed to get members', {
+        error: error.message,
+        userId: req.user?.userId
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Get a specific member by ID
+   * GET /api/members/:id
+   */
+  async getMemberById(req, res, next) {
+    try {
+      const userId = req.user.userId;
+      const { id } = req.params;
+
+      const member = await Member.findOne({
+        where: { id, userId },
+        attributes: [
+          'id', 'userId', 'fullName', 'pan', 'relationship', 'dateOfBirth',
+          'gender', 'status', 'createdAt', 'updatedAt', 'metadata'
+        ]
+      });
+
+      if (!member) {
+        throw new AppError('Member not found', 404);
+      }
+
+      // Get member statistics
+      const [filingStats, documentStats] = await Promise.all([
+        this.getMemberFilingStats(member.id),
+        this.getMemberDocumentStats(member.id)
+      ]);
+
+      const memberDetails = {
+        id: member.id,
+        userId: member.userId,
+        fullName: member.fullName,
+        pan: member.pan,
+        relationship: member.relationship,
+        relationshipLabel: this.getRelationshipLabel(member.relationship),
+        dateOfBirth: member.dateOfBirth,
+        gender: member.gender,
+        genderLabel: this.getGenderLabel(member.gender),
+        status: member.status,
+        statusLabel: this.getStatusLabel(member.status),
+        statusColor: this.getStatusColor(member.status),
+        createdAt: member.createdAt,
+        updatedAt: member.updatedAt,
+        metadata: member.metadata,
+        statistics: {
+          filings: filingStats,
+          documents: documentStats
+        }
+      };
+
+      enterpriseLogger.info('Member details retrieved', { userId, memberId: id });
+
+      res.status(200).json({
+        success: true,
+        message: 'Member details retrieved successfully',
+        data: memberDetails
+      });
+
+    } catch (error) {
+      enterpriseLogger.error('Failed to get member details', {
+        error: error.message,
+        userId: req.user?.userId,
+        memberId: req.params.id
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Create a new member
+   * POST /api/members
+   */
+  async createMember(req, res, next) {
+    try {
+      const userId = req.user.userId;
+      const {
+        fullName,
+        pan,
+        relationship,
+        dateOfBirth,
+        gender,
+        metadata = {}
+      } = req.body;
+
+      // Validate required fields
+      if (!fullName || !pan || !relationship) {
+        throw new AppError('fullName, pan, and relationship are required', 400);
+      }
+
+      // Check member limit
+      const existingMembersCount = await Member.count({ where: { userId } });
+      if (existingMembersCount >= this.maxMembersPerUser) {
+        throw new AppError(`Maximum ${this.maxMembersPerUser} members allowed per user`, 400);
+      }
+
+      // Check if PAN already exists for this user
+      const existingMember = await Member.findOne({
+        where: { userId, pan }
+      });
+      if (existingMember) {
+        throw new AppError('Member with this PAN already exists', 400);
+      }
+
+      // Validate PAN format (basic validation)
+      if (!this.isValidPAN(pan)) {
+        throw new AppError('Invalid PAN format', 400);
+      }
+
+      // Validate relationship
+      const validRelationships = ['spouse', 'child', 'parent', 'sibling', 'other'];
+      if (!validRelationships.includes(relationship)) {
+        throw new AppError(`Invalid relationship. Must be one of: ${validRelationships.join(', ')}`, 400);
+      }
+
+      // Create member
+      const member = await Member.create({
+        userId,
+        fullName,
+        pan: pan.toUpperCase(),
+        relationship,
+        dateOfBirth,
+        gender,
+        status: 'active',
+        metadata
+      });
+
+      // Log audit event
+      await auditService.logDataAccess(
+        userId,
+        'create',
+        'member',
+        member.id,
+        {
+          memberName: member.fullName,
+          pan: member.pan,
+          relationship: member.relationship
+        },
+        req.ip
+      );
+
+      enterpriseLogger.info('Member created successfully', {
+        userId,
+        memberId: member.id,
+        memberName: member.fullName,
+        pan: member.pan
+      });
+
+      res.status(201).json({
+        success: true,
+        message: 'Member created successfully',
+        data: {
+          member: {
+            id: member.id,
+            userId: member.userId,
+            fullName: member.fullName,
+            pan: member.pan,
+            relationship: member.relationship,
+            relationshipLabel: this.getRelationshipLabel(member.relationship),
+            dateOfBirth: member.dateOfBirth,
+            gender: member.gender,
+            genderLabel: this.getGenderLabel(member.gender),
+            status: member.status,
+            statusLabel: this.getStatusLabel(member.status),
+            createdAt: member.createdAt,
+            metadata: member.metadata
+          }
+        }
+      });
+
+    } catch (error) {
+      enterpriseLogger.error('Failed to create member', {
+        error: error.message,
+        userId: req.user?.userId
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Update a member
+   * PUT /api/members/:id
+   */
+  async updateMember(req, res, next) {
+    try {
+      const userId = req.user.userId;
+      const { id } = req.params;
+      const {
+        fullName,
+        pan,
+        relationship,
+        dateOfBirth,
+        gender,
+        status,
+        metadata
+      } = req.body;
+
+      const member = await Member.findOne({
+        where: { id, userId }
+      });
+
+      if (!member) {
+        throw new AppError('Member not found', 404);
+      }
+
+      const updateData = {};
+      const oldValues = {};
+
+      if (fullName !== undefined) {
+        oldValues.fullName = member.fullName;
+        updateData.fullName = fullName;
+      }
+      if (pan !== undefined) {
+        if (!this.isValidPAN(pan)) {
+          throw new AppError('Invalid PAN format', 400);
+        }
+        oldValues.pan = member.pan;
+        updateData.pan = pan.toUpperCase();
+      }
+      if (relationship !== undefined) {
+        const validRelationships = ['spouse', 'child', 'parent', 'sibling', 'other'];
+        if (!validRelationships.includes(relationship)) {
+          throw new AppError(`Invalid relationship. Must be one of: ${validRelationships.join(', ')}`, 400);
+        }
+        oldValues.relationship = member.relationship;
+        updateData.relationship = relationship;
+      }
+      if (dateOfBirth !== undefined) {
+        oldValues.dateOfBirth = member.dateOfBirth;
+        updateData.dateOfBirth = dateOfBirth;
+      }
+      if (gender !== undefined) {
+        oldValues.gender = member.gender;
+        updateData.gender = gender;
+      }
+      if (status !== undefined) {
+        const validStatuses = ['active', 'inactive'];
+        if (!validStatuses.includes(status)) {
+          throw new AppError(`Invalid status. Must be one of: ${validStatuses.join(', ')}`, 400);
+        }
+        oldValues.status = member.status;
+        updateData.status = status;
+      }
+      if (metadata !== undefined) {
+        updateData.metadata = { ...member.metadata, ...metadata };
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        throw new AppError('No fields provided for update', 400);
+      }
+
+      await member.update(updateData);
+
+      // Log audit event
+      await auditService.logDataAccess(
+        userId,
+        'update',
+        'member',
+        member.id,
+        {
+          memberName: member.fullName,
+          updatedFields: Object.keys(updateData),
+          oldValues,
+          newValues: updateData
+        },
+        req.ip
+      );
+
+      enterpriseLogger.info('Member updated successfully', {
+        userId,
+        memberId: member.id,
+        updatedFields: Object.keys(updateData)
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'Member updated successfully',
+        data: {
+          member: {
+            id: member.id,
+            userId: member.userId,
+            fullName: member.fullName,
+            pan: member.pan,
+            relationship: member.relationship,
+            relationshipLabel: this.getRelationshipLabel(member.relationship),
+            dateOfBirth: member.dateOfBirth,
+            gender: member.gender,
+            genderLabel: this.getGenderLabel(member.gender),
+            status: member.status,
+            statusLabel: this.getStatusLabel(member.status),
+            updatedAt: member.updatedAt,
+            metadata: member.metadata
+          }
+        }
+      });
+
+    } catch (error) {
+      enterpriseLogger.error('Failed to update member', {
+        error: error.message,
+        userId: req.user?.userId,
+        memberId: req.params.id
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Delete a member
+   * DELETE /api/members/:id
+   */
+  async deleteMember(req, res, next) {
+    try {
+      const userId = req.user.userId;
+      const { id } = req.params;
+
+      const member = await Member.findOne({
+        where: { id, userId }
+      });
+
+      if (!member) {
+        throw new AppError('Member not found', 404);
+      }
+
+      // Check if member has any active filings
+      const activeFilings = await ITRFiling.count({
+        where: { userId, memberId: member.id, status: { [Op.in]: ['draft', 'submitted'] } }
+      });
+
+      if (activeFilings > 0) {
+        throw new AppError('Cannot delete member with active filings. Please complete or cancel the filings first.', 400);
+      }
+
+      // Soft delete the member
+      await member.destroy();
+
+      // Log audit event
+      await auditService.logDataAccess(
+        userId,
+        'delete',
+        'member',
+        member.id,
+        {
+          memberName: member.fullName,
+          pan: member.pan,
+          relationship: member.relationship
+        },
+        req.ip
+      );
+
+      enterpriseLogger.info('Member deleted successfully', {
+        userId,
+        memberId: member.id,
+        memberName: member.fullName
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'Member deleted successfully'
+      });
+
+    } catch (error) {
+      enterpriseLogger.error('Failed to delete member', {
+        error: error.message,
+        userId: req.user?.userId,
+        memberId: req.params.id
+      });
+      next(error);
+    }
+  }
+
+  // =====================================================
+  // MEMBER FILING MANAGEMENT
+  // =====================================================
+
+  /**
+   * Get member's filings
+   * GET /api/members/:id/filings
+   */
+  async getMemberFilings(req, res, next) {
+    try {
+      const userId = req.user.userId;
+      const { id: memberId } = req.params;
+      const { status, itrType, page = 1, limit = 20 } = req.query;
+
+      // Verify member belongs to user
+      const member = await Member.findOne({
+        where: { id: memberId, userId }
+      });
+
+      if (!member) {
+        throw new AppError('Member not found', 404);
+      }
+
+      const offset = (page - 1) * limit;
+      const whereClause = { userId, memberId };
+
+      if (status) {
+        whereClause.status = status;
+      }
+      if (itrType) {
+        whereClause.itrType = itrType;
+      }
+
+      const { count, rows: filings } = await ITRFiling.findAndCountAll({
+        where: whereClause,
+        order: [['createdAt', 'DESC']],
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        attributes: [
+          'id', 'itrType', 'assessmentYear', 'status', 'taxLiability',
+          'submittedAt', 'acknowledgedAt', 'createdAt', 'updatedAt'
+        ]
+      });
+
+      const filingList = filings.map(filing => ({
+        id: filing.id,
+        itrType: filing.itrType,
+        assessmentYear: filing.assessmentYear,
+        status: filing.status,
+        statusLabel: this.getFilingStatusLabel(filing.status),
+        statusColor: this.getFilingStatusColor(filing.status),
+        taxLiability: filing.taxLiability,
+        submittedAt: filing.submittedAt,
+        acknowledgedAt: filing.acknowledgedAt,
+        createdAt: filing.createdAt,
+        updatedAt: filing.updatedAt
+      }));
+
+      enterpriseLogger.info('Member filings retrieved', {
+        userId,
+        memberId,
+        count: filingList.length
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'Member filings retrieved successfully',
+        data: {
+          filings: filingList,
+          pagination: {
+            currentPage: parseInt(page),
+            totalPages: Math.ceil(count / limit),
+            totalItems: count,
+            itemsPerPage: parseInt(limit)
+          }
+        }
+      });
+
+    } catch (error) {
+      enterpriseLogger.error('Failed to get member filings', {
+        error: error.message,
+        userId: req.user?.userId,
+        memberId: req.params.id
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Get member's documents
+   * GET /api/members/:id/documents
+   */
+  async getMemberDocuments(req, res, next) {
+    try {
+      const userId = req.user.userId;
+      const { id: memberId } = req.params;
+      const { category, status, page = 1, limit = 20 } = req.query;
+
+      // Verify member belongs to user
+      const member = await Member.findOne({
+        where: { id: memberId, userId }
+      });
+
+      if (!member) {
+        throw new AppError('Member not found', 404);
+      }
+
+      const offset = (page - 1) * limit;
+      const whereClause = { userId, memberId, deletedAt: null };
+
+      if (category) {
+        whereClause.category = category;
+      }
+      if (status) {
+        whereClause.status = status;
+      }
+
+      const { count, rows: documents } = await Document.findAndCountAll({
+        where: whereClause,
+        order: [['createdAt', 'DESC']],
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        attributes: [
+          'id', 'category', 'filename', 'originalFilename', 'mimeType',
+          'sizeBytes', 'status', 'verified', 'createdAt', 'updatedAt'
+        ]
+      });
+
+      const documentList = documents.map(doc => ({
+        id: doc.id,
+        category: doc.category,
+        categoryLabel: this.getDocumentCategoryLabel(doc.category),
+        filename: doc.filename,
+        originalFilename: doc.originalFilename,
+        mimeType: doc.mimeType,
+        sizeBytes: doc.sizeBytes,
+        sizeFormatted: this.formatFileSize(doc.sizeBytes),
+        status: doc.status,
+        statusLabel: this.getDocumentStatusLabel(doc.status),
+        statusColor: this.getDocumentStatusColor(doc.status),
+        verified: doc.verified,
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt
+      }));
+
+      enterpriseLogger.info('Member documents retrieved', {
+        userId,
+        memberId,
+        count: documentList.length
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'Member documents retrieved successfully',
+        data: {
+          documents: documentList,
+          pagination: {
+            currentPage: parseInt(page),
+            totalPages: Math.ceil(count / limit),
+            totalItems: count,
+            itemsPerPage: parseInt(limit)
+          }
+        }
+      });
+
+    } catch (error) {
+      enterpriseLogger.error('Failed to get member documents', {
+        error: error.message,
+        userId: req.user?.userId,
+        memberId: req.params.id
+      });
+      next(error);
+    }
+  }
+
+  // =====================================================
+  // HELPER METHODS
+  // =====================================================
+
+  /**
+   * Get member filing statistics
+   */
+  async getMemberFilingStats(memberId) {
+    const stats = await ITRFiling.findAll({
+      where: { memberId },
+      attributes: [
+        [sequelize.fn('COUNT', sequelize.col('id')), 'totalFilings'],
+        [sequelize.fn('COUNT', sequelize.literal('CASE WHEN status = \'draft\' THEN 1 END')), 'draftFilings'],
+        [sequelize.fn('COUNT', sequelize.literal('CASE WHEN status = \'submitted\' THEN 1 END')), 'submittedFilings'],
+        [sequelize.fn('COUNT', sequelize.literal('CASE WHEN status = \'acknowledged\' THEN 1 END')), 'acknowledgedFilings']
+      ],
+      raw: true
+    });
+
+    return {
+      totalFilings: parseInt(stats[0]?.totalFilings) || 0,
+      draftFilings: parseInt(stats[0]?.draftFilings) || 0,
+      submittedFilings: parseInt(stats[0]?.submittedFilings) || 0,
+      acknowledgedFilings: parseInt(stats[0]?.acknowledgedFilings) || 0
+    };
+  }
+
+  /**
+   * Get member document statistics
+   */
+  async getMemberDocumentStats(memberId) {
+    const stats = await Document.findAll({
+      where: { memberId, deletedAt: null },
+      attributes: [
+        [sequelize.fn('COUNT', sequelize.col('id')), 'totalDocuments'],
+        [sequelize.fn('SUM', sequelize.col('size_bytes')), 'totalStorage'],
+        [sequelize.fn('COUNT', sequelize.literal('CASE WHEN status = \'VERIFIED\' THEN 1 END')), 'verifiedDocuments']
+      ],
+      raw: true
+    });
+
+    return {
+      totalDocuments: parseInt(stats[0]?.totalDocuments) || 0,
+      totalStorage: parseInt(stats[0]?.totalStorage) || 0,
+      verifiedDocuments: parseInt(stats[0]?.verifiedDocuments) || 0
+    };
+  }
+
+  /**
+   * Validate PAN format
+   */
+  isValidPAN(pan) {
+    const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+    return panRegex.test(pan.toUpperCase());
+  }
+
+  /**
+   * Format file size
+   */
+  formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  /**
+   * Get relationship label
+   */
+  getRelationshipLabel(relationship) {
+    const labels = {
+      'spouse': 'Spouse',
+      'child': 'Child',
+      'parent': 'Parent',
+      'sibling': 'Sibling',
+      'other': 'Other'
+    };
+    return labels[relationship] || 'Unknown';
+  }
+
+  /**
+   * Get gender label
+   */
+  getGenderLabel(gender) {
+    const labels = {
+      'male': 'Male',
+      'female': 'Female',
+      'other': 'Other'
+    };
+    return labels[gender] || 'Unknown';
+  }
+
+  /**
+   * Get status label
+   */
+  getStatusLabel(status) {
+    const labels = {
+      'active': 'Active',
+      'inactive': 'Inactive'
+    };
+    return labels[status] || 'Unknown';
+  }
+
+  /**
+   * Get status color
+   */
+  getStatusColor(status) {
+    const colors = {
+      'active': 'green',
+      'inactive': 'gray'
+    };
+    return colors[status] || 'gray';
+  }
+
+  /**
+   * Get filing status label
+   */
+  getFilingStatusLabel(status) {
+    const labels = {
+      'draft': 'Draft',
+      'submitted': 'Submitted',
+      'acknowledged': 'Acknowledged',
+      'processed': 'Processed',
+      'rejected': 'Rejected'
+    };
+    return labels[status] || 'Unknown';
+  }
+
+  /**
+   * Get filing status color
+   */
+  getFilingStatusColor(status) {
+    const colors = {
+      'draft': 'yellow',
+      'submitted': 'blue',
+      'acknowledged': 'green',
+      'processed': 'green',
+      'rejected': 'red'
+    };
+    return colors[status] || 'gray';
+  }
+
+  /**
+   * Get document category label
+   */
+  getDocumentCategoryLabel(category) {
+    const labels = {
+      'FORM_16': 'Form 16',
+      'BANK_STATEMENT': 'Bank Statement',
+      'INVESTMENT_PROOF': 'Investment Proof',
+      'RENT_RECEIPT': 'Rent Receipt',
+      'OTHER': 'Other',
+      'AADHAAR': 'Aadhaar',
+      'PAN': 'PAN',
+      'SALARY_SLIP': 'Salary Slip'
+    };
+    return labels[category] || 'Unknown';
+  }
+
+  /**
+   * Get document status label
+   */
+  getDocumentStatusLabel(status) {
+    const labels = {
+      'UPLOADED': 'Uploaded',
+      'SCANNING': 'Scanning',
+      'VERIFIED': 'Verified',
+      'FAILED': 'Failed',
+      'DELETED': 'Deleted'
+    };
+    return labels[status] || 'Unknown';
+  }
+
+  /**
+   * Get document status color
+   */
+  getDocumentStatusColor(status) {
+    const colors = {
+      'UPLOADED': 'blue',
+      'SCANNING': 'yellow',
+      'VERIFIED': 'green',
+      'FAILED': 'red',
+      'DELETED': 'gray'
+    };
+    return colors[status] || 'gray';
+  }
+}
+
+module.exports = new MemberController();

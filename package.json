@@ -1,0 +1,157 @@
+{
+  "name": "burnblack-itr-filing-platform",
+  "version": "2.0.0",
+  "description": "Enterprise-grade Indian Income Tax Return (ITR) filing platform with comprehensive tax computation, document management, and multi-role support.",
+  "main": "start.js",
+  "scripts": {
+    "start": "node start.js",
+    "start:all": "node start.js",
+    "start:backend": "cd backend && npm run dev",
+    "start:frontend": "cd frontend && npm start",
+    "dev": "node start.js",
+    "build": "npm run build:frontend && npm run build:backend",
+    "build:frontend": "cd frontend && npm run build",
+    "build:backend": "cd backend && npm run build",
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "cd backend && npm test",
+    "test:frontend": "cd frontend && npm test",
+    "test:integration": "jest --testPathPattern=integration",
+    "test:e2e": "playwright test",
+    "test:watch": "npm run test:backend -- --watch",
+    "lint": "npm run lint:backend && npm run lint:frontend",
+    "lint:backend": "cd backend && npx eslint \"src/**/*.js\" --max-warnings 0",
+    "lint:frontend": "cd frontend && npx eslint \"src/**/*.{js,jsx}\" --max-warnings 0",
+    "lint:fix": "npm run lint:backend -- --fix && npm run lint:frontend -- --fix",
+    "lint:check": "npm run lint:backend && npm run lint:frontend",
+    "syntax:check": "find backend/src frontend/src -name \"*.js\" -o -name \"*.jsx\" | xargs -I {} node -c {}",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,md}\"",
+    "db:migrate": "cd backend && npm run db:migrate",
+    "db:seed": "cd backend && npm run db:seed",
+    "db:reset": "cd backend && npm run db:reset",
+    "db:status": "cd backend && npm run db:status",
+    "clean": "npm run clean:node_modules && npm run clean:build",
+    "clean:node_modules": "rm -rf node_modules backend/node_modules frontend/node_modules",
+    "clean:build": "rm -rf frontend/build backend/dist",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "health": "curl -f http://localhost:3002/health || exit 1",
+    "health:db": "curl -f http://localhost:3002/health/db || exit 1",
+    "logs": "tail -f logs/combined.log",
+    "logs:error": "tail -f logs/error.log",
+    "restart": "npm run stop && npm run start",
+    "stop": "pkill -f 'node start.js' || pkill -f 'npm run dev' || true",
+    "setup": "npm run install:all && npm run db:migrate && npm run db:seed",
+    "setup:dev": "npm run setup && npm run start",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "docker:restart": "docker-compose restart",
+    "deploy:staging": "npm run build && npm run test && echo 'Deploy to staging'",
+    "deploy:production": "npm run build && npm run test && echo 'Deploy to production'",
+    "backup:db": "cd backend && npm run backup:db",
+    "restore:db": "cd backend && npm run restore:db",
+    "docs:serve": "cd docs && python -m http.server 8080",
+    "docs:build": "echo 'Building documentation...'",
+    "security:audit": "npm audit && cd backend && npm audit && cd ../frontend && npm audit",
+    "security:fix": "npm audit fix && cd backend && npm audit fix && cd ../frontend && npm audit fix",
+    "performance:test": "cd backend && npm run performance:test",
+    "performance:profile": "cd backend && npm run performance:profile",
+    "monitor": "npm run health && npm run logs",
+    "status": "echo 'Checking service status...' && npm run health && echo 'All services are running!'"
+  },
+  "keywords": [
+    "itr",
+    "tax-filing",
+    "income-tax",
+    "india",
+    "enterprise",
+    "nodejs",
+    "react",
+    "postgresql",
+    "jwt",
+    "authentication",
+    "tax-computation",
+    "document-management",
+    "multi-role",
+    "audit-trail",
+    "security"
+  ],
+  "author": "Burnblack ITR Filing Platform Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/burnblack/itr-filing-platform.git"
+  },
+  "bugs": {
+    "url": "https://github.com/burnblack/itr-filing-platform/issues"
+  },
+  "homepage": "https://github.com/burnblack/itr-filing-platform#readme",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
+    "husky": "^8.0.3",
+    "jest": "^29.0.0",
+    "lint-staged": "^15.5.2",
+    "playwright": "^1.40.0",
+    "prettier": "^3.6.2"
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged",
+      "pre-push": "npm test"
+    }
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/tests/**/*.test.js",
+      "**/tests/**/*.spec.js"
+    ],
+    "collectCoverageFrom": [
+      "backend/src/**/*.js",
+      "frontend/src/**/*.{js,jsx}",
+      "!**/node_modules/**",
+      "!**/build/**",
+      "!**/dist/**"
+    ],
+    "coverageDirectory": "coverage",
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html"
+    ]
+  },
+  "prettier": {
+    "semi": true,
+    "trailingComma": "es5",
+    "singleQuote": true,
+    "printWidth": 80,
+    "tabWidth": 2,
+    "useTabs": false
+  },
+  "config": {
+    "backend_port": 3002,
+    "frontend_port": 3000,
+    "database_name": "burnblack_itr",
+    "redis_port": 6379
+  },
+  "dependencies": {
+    "framer-motion": "^12.23.16",
+    "styled-components": "^6.1.19"
+  }
+}

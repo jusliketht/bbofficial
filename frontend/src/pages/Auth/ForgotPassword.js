@@ -9,19 +9,24 @@ import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { Mail, ArrowLeft, CheckCircle } from 'lucide-react';
-import { apiClient } from '../../services/authService';
+import authService from '../../services/authService';
 import toast from 'react-hot-toast';
-import { 
+import {
   EnterpriseCard,
   EnterpriseButton,
   EnterpriseBadge,
   EnterpriseStatCard,
-  EnterpriseInput
+  EnterpriseInput,
 } from '../../components/DesignSystem/EnterpriseComponents';
 
-const schema = yup.object({
-  email: yup.string().email('Invalid email address').required('Email is required'),
-}).required();
+const schema = yup
+  .object({
+    email: yup
+      .string()
+      .email('Invalid email address')
+      .required('Email is required'),
+  })
+  .required();
 
 const ForgotPassword = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -97,12 +102,16 @@ const ForgotPassword = () => {
             Forgot your password?
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Enter your email address and we'll send you a link to reset your password.
+            Enter your email address and we'll send you a link to reset your
+            password.
           </p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="email"
+              className="block text-sm font-medium text-gray-700"
+            >
               Email address
             </label>
             <div className="mt-1 relative">
@@ -121,7 +130,9 @@ const ForgotPassword = () => {
               />
             </div>
             {errors.email && (
-              <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+              <p className="mt-1 text-sm text-red-600">
+                {errors.email.message}
+              </p>
             )}
           </div>
 

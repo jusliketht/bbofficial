@@ -41,15 +41,15 @@ class ApiClient {
       },
       async (error) => {
         const originalRequest = error.config;
-        
+
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true;
-          
+
           try {
             // Try to refresh token
             const authService = (await import('./authService')).default;
             await authService.refreshToken();
-            
+
             // Retry original request
             return this.client(originalRequest);
           } catch (refreshError) {
@@ -59,7 +59,9 @@ class ApiClient {
             toast.error('Session expired. Please login again.');
           }
         } else if (error.response?.status === 403) {
-          toast.error('Access denied. You do not have permission to perform this action.');
+          toast.error(
+            'Access denied. You do not have permission to perform this action.'
+          );
         } else if (error.response?.status >= 500) {
           toast.error('Server error. Please try again later.');
         } else if (error.response?.data?.message) {
@@ -157,3 +159,4 @@ class ApiClient {
 const apiClient = new ApiClient();
 
 export default apiClient;
+export { apiClient };

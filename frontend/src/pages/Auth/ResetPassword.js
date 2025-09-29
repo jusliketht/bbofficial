@@ -9,26 +9,32 @@ import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { Lock, ArrowLeft, CheckCircle, Eye, EyeOff } from 'lucide-react';
-import { apiClient } from '../../services/authService';
+import authService from '../../services/authService';
 import toast from 'react-hot-toast';
-import { 
+import {
   EnterpriseCard,
   EnterpriseButton,
   EnterpriseBadge,
   EnterpriseStatCard,
-  EnterpriseInput
+  EnterpriseInput,
 } from '../../components/DesignSystem/EnterpriseComponents';
 
-const schema = yup.object({
-  newPassword: yup.string()
-    .min(8, 'Password must be at least 8 characters')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, 
-      'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character')
-    .required('New password is required'),
-  confirmPassword: yup.string()
-    .oneOf([yup.ref('newPassword'), null], 'Passwords must match')
-    .required('Confirm password is required'),
-}).required();
+const schema = yup
+  .object({
+    newPassword: yup
+      .string()
+      .min(8, 'Password must be at least 8 characters')
+      .matches(
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
+        'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'
+      )
+      .required('New password is required'),
+    confirmPassword: yup
+      .string()
+      .oneOf([yup.ref('newPassword'), null], 'Passwords must match')
+      .required('Confirm password is required'),
+  })
+  .required();
 
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
@@ -153,7 +159,8 @@ const ResetPassword = () => {
               Password Reset Successful
             </h2>
             <p className="mt-2 text-center text-sm text-gray-600">
-              Your password has been reset successfully. You can now log in with your new password.
+              Your password has been reset successfully. You can now log in with
+              your new password.
             </p>
           </div>
           <div className="text-center">
@@ -186,7 +193,10 @@ const ResetPassword = () => {
         <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
           <div className="space-y-4">
             <div>
-              <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="newPassword"
+                className="block text-sm font-medium text-gray-700"
+              >
                 New Password
               </label>
               <div className="mt-1 relative">
@@ -216,12 +226,17 @@ const ResetPassword = () => {
                 </button>
               </div>
               {errors.newPassword && (
-                <p className="mt-1 text-sm text-red-600">{errors.newPassword.message}</p>
+                <p className="mt-1 text-sm text-red-600">
+                  {errors.newPassword.message}
+                </p>
               )}
             </div>
 
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+              <label
+                htmlFor="confirmPassword"
+                className="block text-sm font-medium text-gray-700"
+              >
                 Confirm New Password
               </label>
               <div className="mt-1 relative">
@@ -251,7 +266,9 @@ const ResetPassword = () => {
                 </button>
               </div>
               {errors.confirmPassword && (
-                <p className="mt-1 text-sm text-red-600">{errors.confirmPassword.message}</p>
+                <p className="mt-1 text-sm text-red-600">
+                  {errors.confirmPassword.message}
+                </p>
               )}
             </div>
           </div>

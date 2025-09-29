@@ -16,36 +16,36 @@ class EmailService {
     try {
       // For development, use a test account or mock
       if (process.env.NODE_ENV === 'development') {
-        this.transporter = nodemailer.createTransporter({
+        this.transporter = nodemailer.createTransport({
           host: 'smtp.ethereal.email',
           port: 587,
           secure: false,
           auth: {
             user: process.env.ETHEREAL_USER || 'ethereal.user@ethereal.email',
-            pass: process.env.ETHEREAL_PASS || 'ethereal.pass'
-          }
+            pass: process.env.ETHEREAL_PASS || 'ethereal.pass',
+          },
         });
       } else {
         // Production email service (AWS SES, SendGrid, etc.)
-        this.transporter = nodemailer.createTransporter({
+        this.transporter = nodemailer.createTransport({
           host: process.env.SMTP_HOST || 'smtp.gmail.com',
           port: process.env.SMTP_PORT || 587,
           secure: process.env.SMTP_SECURE === 'true',
           auth: {
             user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS
-          }
+            pass: process.env.SMTP_PASS,
+          },
         });
       }
 
       enterpriseLogger.info('Email service initialized', {
         environment: process.env.NODE_ENV,
-        hasTransporter: !!this.transporter
+        hasTransporter: !!this.transporter,
       });
     } catch (error) {
       enterpriseLogger.error('Failed to initialize email service', {
         error: error.message,
-        stack: error.stack
+        stack: error.stack,
       });
     }
   }
@@ -61,26 +61,26 @@ class EmailService {
         to,
         subject,
         html,
-        text
+        text,
       };
 
       const result = await this.transporter.sendMail(mailOptions);
-      
+
       enterpriseLogger.info('Email sent successfully', {
         to,
         subject,
-        messageId: result.messageId
+        messageId: result.messageId,
       });
 
       return {
         success: true,
-        messageId: result.messageId
+        messageId: result.messageId,
       };
     } catch (error) {
       enterpriseLogger.error('Failed to send email', {
         error: error.message,
         to,
-        subject
+        subject,
       });
       throw error;
     }
@@ -153,7 +153,7 @@ class EmailService {
       to: email,
       subject,
       html,
-      text
+      text,
     });
   }
 
@@ -222,7 +222,7 @@ class EmailService {
       to: email,
       subject,
       html,
-      text
+      text,
     });
   }
 
@@ -293,7 +293,7 @@ class EmailService {
       to: email,
       subject,
       html,
-      text
+      text,
     });
   }
 
@@ -367,7 +367,7 @@ class EmailService {
       to: email,
       subject,
       html,
-      text
+      text,
     });
   }
 
@@ -378,7 +378,7 @@ class EmailService {
         to: 'test@example.com',
         subject: 'Test Email',
         html: '<h1>Test Email</h1><p>This is a test email from BurnBlack ITR Platform.</p>',
-        text: 'Test Email - This is a test email from BurnBlack ITR Platform.'
+        text: 'Test Email - This is a test email from BurnBlack ITR Platform.',
       });
 
       enterpriseLogger.info('Test email sent successfully', result);

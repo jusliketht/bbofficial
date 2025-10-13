@@ -28,7 +28,14 @@ import {
   ChevronDown,
   ChevronRight,
   Search,
-  Filter
+  Filter,
+  Bot,
+  Palette,
+  Keyboard,
+  Type,
+  Play,
+  Crown,
+  ArrowUpRight
 } from 'lucide-react';
 
 const CompactSidebar = ({ children }) => {
@@ -122,6 +129,7 @@ const CompactSidebar = ({ children }) => {
       ],
       'ca_firm_admin': [
         { name: 'Dashboard', href: '/dashboard', icon: Home },
+        { name: 'CA Bot', href: '/ca-bot', icon: Bot, badge: 'NEW' },
         { name: 'File ITR', href: '/itr/start', icon: FileText, badge: 'HOT' },
         { name: 'History', href: '/filing-history', icon: ClipboardList },
         { name: 'Members', href: '/add-members', icon: Users },
@@ -133,6 +141,7 @@ const CompactSidebar = ({ children }) => {
       ],
       'CA': [
         { name: 'Dashboard', href: '/dashboard', icon: Home },
+        { name: 'CA Bot', href: '/ca-bot', icon: Bot, badge: 'NEW' },
         { name: 'File ITR', href: '/itr/start', icon: FileText, badge: 'HOT' },
         { name: 'History', href: '/filing-history', icon: ClipboardList },
         { name: 'Members', href: '/add-members', icon: Users },
@@ -143,12 +152,33 @@ const CompactSidebar = ({ children }) => {
       ],
       'user': [
         { name: 'Dashboard', href: '/dashboard', icon: Home },
+        { name: 'CA Bot', href: '/ca-bot', icon: Bot, badge: 'NEW' },
         { name: 'File ITR', href: '/itr/start', icon: FileText, badge: 'HOT' },
         { name: 'History', href: '/filing-history', icon: ClipboardList },
         { name: 'Members', href: '/add-members', icon: Users },
         { name: 'Profile', href: '/financial-profile', icon: User },
         { name: 'Tickets', href: '/service-tickets', icon: MessageSquare },
-        { name: 'Settings', href: '/settings', icon: Settings }
+        { name: 'Settings', href: '/settings', icon: Settings },
+        { name: 'Upgrade to Professional', href: '/upgrade', icon: Crown, badge: 'PRO', className: 'text-purple-600 hover:text-purple-700 border-l-2 border-purple-200 bg-purple-50' },
+        { 
+          name: 'Design System', 
+          icon: Palette,
+          section: 'design',
+          items: [
+            { name: 'Style Guide', href: '/style-guide', icon: Palette },
+            { name: 'Keyboard Test', href: '/keyboard-test', icon: Keyboard },
+            { name: 'Content Review', href: '/content-review', icon: Type }
+          ]
+        },
+        { 
+          name: 'Testing', 
+          icon: Play,
+          section: 'testing',
+          items: [
+            { name: 'Test Runner', href: '/test-runner', icon: Play },
+            { name: 'Test Report', href: '/test-report', icon: FileText }
+          ]
+        }
       ]
     };
     
@@ -277,8 +307,8 @@ const CompactSidebar = ({ children }) => {
             {navigation.map((item) => renderNavItem(item))}
           </nav>
 
-          {/* Mobile footer */}
-          <div className="border-t border-neutral-200 p-4">
+          {/* Mobile footer - with bottom padding for mobile nav */}
+          <div className="border-t border-neutral-200 p-4 pb-20 lg:pb-4">
             <button
               onClick={handleLogout}
               className="flex w-full items-center px-3 py-2.5 text-sm font-medium text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 rounded-lg transition-colors"
@@ -372,7 +402,7 @@ const CompactSidebar = ({ children }) => {
         </div>
 
         {/* Page content */}
-        <main className="flex-1">
+        <main className="flex-1 pb-20 lg:pb-0">
           {children}
         </main>
       </div>

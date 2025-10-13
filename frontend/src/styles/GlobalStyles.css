@@ -1,8 +1,38 @@
-/* Global Styles - Mobile First Design */
+/* Global Styles - Mobile First Design with Enhanced Touch Targets */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+}
+
+/* Enhanced Touch Targets for Mobile (Material Design 3) */
+button, 
+input[type="button"], 
+input[type="submit"], 
+input[type="reset"],
+a.button,
+.touch-target {
+  min-height: 48px;
+  min-width: 48px;
+  touch-action: manipulation;
+}
+
+/* Improved focus states for accessibility */
+button:focus,
+input:focus,
+textarea:focus,
+select:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Smooth transitions for all interactive elements */
+button,
+input,
+textarea,
+select,
+a {
+  transition: all 0.2s ease-in-out;
 }
 
 html {

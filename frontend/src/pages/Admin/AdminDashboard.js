@@ -1,640 +1,493 @@
 // =====================================================
-// ADMIN DASHBOARD COMPONENT
+// ADMIN DASHBOARD - PLATFORM CONTROL CENTER
+// Comprehensive administrative interface for platform management
 // =====================================================
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import Card from '../../components/common/Card';
-import Button from '../../components/common/Button';
-import StatusBadge from '../../components/common/StatusBadge';
-import Modal from '../../components/common/Modal';
-import { enterpriseLogger } from '../../utils/logger';
-import { useAuth } from '../../contexts/AuthContext';
+import { motion } from 'framer-motion';
+import { Card, CardHeader, CardTitle, CardContent, Typography } from '../../components/DesignSystem/DesignSystem';
+import { PageTransition, FadeInUp, StaggerContainer, StaggerItem } from '../../components/DesignSystem/Animations';
+import { 
+  Users, 
+  FileText, 
+  MessageSquare, 
+  DollarSign, 
+  TrendingUp, 
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  Activity,
+  Shield,
+  Settings,
+  BarChart3
+} from 'lucide-react';
 
-const AdminDashboard = ({ className = '' }) => {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('overview');
-  const [users, setUsers] = useState([]);
-  const [systemStats, setSystemStats] = useState(null);
-  const [recentActivity, setRecentActivity] = useState([]);
+const AdminDashboard = () => {
+  const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [showUserModal, setShowUserModal] = useState(false);
-  const [showStatusModal, setShowStatusModal] = useState(false);
-  const [showRoleModal, setShowRoleModal] = useState(false);
-  const [filters, setFilters] = useState({
-    role: '',
-    status: '',
-    search: '',
-    page: 1,
-    limit: 20
-  });
+  const [selectedTimeRange, setSelectedTimeRange] = useState('7d');
 
-  // Role-based access control
+  // Mock dashboard data
   useEffect(() => {
-    if (user) {
-      const allowedRoles = ['super_admin', 'platform_admin', 'ca_firm_admin', 'ca'];
-      if (!allowedRoles.includes(user.role)) {
-        enterpriseLogger.warn('Unauthorized access to admin dashboard', {
-          userId: user.id,
-          userRole: user.role,
-          attemptedPath: window.location.pathname
-        });
-        navigate('/dashboard');
-        return;
-      }
-    }
-  }, [user, navigate]);
-
-  useEffect(() => {
-    loadSystemStats();
-    loadRecentActivity();
-    loadUsers();
-  }, [filters]);
-
-  const loadSystemStats = async () => {
-    try {
-      const response = await fetch('/api/admin/stats', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to load system stats');
-      }
-
-      const data = await response.json();
-      setSystemStats(data.data);
-
-    } catch (error) {
-      enterpriseLogger.error('Failed to load system stats', { error: error.message });
-    }
-  };
-
-  const loadRecentActivity = async () => {
-    try {
-      const response = await fetch('/api/admin/activity', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to load recent activity');
-      }
-
-      const data = await response.json();
-      setRecentActivity(data.data.activities);
-
-    } catch (error) {
-      enterpriseLogger.error('Failed to load recent activity', { error: error.message });
-    }
-  };
-
-  const loadUsers = async () => {
-    try {
+    const fetchDashboardData = async () => {
       setLoading(true);
       
-      const params = new URLSearchParams();
-      Object.keys(filters).forEach(key => {
-        if (filters[key]) {
-          params.append(key, filters[key]);
-        }
-      });
-
-      const response = await fetch(`/api/admin/users?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to load users');
-      }
-
-      const data = await response.json();
-      setUsers(data.data.users);
-
-    } catch (error) {
-      enterpriseLogger.error('Failed to load users', { error: error.message });
-    } finally {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      const mockData = {
+        metrics: {
+          newUsers: {
+            today: 45,
+            last7Days: 312,
+            growth: 12.5
+          },
+          itrFilings: {
+            initiated: 189,
+            completed: 156,
+            completionRate: 82.5
+          },
+          serviceTickets: {
+            open: 23,
+            resolved: 89,
+            avgResolutionTime: '4.2 hours'
+          },
+          revenue: {
+            today: 125000,
+            last7Days: 875000,
+            growth: 8.3
+          }
+        },
+        recentActivity: [
+          {
+            id: 1,
+            type: 'user_signup',
+            message: 'New user registered: john.doe@example.com',
+            timestamp: new Date(Date.now() - 1000 * 60 * 15),
+            status: 'success'
+          },
+          {
+            id: 2,
+            type: 'itr_filing',
+            message: 'ITR filing completed for PAN: ABCDE1234F',
+            timestamp: new Date(Date.now() - 1000 * 60 * 30),
+            status: 'success'
+          },
+          {
+            id: 3,
+            type: 'support_ticket',
+            message: 'New support ticket created: #ST-2024-001',
+            timestamp: new Date(Date.now() - 1000 * 60 * 45),
+            status: 'warning'
+          },
+          {
+            id: 4,
+            type: 'payment',
+            message: 'Payment received: ₹2,500 from user@example.com',
+            timestamp: new Date(Date.now() - 1000 * 60 * 60),
+            status: 'success'
+          }
+        ],
+        systemHealth: {
+          status: 'healthy',
+          uptime: '99.9%',
+          responseTime: '245ms',
+          activeUsers: 1247,
+          serverLoad: 65
+        },
+        topPerformers: [
+          {
+            name: 'CA Firm Alpha',
+            filings: 45,
+            revenue: 112500,
+            rating: 4.8
+          },
+          {
+            name: 'CA Firm Beta',
+            filings: 38,
+            revenue: 95000,
+            rating: 4.6
+          },
+          {
+            name: 'CA Firm Gamma',
+            filings: 32,
+            revenue: 80000,
+            rating: 4.7
+          }
+        ]
+      };
+      
+      setDashboardData(mockData);
       setLoading(false);
+    };
+
+    fetchDashboardData();
+  }, [selectedTimeRange]);
+
+  const getActivityIcon = (type) => {
+    switch (type) {
+      case 'user_signup': return <Users className="w-4 h-4" />;
+      case 'itr_filing': return <FileText className="w-4 h-4" />;
+      case 'support_ticket': return <MessageSquare className="w-4 h-4" />;
+      case 'payment': return <DollarSign className="w-4 h-4" />;
+      default: return <Activity className="w-4 h-4" />;
     }
   };
 
-  const handleUserClick = async (user) => {
-    try {
-      const response = await fetch(`/api/admin/users/${user.id}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to load user details');
-      }
-
-      const data = await response.json();
-      setSelectedUser(data.data);
-      setShowUserModal(true);
-
-    } catch (error) {
-      enterpriseLogger.error('Failed to load user details', { error: error.message });
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'success': return 'text-success-600 bg-success-100';
+      case 'warning': return 'text-warning-600 bg-warning-100';
+      case 'error': return 'text-error-600 bg-error-100';
+      default: return 'text-neutral-600 bg-neutral-100';
     }
   };
 
-  const handleStatusUpdate = async (userId, newStatus, reason) => {
-    try {
-      const response = await fetch(`/api/admin/users/${userId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ status: newStatus, reason })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update user status');
-      }
-
-      // Reload users
-      await loadUsers();
-      setShowStatusModal(false);
-
-      enterpriseLogger.info('User status updated', { userId, newStatus, reason });
-
-    } catch (error) {
-      enterpriseLogger.error('Failed to update user status', { error: error.message });
-    }
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0
+    }).format(amount);
   };
 
-  const handleRoleUpdate = async (userId, newRole, reason) => {
-    try {
-      const response = await fetch(`/api/admin/users/${userId}/role`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ role: newRole, reason })
-      });
+  const formatTimeAgo = (timestamp) => {
+    const now = new Date();
+    const diff = now - timestamp;
+    const minutes = Math.floor(diff / (1000 * 60));
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
-      if (!response.ok) {
-        throw new Error('Failed to update user role');
-      }
-
-      // Reload users
-      await loadUsers();
-      setShowRoleModal(false);
-
-      enterpriseLogger.info('User role updated', { userId, newRole, reason });
-
-    } catch (error) {
-      enterpriseLogger.error('Failed to update user role', { error: error.message });
-    }
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    return `${days}d ago`;
   };
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-IN', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  if (loading && !systemStats) {
+  if (loading) {
     return (
-      <div className={`admin-dashboard ${className}`}>
-        <Card className="loading-state">
-          <div className="loading-spinner">
-            <div className="spinner"></div>
+      <PageTransition className="min-h-screen bg-neutral-50 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <Typography.H1 className="mb-4">Loading Dashboard...</Typography.H1>
+            <Typography.Body>Please wait while we load your admin dashboard.</Typography.Body>
           </div>
-          <p>Loading admin dashboard...</p>
-        </Card>
-      </div>
+        </div>
+      </PageTransition>
     );
   }
 
   return (
-    <div className={`admin-dashboard ${className}`}>
-      {/* Header */}
-      <Card className="dashboard-header">
-        <div className="header-content">
-          <h1>Admin Dashboard</h1>
-          <p>Manage users, monitor system, and oversee operations</p>
+    <PageTransition className="min-h-screen bg-neutral-50 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <Typography.H1 className="mb-2">Admin Dashboard</Typography.H1>
+            <Typography.Body className="text-neutral-600">
+              Platform overview and management control center
+            </Typography.Body>
+          </div>
+          <div className="flex items-center space-x-4">
+            <select
+              value={selectedTimeRange}
+              onChange={(e) => setSelectedTimeRange(e.target.value)}
+              className="px-3 py-2 border border-neutral-300 rounded-lg text-sm"
+            >
+              <option value="1d">Last 24 Hours</option>
+              <option value="7d">Last 7 Days</option>
+              <option value="30d">Last 30 Days</option>
+              <option value="90d">Last 90 Days</option>
+            </select>
+            <button className="px-4 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors">
+              Export Report
+            </button>
+          </div>
         </div>
-      </Card>
 
-      {/* Tabs */}
-      <Card className="tabs-card">
-        <div className="tabs">
-          <Button
-            variant={activeTab === 'overview' ? 'primary' : 'outline'}
-            onClick={() => setActiveTab('overview')}
-            className="tab-button"
-          >
-            📊 Overview
-          </Button>
-          <Button
-            variant={activeTab === 'users' ? 'primary' : 'outline'}
-            onClick={() => setActiveTab('users')}
-            className="tab-button"
-          >
-            👥 Users ({users.length})
-          </Button>
-          <Button
-            variant={activeTab === 'activity' ? 'primary' : 'outline'}
-            onClick={() => setActiveTab('activity')}
-            className="tab-button"
-          >
-            📈 Activity
-          </Button>
-        </div>
-      </Card>
-
-      {/* Overview Tab */}
-      {activeTab === 'overview' && systemStats && (
-        <div className="overview-tab">
-          {/* System Stats */}
-          <Card className="stats-grid">
-            <div className="stat-card">
-              <div className="stat-icon">👥</div>
-              <div className="stat-content">
-                <h3>{systemStats.users.totalUsers}</h3>
-                <p>Total Users</p>
-                <div className="stat-breakdown">
-                  <span className="breakdown-item">Active: {systemStats.users.activeUsers}</span>
-                  <span className="breakdown-item">CA: {systemStats.users.caUsers}</span>
+        {/* Key Metrics */}
+        <StaggerContainer className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <StaggerItem>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Typography.Small className="text-neutral-600 mb-1">
+                      New Users
+                    </Typography.Small>
+                    <Typography.H3 className="text-2xl font-bold text-neutral-900">
+                      {dashboardData.metrics.newUsers.today}
+                    </Typography.H3>
+                    <Typography.Small className="text-success-600">
+                      +{dashboardData.metrics.newUsers.growth}% from last week
+                    </Typography.Small>
+                  </div>
+                  <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center">
+                    <Users className="w-6 h-6 text-primary-600" />
+                  </div>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
+          </StaggerItem>
 
-            <div className="stat-card">
-              <div className="stat-icon">📄</div>
-              <div className="stat-content">
-                <h3>{systemStats.filings.totalFilings}</h3>
-                <p>Total Filings</p>
-                <div className="stat-breakdown">
-                  <span className="breakdown-item">Draft: {systemStats.filings.draftFilings}</span>
-                  <span className="breakdown-item">Submitted: {systemStats.filings.submittedFilings}</span>
+          <StaggerItem>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Typography.Small className="text-neutral-600 mb-1">
+                      ITR Filings
+                    </Typography.Small>
+                    <Typography.H3 className="text-2xl font-bold text-neutral-900">
+                      {dashboardData.metrics.itrFilings.completed}
+                    </Typography.H3>
+                    <Typography.Small className="text-success-600">
+                      {dashboardData.metrics.itrFilings.completionRate}% completion rate
+                    </Typography.Small>
+                  </div>
+                  <div className="w-12 h-12 bg-success-100 rounded-lg flex items-center justify-center">
+                    <FileText className="w-6 h-6 text-success-600" />
+                  </div>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
+          </StaggerItem>
 
-            <div className="stat-card">
-              <div className="stat-icon">🎫</div>
-              <div className="stat-content">
-                <h3>{systemStats.tickets.totalTickets}</h3>
-                <p>Service Tickets</p>
-                <div className="stat-breakdown">
-                  <span className="breakdown-item">Open: {systemStats.tickets.openTickets}</span>
-                  <span className="breakdown-item">Resolved: {systemStats.tickets.resolvedTickets}</span>
+          <StaggerItem>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Typography.Small className="text-neutral-600 mb-1">
+                      Open Tickets
+                    </Typography.Small>
+                    <Typography.H3 className="text-2xl font-bold text-neutral-900">
+                      {dashboardData.metrics.serviceTickets.open}
+                    </Typography.H3>
+                    <Typography.Small className="text-neutral-600">
+                      Avg resolution: {dashboardData.metrics.serviceTickets.avgResolutionTime}
+                    </Typography.Small>
+                  </div>
+                  <div className="w-12 h-12 bg-warning-100 rounded-lg flex items-center justify-center">
+                    <MessageSquare className="w-6 h-6 text-warning-600" />
+                  </div>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
+          </StaggerItem>
 
-            <div className="stat-card">
-              <div className="stat-icon">📁</div>
-              <div className="stat-content">
-                <h3>{systemStats.documents.totalDocuments}</h3>
-                <p>Documents</p>
-                <div className="stat-breakdown">
-                  <span className="breakdown-item">Verified: {systemStats.documents.verifiedDocuments}</span>
-                  <span className="breakdown-item">Storage: {formatFileSize(systemStats.documents.totalStorage)}</span>
+          <StaggerItem>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Typography.Small className="text-neutral-600 mb-1">
+                      Revenue
+                    </Typography.Small>
+                    <Typography.H3 className="text-2xl font-bold text-neutral-900">
+                      {formatCurrency(dashboardData.metrics.revenue.today)}
+                    </Typography.H3>
+                    <Typography.Small className="text-success-600">
+                      +{dashboardData.metrics.revenue.growth}% from last week
+                    </Typography.Small>
+                  </div>
+                  <div className="w-12 h-12 bg-secondary-100 rounded-lg flex items-center justify-center">
+                    <DollarSign className="w-6 h-6 text-secondary-600" />
+                  </div>
                 </div>
-              </div>
-            </div>
-          </Card>
+              </CardContent>
+            </Card>
+          </StaggerItem>
+        </StaggerContainer>
 
-          {/* System Info */}
-          <Card className="system-info">
-            <h3>System Information</h3>
-            <div className="system-details">
-              <div className="system-item">
-                <span className="label">Uptime:</span>
-                <span className="value">{Math.floor(systemStats.system.uptime / 3600)} hours</span>
-              </div>
-              <div className="system-item">
-                <span className="label">Memory Usage:</span>
-                <span className="value">{formatFileSize(systemStats.system.memoryUsage.heapUsed)}</span>
-              </div>
-              <div className="system-item">
-                <span className="label">Node Version:</span>
-                <span className="value">{systemStats.system.nodeVersion}</span>
-              </div>
-              <div className="system-item">
-                <span className="label">Platform:</span>
-                <span className="value">{systemStats.system.platform}</span>
-              </div>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* Users Tab */}
-      {activeTab === 'users' && (
-        <div className="users-tab">
-          {/* Filters */}
-          <Card className="filters-card">
-            <div className="filters">
-              <div className="filter-group">
-                <label>Role:</label>
-                <select
-                  value={filters.role}
-                  onChange={(e) => setFilters({ ...filters, role: e.target.value, page: 1 })}
-                >
-                  <option value="">All Roles</option>
-                  <option value="user">End User</option>
-                  <option value="ca">CA</option>
-                  <option value="ca_firm_admin">CA Firm Admin</option>
-                  <option value="admin">Admin</option>
-                  <option value="super_admin">Super Admin</option>
-                </select>
-              </div>
-
-              <div className="filter-group">
-                <label>Status:</label>
-                <select
-                  value={filters.status}
-                  onChange={(e) => setFilters({ ...filters, status: e.target.value, page: 1 })}
-                >
-                  <option value="">All Status</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                  <option value="suspended">Suspended</option>
-                  <option value="pending">Pending</option>
-                </select>
-              </div>
-
-              <div className="filter-group">
-                <label>Search:</label>
-                <input
-                  type="text"
-                  placeholder="Search by name, email, or phone"
-                  value={filters.search}
-                  onChange={(e) => setFilters({ ...filters, search: e.target.value, page: 1 })}
-                />
-              </div>
-            </div>
-          </Card>
-
-          {/* Users List */}
-          <Card className="users-list">
-            {loading ? (
-              <div className="loading-state">
-                <div className="loading-spinner">
-                  <div className="spinner"></div>
+        {/* System Health & Recent Activity */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          {/* System Health */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Activity className="w-5 h-5 text-primary-600" />
+                <span>System Health</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Typography.Small className="text-neutral-600">
+                    Status
+                  </Typography.Small>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-success-500 rounded-full" />
+                    <Typography.Small className="text-success-600 font-medium">
+                      {dashboardData.systemHealth.status.toUpperCase()}
+                    </Typography.Small>
+                  </div>
                 </div>
-                <p>Loading users...</p>
-              </div>
-            ) : users.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon">👥</div>
-                <h3>No Users Found</h3>
-                <p>No users match your current filters</p>
-              </div>
-            ) : (
-              <div className="users-table">
-                <div className="table-header">
-                  <div className="header-cell">User</div>
-                  <div className="header-cell">Role</div>
-                  <div className="header-cell">Status</div>
-                  <div className="header-cell">Created</div>
-                  <div className="header-cell">Last Login</div>
-                  <div className="header-cell">Actions</div>
+                <div className="flex items-center justify-between">
+                  <Typography.Small className="text-neutral-600">
+                    Uptime
+                  </Typography.Small>
+                  <Typography.Small className="font-medium">
+                    {dashboardData.systemHealth.uptime}
+                  </Typography.Small>
                 </div>
-                {users.map(user => (
-                  <div key={user.id} className="table-row" onClick={() => handleUserClick(user)}>
-                    <div className="table-cell">
-                      <div className="user-info">
-                        <div className="user-avatar">
-                          {user.fullName.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="user-details">
-                          <h4>{user.fullName}</h4>
-                          <p>{user.email}</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="table-cell">
-                      <span className="role-badge">{user.roleLabel}</span>
-                    </div>
-                    <div className="table-cell">
-                      <StatusBadge
-                        status={user.statusLabel}
-                        color={user.statusColor}
+                <div className="flex items-center justify-between">
+                  <Typography.Small className="text-neutral-600">
+                    Response Time
+                  </Typography.Small>
+                  <Typography.Small className="font-medium">
+                    {dashboardData.systemHealth.responseTime}
+                  </Typography.Small>
+                </div>
+                <div className="flex items-center justify-between">
+                  <Typography.Small className="text-neutral-600">
+                    Active Users
+                  </Typography.Small>
+                  <Typography.Small className="font-medium">
+                    {dashboardData.systemHealth.activeUsers.toLocaleString()}
+                  </Typography.Small>
+                </div>
+                <div className="flex items-center justify-between">
+                  <Typography.Small className="text-neutral-600">
+                    Server Load
+                  </Typography.Small>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-16 h-2 bg-neutral-200 rounded-full">
+                      <div 
+                        className="h-2 bg-primary-500 rounded-full"
+                        style={{ width: `${dashboardData.systemHealth.serverLoad}%` }}
                       />
                     </div>
-                    <div className="table-cell">
-                      {formatDate(user.createdAt)}
-                    </div>
-                    <div className="table-cell">
-                      {user.lastLoginAt ? formatDate(user.lastLoginAt) : 'Never'}
-                    </div>
-                    <div className="table-cell">
-                      <div className="action-buttons">
-                        <Button
-                          variant="outline"
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedUser(user);
-                            setShowStatusModal(true);
-                          }}
-                        >
-                          Status
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedUser(user);
-                            setShowRoleModal(true);
-                          }}
-                        >
-                          Role
-                        </Button>
-                      </div>
-                    </div>
+                    <Typography.Small className="font-medium">
+                      {dashboardData.systemHealth.serverLoad}%
+                    </Typography.Small>
                   </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Recent Activity */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Clock className="w-5 h-5 text-primary-600" />
+                <span>Recent Activity</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {dashboardData.recentActivity.map((activity, index) => (
+                  <motion.div
+                    key={activity.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="flex items-start space-x-3 p-3 bg-neutral-50 rounded-lg"
+                  >
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${getStatusColor(activity.status)}`}>
+                      {getActivityIcon(activity.type)}
+                    </div>
+                    <div className="flex-1">
+                      <Typography.Small className="text-neutral-700">
+                        {activity.message}
+                      </Typography.Small>
+                      <Typography.Small className="text-neutral-500">
+                        {formatTimeAgo(activity.timestamp)}
+                      </Typography.Small>
+                    </div>
+                  </motion.div>
                 ))}
               </div>
-            )}
+            </CardContent>
           </Card>
         </div>
-      )}
 
-      {/* Activity Tab */}
-      {activeTab === 'activity' && (
-        <Card className="activity-tab">
-          <h3>Recent Activity</h3>
-          {recentActivity.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon">📈</div>
-              <h3>No Recent Activity</h3>
-              <p>No recent activity to display</p>
-            </div>
-          ) : (
-            <div className="activity-list">
-              {recentActivity.map(activity => (
-                <div key={activity.id} className="activity-item">
-                  <div className="activity-icon">
-                    {activity.type === 'user_registration' ? '👤' : '📄'}
+        {/* Top Performers */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <BarChart3 className="w-5 h-5 text-primary-600" />
+              <span>Top Performing CA Firms</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {dashboardData.topPerformers.map((firm, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg"
+                >
+                  <div className="flex items-center space-x-4">
+                    <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
+                      <span className="text-primary-600 font-medium">
+                        {index + 1}
+                      </span>
+                    </div>
+                    <div>
+                      <Typography.Small className="font-medium text-neutral-700">
+                        {firm.name}
+                      </Typography.Small>
+                      <Typography.Small className="text-neutral-500">
+                        {firm.filings} filings • Rating: {firm.rating}/5
+                      </Typography.Small>
+                    </div>
                   </div>
-                  <div className="activity-content">
-                    <h4>{activity.description}</h4>
-                    <p>{formatDate(activity.timestamp)}</p>
+                  <div className="text-right">
+                    <Typography.Small className="font-medium text-neutral-700">
+                      {formatCurrency(firm.revenue)}
+                    </Typography.Small>
+                    <Typography.Small className="text-neutral-500">
+                      Revenue
+                    </Typography.Small>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
-          )}
+          </CardContent>
         </Card>
-      )}
 
-      {/* User Details Modal */}
-      <Modal
-        isOpen={showUserModal}
-        onClose={() => setShowUserModal(false)}
-        title="User Details"
-        size="large"
-      >
-        {selectedUser && (
-          <div className="user-details-modal">
-            <div className="user-header">
-              <div className="user-avatar-large">
-                {selectedUser.fullName.charAt(0).toUpperCase()}
-              </div>
-              <div className="user-info">
-                <h2>{selectedUser.fullName}</h2>
-                <p>{selectedUser.email}</p>
-                <div className="user-badges">
-                  <StatusBadge
-                    status={selectedUser.statusLabel}
-                    color={selectedUser.statusColor}
-                  />
-                  <span className="role-badge">{selectedUser.roleLabel}</span>
-                </div>
-              </div>
+        {/* Quick Actions */}
+        <Card className="mt-8">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Settings className="w-5 h-5 text-primary-600" />
+              <span>Quick Actions</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <button className="flex items-center space-x-3 p-4 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors">
+                <Users className="w-5 h-5 text-primary-600" />
+                <Typography.Small className="font-medium text-primary-700">
+                  Manage Users
+                </Typography.Small>
+              </button>
+              <button className="flex items-center space-x-3 p-4 bg-success-50 border border-success-200 rounded-lg hover:bg-success-100 transition-colors">
+                <MessageSquare className="w-5 h-5 text-success-600" />
+                <Typography.Small className="font-medium text-success-700">
+                  Support Tickets
+                </Typography.Small>
+              </button>
+              <button className="flex items-center space-x-3 p-4 bg-warning-50 border border-warning-200 rounded-lg hover:bg-warning-100 transition-colors">
+                <DollarSign className="w-5 h-5 text-warning-600" />
+                <Typography.Small className="font-medium text-warning-700">
+                  Pricing Control
+                </Typography.Small>
+              </button>
+              <button className="flex items-center space-x-3 p-4 bg-neutral-50 border border-neutral-200 rounded-lg hover:bg-neutral-100 transition-colors">
+                <Shield className="w-5 h-5 text-neutral-600" />
+                <Typography.Small className="font-medium text-neutral-700">
+                  System Settings
+                </Typography.Small>
+              </button>
             </div>
-
-            <div className="user-stats">
-              <div className="stat-item">
-                <h4>Tickets</h4>
-                <p>Total: {selectedUser.statistics.tickets.totalTickets}</p>
-                <p>Open: {selectedUser.statistics.tickets.openTickets}</p>
-              </div>
-              <div className="stat-item">
-                <h4>Filings</h4>
-                <p>Total: {selectedUser.statistics.filings.totalFilings}</p>
-                <p>Draft: {selectedUser.statistics.filings.draftFilings}</p>
-              </div>
-              <div className="stat-item">
-                <h4>Documents</h4>
-                <p>Total: {selectedUser.statistics.documents.totalFiles}</p>
-                <p>Storage: {formatFileSize(selectedUser.statistics.documents.totalSize)}</p>
-              </div>
-            </div>
-
-            <div className="user-meta">
-              <h4>Account Information</h4>
-              <div className="meta-item">
-                <span className="label">Created:</span>
-                <span className="value">{formatDate(selectedUser.createdAt)}</span>
-              </div>
-              <div className="meta-item">
-                <span className="label">Last Login:</span>
-                <span className="value">{selectedUser.lastLoginAt ? formatDate(selectedUser.lastLoginAt) : 'Never'}</span>
-              </div>
-              <div className="meta-item">
-                <span className="label">Login Count:</span>
-                <span className="value">{selectedUser.loginCount}</span>
-              </div>
-              <div className="meta-item">
-                <span className="label">Email Verified:</span>
-                <span className="value">{selectedUser.emailVerified ? 'Yes' : 'No'}</span>
-              </div>
-              <div className="meta-item">
-                <span className="label">Phone Verified:</span>
-                <span className="value">{selectedUser.phoneVerified ? 'Yes' : 'No'}</span>
-              </div>
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* Status Update Modal */}
-      <Modal
-        isOpen={showStatusModal}
-        onClose={() => setShowStatusModal(false)}
-        title="Update User Status"
-        size="small"
-      >
-        {selectedUser && (
-          <div className="status-update-modal">
-            <h3>Update status for {selectedUser.fullName}</h3>
-            <div className="status-options">
-              {['active', 'inactive', 'suspended', 'pending'].map(status => (
-                <Button
-                  key={status}
-                  variant={selectedUser.status === status ? 'primary' : 'outline'}
-                  onClick={() => handleStatusUpdate(selectedUser.id, status, 'Status updated by admin')}
-                  className="status-option"
-                >
-                  {status.charAt(0).toUpperCase() + status.slice(1)}
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* Role Update Modal */}
-      <Modal
-        isOpen={showRoleModal}
-        onClose={() => setShowRoleModal(false)}
-        title="Update User Role"
-        size="small"
-      >
-        {selectedUser && (
-          <div className="role-update-modal">
-            <h3>Update role for {selectedUser.fullName}</h3>
-            <div className="role-options">
-              {[
-                { key: 'user', label: 'End User' },
-                { key: 'ca', label: 'CA' },
-                { key: 'ca_firm_admin', label: 'CA Firm Admin' },
-                { key: 'admin', label: 'Admin' },
-                { key: 'super_admin', label: 'Super Admin' }
-              ].map(role => (
-                <Button
-                  key={role.key}
-                  variant={selectedUser.role === role.key ? 'primary' : 'outline'}
-                  onClick={() => handleRoleUpdate(selectedUser.id, role.key, 'Role updated by admin')}
-                  className="role-option"
-                >
-                  {role.label}
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
-      </Modal>
-    </div>
+          </CardContent>
+        </Card>
+      </div>
+    </PageTransition>
   );
 };
 

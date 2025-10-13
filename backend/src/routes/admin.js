@@ -13,17 +13,27 @@ router.use(authMiddleware.authenticateToken);
 
 // Middleware to check admin role
 const requireAdmin = (req, res, next) => {
-  if (!['admin', 'super_admin'].includes(req.user.role)) {
+  console.log('Admin middleware - User:', req.user);
+  console.log('Admin middleware - Role:', req.user?.role);
+  
+  if (!['SUPER_ADMIN', 'PLATFORM_ADMIN'].includes(req.user.role)) {
+    console.log('Admin access denied for role:', req.user.role);
     return res.status(403).json({
       success: false,
       message: 'Admin access required'
     });
   }
+  console.log('Admin access granted for role:', req.user.role);
   next();
 };
 
 // Apply admin role check to all routes
 router.use(requireAdmin);
+
+// Test route after middleware
+router.get('/test', (req, res) => {
+  res.json({ message: 'Admin test route working', user: req.user });
+});
 
 // User Management Routes
 router.get('/users', adminController.getUsers);

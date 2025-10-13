@@ -95,16 +95,19 @@ const authenticateWithCookies = async (req, res, next) => {
 
 /**
  * Middleware to set HttpOnly cookies for refresh tokens
+ * Enterprise-grade security: HttpOnly, Secure, SameSite protection
  */
 const setRefreshTokenCookie = (res, refreshToken) => {
   const isProduction = process.env.NODE_ENV === 'production';
   
   res.cookie('refreshToken', refreshToken, {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: 'strict',
+    httpOnly: true, // Prevents XSS attacks - JavaScript cannot access
+    secure: isProduction, // HTTPS only in production
+    sameSite: 'strict', // CSRF protection
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    path: '/'
+    path: '/',
+    // Additional security headers
+    domain: process.env.COOKIE_DOMAIN || undefined
   });
 };
 
@@ -120,8 +123,109 @@ const clearRefreshTokenCookie = (res) => {
   });
 };
 
+/**
+ * Token refresh endpoint handler
+ * Exchanges valid refresh token for new access token
+ */
+const handleTokenRefresh = async (req, res) => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+    
+    if (!refreshToken) {
+      return res.status(401).json({
+        success: false,
+        error: 'No refresh token provided'
+      });
+    }
+
+    // Find session by refresh token
+    const sessions = await UserSession.findAll({
+      where: {
+        revoked: false,
+        expiresAt: {
+          [require('sequelize').Op.gt]: new Date()
+        }
+      }
+    });
+
+    let validSession = null;
+    for (const session of sessions) {
+      const bcrypt = require('bcryptjs');
+      const isValid = await bcrypt.compare(refreshToken, session.refreshTokenHash);
+      if (isValid) {
+        validSession = session;
+        break;
+      }
+    }
+
+    if (!validSession) {
+      // Clear invalid cookie
+      clearRefreshTokenCookie(res);
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid or expired refresh token'
+      });
+    }
+
+    // Get user
+    const user = await User.findByPk(validSession.userId);
+    if (!user || user.status !== 'active') {
+      clearRefreshTokenCookie(res);
+      return res.status(401).json({
+        success: false,
+        error: 'User not found or inactive'
+      });
+    }
+
+    // Generate new access token
+    const accessToken = jwt.sign(
+      {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        tokenVersion: user.tokenVersion
+      },
+      process.env.JWT_SECRET || 'fallback-secret',
+      { expiresIn: '15m' }
+    );
+
+    // Update session last active
+    await validSession.update({ lastActive: new Date() });
+
+    enterpriseLogger.info('Token refreshed successfully', {
+      userId: user.id,
+      email: user.email
+    });
+
+    res.json({
+      success: true,
+      accessToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        full_name: user.fullName,
+        role: user.role,
+        status: user.status,
+        onboardingCompleted: user.onboardingCompleted
+      }
+    });
+
+  } catch (error) {
+    enterpriseLogger.error('Token refresh failed', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Token refresh failed'
+    });
+  }
+};
+
 module.exports = {
   authenticateWithCookies,
   setRefreshTokenCookie,
-  clearRefreshTokenCookie
+  clearRefreshTokenCookie,
+  handleTokenRefresh
 };

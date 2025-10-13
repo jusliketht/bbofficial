@@ -1,632 +1,366 @@
 // =====================================================
-// MOBILE-FIRST SETTINGS PAGE
-// Touch-friendly settings management for all devices
+// USER SETTINGS PAGE - ACCOUNT AND PREFERENCES
 // =====================================================
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  ArrowLeft, 
-  Bell, 
-  Shield, 
-  Moon, 
-  Sun, 
-  Globe, 
-  Smartphone, 
-  Mail, 
-  Lock, 
-  Eye,
-  Clock, 
-  EyeOff,
-  Check,
-  X,
-  Save,
-  AlertCircle,
-  CheckCircle,
-  Settings,
-  User,
-  FileText,
-  Trash2,
-  Download,
-  Upload,
-  Wifi,
-  WifiOff
-} from 'lucide-react';
+import Card from '../../components/common/Card';
+import Button from '../../components/common/Button';
+import { Settings, User, Bell, Shield, Key, Mail, Phone, Save, Eye, EyeOff } from 'lucide-react';
+import toast from 'react-hot-toast';
 import api from '../../services/api';
 
 const UserSettings = () => {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState('general');
+  const { user, updateUser } = useAuth();
+  
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('profile');
   const [showPassword, setShowPassword] = useState(false);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-
-  // Settings state
-  const [settings, setSettings] = useState({
-    // General Settings
-    theme: 'light',
-    language: 'en',
-    timezone: 'Asia/Kolkata',
-    
-    // Notification Settings
-    emailNotifications: true,
-    pushNotifications: true,
-    smsNotifications: false,
-    reminderNotifications: true,
-    
-    // Privacy Settings
-    profileVisibility: 'private',
-    dataSharing: false,
-    analyticsTracking: false,
-    
-    // Security Settings
-    twoFactorAuth: false,
-    sessionTimeout: 30,
-    loginAlerts: true
+  
+  // Profile settings
+  const [profileData, setProfileData] = useState({
+    fullName: user?.fullName || '',
+    email: user?.email || '',
+    phone: user?.phone || ''
   });
-
+  
+  // Password change
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
-
-  const [errors, setErrors] = useState({});
-
-  // Update settings mutation
-  const updateSettingsMutation = useMutation({
-    mutationFn: async (newSettings) => {
-      const response = await api.patch('/users/settings', newSettings);
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries(['userSettings', user?.user_id]);
-    }
-  });
-
-  // Change password mutation
-  const changePasswordMutation = useMutation({
-    mutationFn: async (passwordData) => {
-      const response = await api.patch('/users/change-password', passwordData);
-      return response.data;
-    }
+  
+  // Notification preferences
+  const [notificationSettings, setNotificationSettings] = useState({
+    emailNotifications: true,
+    pushNotifications: true,
+    filingReminders: true,
+    documentUploads: true,
+    systemUpdates: false
   });
 
   useEffect(() => {
-    const handleOnlineStatus = () => setIsOnline(navigator.onLine);
-    window.addEventListener('online', handleOnlineStatus);
-    window.addEventListener('offline', handleOnlineStatus);
-    
-    return () => {
-      window.removeEventListener('online', handleOnlineStatus);
-      window.removeEventListener('offline', handleOnlineStatus);
-    };
+    loadUserSettings();
   }, []);
 
-  const handleSettingChange = (key, value) => {
-    setSettings(prev => ({
-      ...prev,
-      [key]: value
-    }));
+  const loadUserSettings = async () => {
+    try {
+      const response = await api.get('/users/settings');
+      if (response.data.success) {
+        const settings = response.data.data;
+        setNotificationSettings(settings.notifications || notificationSettings);
+      }
+    } catch (error) {
+      console.error('Error loading user settings:', error);
+    }
   };
 
-  const handleSaveSettings = async () => {
-    setLoading(true);
+  const handleProfileUpdate = async (e) => {
+    e.preventDefault();
+    
     try {
-      await updateSettingsMutation.mutateAsync(settings);
-      // Show success message
+      setLoading(true);
+      const response = await api.put('/users/profile', profileData);
+      
+      if (response.data.success) {
+        updateUser(response.data.data.user);
+        toast.success('Profile updated successfully');
+      }
     } catch (error) {
-      console.error('Error saving settings:', error);
+      console.error('Error updating profile:', error);
+      toast.error('Failed to update profile');
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePasswordChange = async () => {
-    const newErrors = {};
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
     
-    if (!passwordData.currentPassword) {
-      newErrors.currentPassword = 'Current password is required';
-    }
-    if (!passwordData.newPassword) {
-      newErrors.newPassword = 'New password is required';
-    }
-    if (passwordData.newPassword.length < 8) {
-      newErrors.newPassword = 'Password must be at least 8 characters';
-    }
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
+      toast.error('New passwords do not match');
+      return;
     }
     
-    setErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) return;
+    if (passwordData.newPassword.length < 8) {
+      toast.error('Password must be at least 8 characters long');
+      return;
+    }
     
-    setLoading(true);
     try {
-      await changePasswordMutation.mutateAsync(passwordData);
-      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      // Show success message
+      setLoading(true);
+      const response = await api.put('/users/change-password', {
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword
+      });
+      
+      if (response.data.success) {
+        toast.success('Password changed successfully');
+        setPasswordData({
+          currentPassword: '',
+          newPassword: '',
+          confirmPassword: ''
+        });
+      }
     } catch (error) {
       console.error('Error changing password:', error);
+      toast.error(error.response?.data?.error || 'Failed to change password');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogout = async () => {
+  const handleNotificationUpdate = async () => {
     try {
-      await logout();
-      navigate('/login');
+      setLoading(true);
+      const response = await api.put('/users/settings', {
+        notifications: notificationSettings
+      });
+      
+      if (response.data.success) {
+        toast.success('Notification settings updated');
+      }
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('Error updating notifications:', error);
+      toast.error('Failed to update notification settings');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Setting item component
-  const SettingItem = ({ icon: Icon, title, description, children }) => (
-    <div className="bg-white rounded-xl p-4 border border-gray-100 mb-3">
-      <div className="flex items-start space-x-3">
-        <div className="p-2 rounded-lg bg-blue-50">
-          <Icon className="h-4 w-4 text-blue-600" />
-        </div>
-        <div className="flex-1">
-          <h3 className="text-sm font-semibold text-gray-900 mb-1">{title}</h3>
-          <p className="text-xs text-gray-500 mb-3">{description}</p>
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-
-  // Toggle switch component
-  const ToggleSwitch = ({ checked, onChange, disabled = false }) => (
-    <button
-      onClick={onChange}
-      disabled={disabled}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-        checked ? 'bg-blue-600' : 'bg-gray-300'
-      } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-    >
-      <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-          checked ? 'translate-x-6' : 'translate-x-1'
-        }`}
-      />
-    </button>
-  );
-
   const tabs = [
-    { id: 'general', label: 'General', icon: Settings },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'privacy', label: 'Privacy', icon: Shield },
-    { id: 'security', label: 'Security', icon: Lock }
+    { id: 'profile', name: 'Profile', icon: User },
+    { id: 'security', name: 'Security', icon: Shield },
+    { id: 'notifications', name: 'Notifications', icon: Bell }
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Mobile Header */}
-      <header className="bg-white shadow-sm border-b sticky top-0 z-50">
-        <div className="px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="p-2 rounded-lg hover:bg-gray-100 active:scale-95 transition-transform"
-              >
-                <ArrowLeft className="h-5 w-5 text-gray-700" />
-              </button>
-              <div>
-                <h1 className="text-lg font-semibold text-gray-900">Settings</h1>
-                <p className="text-xs text-gray-500">Manage your preferences</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <div className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs ${
-                isOnline ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-              }`}>
-                {isOnline ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-                <span>{isOnline ? 'Online' : 'Offline'}</span>
-              </div>
-            </div>
-          </div>
+    <div className="min-h-screen bg-neutral-50 p-4 lg:p-6">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-neutral-900 mb-2">
+            Settings
+          </h1>
+          <p className="text-neutral-600">
+            Manage your account settings and preferences
+          </p>
         </div>
-      </header>
 
-      {/* Tab Navigation */}
-      <div className="bg-white border-b">
-        <div className="px-4 py-2">
-          <div className="flex space-x-1 overflow-x-auto">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
+        {/* Tabs */}
+        <div className="mb-6">
+          <div className="border-b border-neutral-200">
+            <nav className="-mb-px flex space-x-8">
+              {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                  className={`flex items-center gap-2 py-2 px-1 border-b-2 font-medium text-sm ${
                     activeTab === tab.id
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'text-gray-600 hover:bg-gray-100'
+                      ? 'border-primary-500 text-primary-600'
+                      : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'
                   }`}
                 >
-                  <Icon className="h-4 w-4" />
-                  <span>{tab.label}</span>
+                  <tab.icon className="w-4 h-4" />
+                  {tab.name}
                 </button>
-              );
-            })}
+              ))}
+            </nav>
           </div>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <main className="px-4 py-4">
-        {/* General Settings */}
-        {activeTab === 'general' && (
-          <div className="space-y-4">
-            <SettingItem
-              icon={Moon}
-              title="Theme"
-              description="Choose your preferred theme"
-            >
-              <div className="flex space-x-3">
-                <button
-                  onClick={() => handleSettingChange('theme', 'light')}
-                  className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm ${
-                    settings.theme === 'light' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
-                  }`}
-                >
-                  <Sun className="h-4 w-4" />
-                  <span>Light</span>
-                </button>
-                <button
-                  onClick={() => handleSettingChange('theme', 'dark')}
-                  className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm ${
-                    settings.theme === 'dark' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
-                  }`}
-                >
-                  <Moon className="h-4 w-4" />
-                  <span>Dark</span>
-                </button>
-              </div>
-            </SettingItem>
-
-            <SettingItem
-              icon={Globe}
-              title="Language"
-              description="Select your preferred language"
-            >
-              <select
-                value={settings.language}
-                onChange={(e) => handleSettingChange('language', e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="en">English</option>
-                <option value="hi">Hindi</option>
-                <option value="ta">Tamil</option>
-                <option value="te">Telugu</option>
-              </select>
-            </SettingItem>
-
-            <SettingItem
-              icon={Globe}
-              title="Timezone"
-              description="Set your timezone for accurate timestamps"
-            >
-              <select
-                value={settings.timezone}
-                onChange={(e) => handleSettingChange('timezone', e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
-                <option value="Asia/Dubai">Asia/Dubai (GST)</option>
-                <option value="America/New_York">America/New_York (EST)</option>
-                <option value="Europe/London">Europe/London (GMT)</option>
-              </select>
-            </SettingItem>
-          </div>
-        )}
-
-        {/* Notification Settings */}
-        {activeTab === 'notifications' && (
-          <div className="space-y-4">
-            <SettingItem
-              icon={Mail}
-              title="Email Notifications"
-              description="Receive notifications via email"
-            >
-              <ToggleSwitch
-                checked={settings.emailNotifications}
-                onChange={() => handleSettingChange('emailNotifications', !settings.emailNotifications)}
-              />
-            </SettingItem>
-
-            <SettingItem
-              icon={Smartphone}
-              title="Push Notifications"
-              description="Receive push notifications on your device"
-            >
-              <ToggleSwitch
-                checked={settings.pushNotifications}
-                onChange={() => handleSettingChange('pushNotifications', !settings.pushNotifications)}
-              />
-            </SettingItem>
-
-            <SettingItem
-              icon={Bell}
-              title="SMS Notifications"
-              description="Receive notifications via SMS"
-            >
-              <ToggleSwitch
-                checked={settings.smsNotifications}
-                onChange={() => handleSettingChange('smsNotifications', !settings.smsNotifications)}
-              />
-            </SettingItem>
-
-            <SettingItem
-              icon={Bell}
-              title="Reminder Notifications"
-              description="Get reminders for important deadlines"
-            >
-              <ToggleSwitch
-                checked={settings.reminderNotifications}
-                onChange={() => handleSettingChange('reminderNotifications', !settings.reminderNotifications)}
-              />
-            </SettingItem>
-          </div>
-        )}
-
-        {/* Privacy Settings */}
-        {activeTab === 'privacy' && (
-          <div className="space-y-4">
-            <SettingItem
-              icon={User}
-              title="Profile Visibility"
-              description="Control who can see your profile information"
-            >
-              <select
-                value={settings.profileVisibility}
-                onChange={(e) => handleSettingChange('profileVisibility', e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="private">Private</option>
-                <option value="public">Public</option>
-                <option value="contacts">Contacts Only</option>
-              </select>
-            </SettingItem>
-
-            <SettingItem
-              icon={Shield}
-              title="Data Sharing"
-              description="Allow sharing of anonymized data for service improvement"
-            >
-              <ToggleSwitch
-                checked={settings.dataSharing}
-                onChange={() => handleSettingChange('dataSharing', !settings.dataSharing)}
-              />
-            </SettingItem>
-
-            <SettingItem
-              icon={Shield}
-              title="Analytics Tracking"
-              description="Help us improve by sharing usage analytics"
-            >
-              <ToggleSwitch
-                checked={settings.analyticsTracking}
-                onChange={() => handleSettingChange('analyticsTracking', !settings.analyticsTracking)}
-              />
-            </SettingItem>
-          </div>
-        )}
-
-        {/* Security Settings */}
-        {activeTab === 'security' && (
-          <div className="space-y-4">
-            <SettingItem
-              icon={Lock}
-              title="Two-Factor Authentication"
-              description="Add an extra layer of security to your account"
-            >
-              <div className="flex items-center justify-between">
-                <ToggleSwitch
-                  checked={settings.twoFactorAuth}
-                  onChange={() => handleSettingChange('twoFactorAuth', !settings.twoFactorAuth)}
-                />
-                <span className="text-xs text-gray-500">
-                  {settings.twoFactorAuth ? 'Enabled' : 'Disabled'}
-                </span>
-              </div>
-            </SettingItem>
-
-            <SettingItem
-              icon={Clock}
-              title="Session Timeout"
-              description="Automatically log out after inactivity"
-            >
-              <select
-                value={settings.sessionTimeout}
-                onChange={(e) => handleSettingChange('sessionTimeout', parseInt(e.target.value))}
-                className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value={15}>15 minutes</option>
-                <option value={30}>30 minutes</option>
-                <option value={60}>1 hour</option>
-                <option value={120}>2 hours</option>
-              </select>
-            </SettingItem>
-
-            <SettingItem
-              icon={Bell}
-              title="Login Alerts"
-              description="Get notified when someone logs into your account"
-            >
-              <ToggleSwitch
-                checked={settings.loginAlerts}
-                onChange={() => handleSettingChange('loginAlerts', !settings.loginAlerts)}
-              />
-            </SettingItem>
-
-            {/* Change Password */}
-            <div className="bg-white rounded-xl p-4 border border-gray-100">
-              <div className="flex items-start space-x-3 mb-4">
-                <div className="p-2 rounded-lg bg-red-50">
-                  <Lock className="h-4 w-4 text-red-600" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-1">Change Password</h3>
-                  <p className="text-xs text-gray-500">Update your account password</p>
-                </div>
-              </div>
+        {/* Profile Tab */}
+        {activeTab === 'profile' && (
+          <Card>
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-neutral-900 mb-4">
+                Profile Information
+              </h3>
               
-              <div className="space-y-3">
+              <form onSubmit={handleProfileUpdate} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 mb-1">
+                      Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={profileData.fullName}
+                      onChange={(e) => setProfileData(prev => ({ ...prev, fullName: e.target.value }))}
+                      required
+                      className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 mb-1">
+                      Email Address *
+                    </label>
+                    <input
+                      type="email"
+                      value={profileData.email}
+                      onChange={(e) => setProfileData(prev => ({ ...prev, email: e.target.value }))}
+                      required
+                      className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 mb-1">
+                      Phone Number
+                    </label>
+                    <input
+                      type="tel"
+                      value={profileData.phone}
+                      onChange={(e) => setProfileData(prev => ({ ...prev, phone: e.target.value }))}
+                      className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex gap-3 pt-4">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    disabled={loading}
+                    className="flex items-center gap-2"
+                  >
+                    <Save className="w-4 h-4" />
+                    {loading ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </Card>
+        )}
+
+        {/* Security Tab */}
+        {activeTab === 'security' && (
+          <Card>
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-neutral-900 mb-4">
+                Change Password
+              </h3>
+              
+              <form onSubmit={handlePasswordChange} className="space-y-4">
                 <div>
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Current Password</label>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">
+                    Current Password *
+                  </label>
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={passwordData.currentPassword}
                       onChange={(e) => setPasswordData(prev => ({ ...prev, currentPassword: e.target.value }))}
-                      className={`w-full p-2 pr-10 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        errors.currentPassword ? 'border-red-300' : 'border-gray-300'
-                      }`}
-                      placeholder="Enter current password"
+                      required
+                      className="w-full px-3 py-2 pr-10 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
                     >
-                      {showPassword ? <EyeOff className="h-4 w-4 text-gray-400" /> : <Eye className="h-4 w-4 text-gray-400" />}
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                  {errors.currentPassword && (
-                    <p className="text-xs text-red-600 mt-1">{errors.currentPassword}</p>
-                  )}
                 </div>
-
+                
                 <div>
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">New Password</label>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">
+                    New Password *
+                  </label>
                   <input
                     type="password"
                     value={passwordData.newPassword}
                     onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
-                    className={`w-full p-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      errors.newPassword ? 'border-red-300' : 'border-gray-300'
-                    }`}
-                    placeholder="Enter new password"
+                    required
+                    minLength="8"
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
-                  {errors.newPassword && (
-                    <p className="text-xs text-red-600 mt-1">{errors.newPassword}</p>
-                  )}
                 </div>
-
+                
                 <div>
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Confirm New Password</label>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">
+                    Confirm New Password *
+                  </label>
                   <input
                     type="password"
                     value={passwordData.confirmPassword}
                     onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                    className={`w-full p-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      errors.confirmPassword ? 'border-red-300' : 'border-gray-300'
-                    }`}
-                    placeholder="Confirm new password"
+                    required
+                    minLength="8"
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
-                  {errors.confirmPassword && (
-                    <p className="text-xs text-red-600 mt-1">{errors.confirmPassword}</p>
-                  )}
                 </div>
-
-                <button
-                  onClick={handlePasswordChange}
-                  disabled={loading}
-                  className="w-full bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 active:scale-95 transition-transform disabled:opacity-50"
-                >
-                  {loading ? (
-                    <div className="flex items-center justify-center space-x-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      <span>Changing Password...</span>
-                    </div>
-                  ) : (
-                    'Change Password'
-                  )}
-                </button>
-              </div>
+                
+                <div className="flex gap-3 pt-4">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    disabled={loading}
+                    className="flex items-center gap-2"
+                  >
+                    <Key className="w-4 h-4" />
+                    {loading ? 'Changing...' : 'Change Password'}
+                  </Button>
+                </div>
+              </form>
             </div>
-          </div>
+          </Card>
         )}
 
-        {/* Save Button */}
-        <div className="mt-6">
-          <button
-            onClick={handleSaveSettings}
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-3 px-4 rounded-xl hover:bg-blue-700 active:scale-95 transition-transform disabled:opacity-50"
-          >
-            {loading ? (
-              <div className="flex items-center justify-center space-x-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                <span>Saving Settings...</span>
+        {/* Notifications Tab */}
+        {activeTab === 'notifications' && (
+          <Card>
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-neutral-900 mb-4">
+                Notification Preferences
+              </h3>
+              
+              <div className="space-y-4">
+                {Object.entries(notificationSettings).map(([key, value]) => (
+                  <div key={key} className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-medium text-neutral-900 capitalize">
+                        {key.replace(/([A-Z])/g, ' $1').trim()}
+                      </h4>
+                      <p className="text-xs text-neutral-600">
+                        {key === 'emailNotifications' && 'Receive notifications via email'}
+                        {key === 'pushNotifications' && 'Receive push notifications in browser'}
+                        {key === 'filingReminders' && 'Get reminders for filing deadlines'}
+                        {key === 'documentUploads' && 'Notifications for document upload status'}
+                        {key === 'systemUpdates' && 'System maintenance and update notifications'}
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={value}
+                        onChange={(e) => setNotificationSettings(prev => ({ ...prev, [key]: e.target.checked }))}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-neutral-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                    </label>
+                  </div>
+                ))}
               </div>
-            ) : (
-              <div className="flex items-center justify-center space-x-2">
-                <Save className="h-4 w-4" />
-                <span>Save Settings</span>
+              
+              <div className="flex gap-3 pt-6">
+                <Button
+                  onClick={handleNotificationUpdate}
+                  variant="primary"
+                  disabled={loading}
+                  className="flex items-center gap-2"
+                >
+                  <Bell className="w-4 h-4" />
+                  {loading ? 'Saving...' : 'Save Preferences'}
+                </Button>
               </div>
-            )}
-          </button>
-        </div>
-
-        {/* Danger Zone */}
-        <div className="mt-8 bg-red-50 rounded-xl p-4 border border-red-200">
-          <h3 className="text-sm font-semibold text-red-800 mb-3">Danger Zone</h3>
-          <button
-            onClick={handleLogout}
-            className="w-full bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 active:scale-95 transition-transform"
-          >
-            <div className="flex items-center justify-center space-x-2">
-              <X className="h-4 w-4" />
-              <span>Logout</span>
             </div>
-          </button>
-        </div>
-      </main>
-
-      {/* Bottom Navigation - Mobile Only */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-2 md:hidden">
-        <div className="flex justify-around">
-          <button 
-            onClick={() => navigate('/dashboard')}
-            className="flex flex-col items-center p-2 text-gray-600 hover:text-blue-600"
-          >
-            <FileText className="h-5 w-5 mb-1" />
-            <span className="text-xs">Dashboard</span>
-          </button>
-          <button 
-            onClick={() => navigate('/notifications')}
-            className="flex flex-col items-center p-2 text-gray-600 hover:text-blue-600"
-          >
-            <Bell className="h-5 w-5 mb-1" />
-            <span className="text-xs">Alerts</span>
-          </button>
-          <button 
-            onClick={() => navigate('/profile')}
-            className="flex flex-col items-center p-2 text-gray-600 hover:text-blue-600"
-          >
-            <User className="h-5 w-5 mb-1" />
-            <span className="text-xs">Profile</span>
-          </button>
-          <button className="flex flex-col items-center p-2 text-blue-600">
-            <Settings className="h-5 w-5 mb-1" />
-            <span className="text-xs font-medium">Settings</span>
-          </button>
-        </div>
-      </nav>
-
-      {/* Bottom padding for mobile navigation */}
-      <div className="h-20 md:hidden"></div>
+          </Card>
+        )}
+      </div>
     </div>
   );
 };

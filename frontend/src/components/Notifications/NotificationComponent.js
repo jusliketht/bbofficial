@@ -3,10 +3,10 @@
 // =====================================================
 
 import React, { useState } from 'react';
-import { Card } from '../Common/Card';
-import { Button } from '../Common/Button';
-import { StatusBadge } from '../Common/StatusBadge';
-import { Modal } from '../Common/Modal';
+import Card from '../common/Card';
+import Button from '../common/Button';
+import StatusBadge from '../common/StatusBadge';
+import Modal from '../common/Modal';
 import { useNotificationContext } from '../../contexts/NotificationContext';
 import { enterpriseLogger } from '../../utils/logger';
 

@@ -22,8 +22,8 @@ const CompactMobileNav = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Don't render if no user
-  if (!user) {
+  // Don't render if no user or on admin pages
+  if (!user || location.pathname.startsWith('/admin')) {
     return null;
   }
 

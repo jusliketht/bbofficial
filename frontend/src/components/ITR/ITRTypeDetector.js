@@ -3,10 +3,10 @@
 // =====================================================
 
 import React, { useState, useEffect } from 'react';
-import { Card } from '../Common/Card';
-import { Button } from '../Common/Button';
-import { Modal } from '../Common/Modal';
-import { StatusBadge } from '../Common/StatusBadge';
+import Card from '../common/Card';
+import Button from '../common/Button';
+import Modal from '../common/Modal';
+import StatusBadge from '../common/StatusBadge';
 import { enterpriseLogger } from '../../utils/logger';
 
 const ITRTypeDetector = ({ 

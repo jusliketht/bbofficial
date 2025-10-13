@@ -3,9 +3,9 @@
 // =====================================================
 
 import React, { useState, useEffect } from 'react';
-import { Button } from '../Common/Button';
-import { Card } from '../Common/Card';
-import Tooltip from '../Common/Tooltip';
+import Button from '../UI/Button';
+import Card from '../common/Card';
+import Tooltip from '../common/Tooltip';
 import { enterpriseLogger } from '../../utils/logger';
 
 const IncomeForm = ({ data = {}, onChange, onNext, onPrevious, itrType = 'ITR1' }) => {

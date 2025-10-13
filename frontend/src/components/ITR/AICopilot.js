@@ -3,9 +3,9 @@
 // =====================================================
 
 import React, { useState, useEffect } from 'react';
-import { Button } from '../Common/Button';
-import { Card } from '../Common/Card';
-import { Modal } from '../Common/Modal';
+import Button from '../common/Button';
+import Card from '../common/Card';
+import Modal from '../common/Modal';
 import { enterpriseLogger } from '../../utils/logger';
 
 const AICopilot = ({ 

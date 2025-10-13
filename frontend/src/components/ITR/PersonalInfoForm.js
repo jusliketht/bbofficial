@@ -1,475 +1,676 @@
 // =====================================================
-// PERSONAL INFO FORM COMPONENT
+// PERSONAL INFO FORM COMPONENT - MODULE 4 IMPLEMENTATION
+// Comprehensive personal information form with react-hook-form
 // =====================================================
 
 import React, { useState, useEffect } from 'react';
-import { Button } from '../Common/Button';
-import { Card } from '../Common/Card';
-import Tooltip from '../Common/Tooltip';
-import { enterpriseLogger } from '../../utils/logger';
+import { useForm } from 'react-hook-form';
+import { yupResolver } from '@hookform/resolvers/yup';
+import * as yup from 'yup';
+import Button from '../UI/Button';
+import Card from '../common/Card';
+import { 
+  User, 
+  MapPin, 
+  Phone, 
+  Mail, 
+  CreditCard,
+  Plus,
+  Trash2,
+  Edit3
+} from 'lucide-react';
+import toast from 'react-hot-toast';
 
-const PersonalInfoForm = ({ data = {}, onChange, onNext, onPrevious, isFirstStep = true, isLastStep = false }) => {
-  const [formData, setFormData] = useState({
-    firstName: data.firstName || '',
-    lastName: data.lastName || '',
-    fullName: data.fullName || '',
-    panNumber: data.panNumber || '',
-    dateOfBirth: data.dateOfBirth || '',
-    gender: data.gender || '',
-    maritalStatus: data.maritalStatus || '',
-    fatherName: data.fatherName || '',
-    motherName: data.motherName || '',
-    spouseName: data.spouseName || '',
-    address: {
-      residential: data.address?.residential || '',
-      permanent: data.address?.permanent || '',
-      city: data.address?.city || '',
-      state: data.address?.state || '',
-      pincode: data.address?.pincode || '',
-      country: data.address?.country || 'India'
-    },
-    contact: {
-      phone: data.contact?.phone || '',
-      email: data.contact?.email || '',
-      alternatePhone: data.contact?.alternatePhone || ''
+// Validation schema
+const personalInfoSchema = yup.object({
+  firstName: yup.string().required('First name is required'),
+  lastName: yup.string().required('Last name is required'),
+  dateOfBirth: yup.date().required('Date of birth is required'),
+  gender: yup.string().required('Gender is required'),
+  maritalStatus: yup.string().required('Marital status is required'),
+  pan: yup.string()
+    .matches(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, 'Invalid PAN format')
+    .required('PAN is required'),
+  aadhaar: yup.string()
+    .matches(/^[0-9]{12}$/, 'Aadhaar must be 12 digits')
+    .optional(),
+  address: yup.object({
+    line1: yup.string().required('Address line 1 is required'),
+    city: yup.string().required('City is required'),
+    state: yup.string().required('State is required'),
+    pincode: yup.string()
+      .matches(/^[0-9]{6}$/, 'Pincode must be 6 digits')
+      .required('Pincode is required'),
+    country: yup.string().default('India')
+  }),
+  contact: yup.object({
+    phone: yup.string()
+      .matches(/^[0-9]{10}$/, 'Phone must be 10 digits')
+      .required('Phone number is required'),
+    email: yup.string().email('Invalid email').required('Email is required'),
+    alternatePhone: yup.string()
+      .matches(/^[0-9]{10}$/, 'Alternate phone must be 10 digits')
+      .optional()
+  }),
+  bankAccounts: yup.array().of(
+    yup.object({
+      accountNumber: yup.string().required('Account number is required'),
+      ifscCode: yup.string()
+        .matches(/^[A-Z]{4}0[A-Z0-9]{6}$/, 'Invalid IFSC code')
+        .required('IFSC code is required'),
+      bankName: yup.string().required('Bank name is required'),
+      accountType: yup.string().required('Account type is required'),
+      isPrimary: yup.boolean().default(false)
+    })
+  ).min(1, 'At least one bank account is required')
+});
+
+const PersonalInfoForm = ({ 
+  data = {}, 
+  onChange, 
+  onNext, 
+  onPrevious, 
+  isFirstStep = true, 
+  isLastStep = false 
+}) => {
+  const [bankAccounts, setBankAccounts] = useState(data.bankAccounts || []);
+  const [editingAccount, setEditingAccount] = useState(null);
+  const [showBankForm, setShowBankForm] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isValid },
+    watch,
+    setValue,
+    getValues
+  } = useForm({
+    resolver: yupResolver(personalInfoSchema),
+    defaultValues: {
+      firstName: data.firstName || '',
+      lastName: data.lastName || '',
+      dateOfBirth: data.dateOfBirth || '',
+      gender: data.gender || '',
+      maritalStatus: data.maritalStatus || '',
+      pan: data.pan || '',
+      aadhaar: data.aadhaar || '',
+      address: {
+        line1: data.address?.line1 || '',
+        line2: data.address?.line2 || '',
+        city: data.address?.city || '',
+        state: data.address?.state || '',
+        pincode: data.address?.pincode || '',
+        country: data.address?.country || 'India'
+      },
+      contact: {
+        phone: data.contact?.phone || '',
+        email: data.contact?.email || '',
+        alternatePhone: data.contact?.alternatePhone || ''
+      },
+      bankAccounts: bankAccounts
     }
   });
 
-  const [errors, setErrors] = useState({});
-  const [isValidating, setIsValidating] = useState(false);
-
+  // Watch form values and update parent
+  const watchedValues = watch();
   useEffect(() => {
-    onChange(formData);
-  }, [formData, onChange]);
+    onChange({ ...watchedValues, bankAccounts });
+  }, [watchedValues, bankAccounts, onChange]);
 
-  const validatePAN = (pan) => {
-    const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
-    return panRegex.test(pan);
+  // Handle form submission
+  const onSubmit = (formData) => {
+    const completeData = { ...formData, bankAccounts };
+    onChange(completeData);
+    onNext && onNext(completeData);
   };
 
-  const validatePhone = (phone) => {
-    const phoneRegex = /^[6-9]\d{9}$/;
-    return phoneRegex.test(phone);
-  };
-
-  const validateEmail = (email) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
-
-  const validateForm = () => {
-    const newErrors = {};
-
-    // Required field validations
-    if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
-    if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
-    if (!formData.panNumber.trim()) newErrors.panNumber = 'PAN number is required';
-    if (!formData.dateOfBirth) newErrors.dateOfBirth = 'Date of birth is required';
-    if (!formData.gender) newErrors.gender = 'Gender is required';
-    if (!formData.maritalStatus) newErrors.maritalStatus = 'Marital status is required';
-
-    // Format validations
-    if (formData.panNumber && !validatePAN(formData.panNumber)) {
-      newErrors.panNumber = 'Invalid PAN format (e.g., ABCDE1234F)';
-    }
-
-    if (formData.contact.phone && !validatePhone(formData.contact.phone)) {
-      newErrors.phone = 'Invalid phone number (10 digits starting with 6-9)';
-    }
-
-    if (formData.contact.email && !validateEmail(formData.contact.email)) {
-      newErrors.email = 'Invalid email format';
-    }
-
-    // Age validation
-    if (formData.dateOfBirth) {
-      const today = new Date();
-      const birthDate = new Date(formData.dateOfBirth);
-      const age = today.getFullYear() - birthDate.getFullYear();
-      if (age < 18) {
-        newErrors.dateOfBirth = 'Must be 18 years or older to file ITR';
-      }
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  const handleNestedInputChange = (parent, field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [parent]: {
-        ...prev[parent],
-        [field]: value
-      }
-    }));
-  };
-
-  const handleNext = async () => {
-    setIsValidating(true);
-    const isValid = validateForm();
+  // Bank account management
+  const addBankAccount = (accountData) => {
+    const newAccount = {
+      ...accountData,
+      id: Date.now().toString(),
+      isPrimary: bankAccounts.length === 0 // First account is primary
+    };
     
-    if (isValid) {
-      enterpriseLogger.info('Personal info form validated successfully');
-      onNext && onNext();
-    } else {
-      enterpriseLogger.warn('Personal info form validation failed', { errors });
-    }
-    setIsValidating(false);
+    setBankAccounts([...bankAccounts, newAccount]);
+    setShowBankForm(false);
+    setEditingAccount(null);
+    toast.success('Bank account added successfully');
   };
 
-  const handlePrevious = () => {
-    onPrevious && onPrevious();
+  const updateBankAccount = (accountData) => {
+    setBankAccounts(bankAccounts.map(account => 
+      account.id === editingAccount.id 
+        ? { ...account, ...accountData }
+        : account
+    ));
+    setShowBankForm(false);
+    setEditingAccount(null);
+    toast.success('Bank account updated successfully');
+  };
+
+  const deleteBankAccount = (accountId) => {
+    setBankAccounts(bankAccounts.filter(account => account.id !== accountId));
+    toast.success('Bank account deleted');
+  };
+
+  const setPrimaryAccount = (accountId) => {
+    setBankAccounts(bankAccounts.map(account => ({
+      ...account,
+      isPrimary: account.id === accountId
+    })));
+  };
+
+  const openBankForm = (account = null) => {
+    setEditingAccount(account);
+    setShowBankForm(true);
   };
 
   return (
-    <div className="personal-info-form">
-      <Card className="form-card">
-        <div className="form-header">
-          <h2>Personal Information</h2>
-          <p>Please provide your personal details for ITR filing</p>
-        </div>
+    <div className="space-y-6">
+      {/* Personal Information Section */}
+      <Card>
+        <div className="p-6">
+          <div className="flex items-center space-x-3 mb-6">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <User className="w-5 h-5 text-blue-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900">
+              Personal Information
+            </h3>
+          </div>
 
-        <div className="form-content">
-          {/* Basic Information */}
-          <div className="form-section">
-            <h3>Basic Information</h3>
-            
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="firstName">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            {/* Basic Details */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   First Name *
-                  <Tooltip content="Enter your first name as per PAN card">
-                    <span className="help-icon">?</span>
-                  </Tooltip>
                 </label>
                 <input
-                  id="firstName"
-                  type="text"
-                  value={formData.firstName}
-                  onChange={(e) => handleInputChange('firstName', e.target.value)}
-                  className={errors.firstName ? 'error' : ''}
-                  placeholder="Enter your first name"
+                  {...register('firstName')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter first name"
                 />
-                {errors.firstName && <span className="error-message">{errors.firstName}</span>}
+                {errors.firstName && (
+                  <p className="mt-1 text-sm text-red-600">{errors.firstName.message}</p>
+                )}
               </div>
 
-              <div className="form-group">
-                <label htmlFor="lastName">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Last Name *
-                  <Tooltip content="Enter your last name as per PAN card">
-                    <span className="help-icon">?</span>
-                  </Tooltip>
                 </label>
                 <input
-                  id="lastName"
-                  type="text"
-                  value={formData.lastName}
-                  onChange={(e) => handleInputChange('lastName', e.target.value)}
-                  className={errors.lastName ? 'error' : ''}
-                  placeholder="Enter your last name"
+                  {...register('lastName')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter last name"
                 />
-                {errors.lastName && <span className="error-message">{errors.lastName}</span>}
+                {errors.lastName && (
+                  <p className="mt-1 text-sm text-red-600">{errors.lastName.message}</p>
+                )}
               </div>
-            </div>
 
-            <div className="form-group">
-              <label htmlFor="panNumber">
-                PAN Number *
-                <Tooltip content="10-character alphanumeric PAN (e.g., ABCDE1234F)">
-                  <span className="help-icon">?</span>
-                </Tooltip>
-              </label>
-              <input
-                id="panNumber"
-                type="text"
-                value={formData.panNumber}
-                onChange={(e) => handleInputChange('panNumber', e.target.value.toUpperCase())}
-                className={errors.panNumber ? 'error' : ''}
-                placeholder="ABCDE1234F"
-                maxLength="10"
-              />
-              {errors.panNumber && <span className="error-message">{errors.panNumber}</span>}
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="dateOfBirth">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Date of Birth *
-                  <Tooltip content="Date of birth as per PAN card">
-                    <span className="help-icon">?</span>
-                  </Tooltip>
                 </label>
                 <input
-                  id="dateOfBirth"
+                  {...register('dateOfBirth')}
                   type="date"
-                  value={formData.dateOfBirth}
-                  onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
-                  className={errors.dateOfBirth ? 'error' : ''}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                {errors.dateOfBirth && <span className="error-message">{errors.dateOfBirth}</span>}
+                {errors.dateOfBirth && (
+                  <p className="mt-1 text-sm text-red-600">{errors.dateOfBirth.message}</p>
+                )}
               </div>
 
-              <div className="form-group">
-                <label htmlFor="gender">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Gender *
-                  <Tooltip content="Select your gender">
-                    <span className="help-icon">?</span>
-                  </Tooltip>
                 </label>
                 <select
-                  id="gender"
-                  value={formData.gender}
-                  onChange={(e) => handleInputChange('gender', e.target.value)}
-                  className={errors.gender ? 'error' : ''}
+                  {...register('gender')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="">Select Gender</option>
+                  <option value="">Select gender</option>
                   <option value="male">Male</option>
                   <option value="female">Female</option>
                   <option value="other">Other</option>
                 </select>
-                {errors.gender && <span className="error-message">{errors.gender}</span>}
+                {errors.gender && (
+                  <p className="mt-1 text-sm text-red-600">{errors.gender.message}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Marital Status *
+                </label>
+                <select
+                  {...register('maritalStatus')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select marital status</option>
+                  <option value="single">Single</option>
+                  <option value="married">Married</option>
+                  <option value="divorced">Divorced</option>
+                  <option value="widowed">Widowed</option>
+                </select>
+                {errors.maritalStatus && (
+                  <p className="mt-1 text-sm text-red-600">{errors.maritalStatus.message}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  PAN Number *
+                </label>
+                <input
+                  {...register('pan')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="ABCDE1234F"
+                  maxLength="10"
+                />
+                {errors.pan && (
+                  <p className="mt-1 text-sm text-red-600">{errors.pan.message}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Aadhaar Number
+                </label>
+                <input
+                  {...register('aadhaar')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="123456789012"
+                  maxLength="12"
+                />
+                {errors.aadhaar && (
+                  <p className="mt-1 text-sm text-red-600">{errors.aadhaar.message}</p>
+                )}
               </div>
             </div>
 
-            <div className="form-group">
-              <label htmlFor="maritalStatus">
-                Marital Status *
-                <Tooltip content="Your marital status as on March 31st of the assessment year">
-                  <span className="help-icon">?</span>
-                </Tooltip>
-              </label>
-              <select
-                id="maritalStatus"
-                value={formData.maritalStatus}
-                onChange={(e) => handleInputChange('maritalStatus', e.target.value)}
-                className={errors.maritalStatus ? 'error' : ''}
+            {/* Address Section */}
+            <div className="border-t border-gray-200 pt-6">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <MapPin className="w-5 h-5 text-green-600" />
+                </div>
+                <h4 className="text-md font-semibold text-gray-900">Address Details</h4>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Address Line 1 *
+                  </label>
+                  <input
+                    {...register('address.line1')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter address line 1"
+                  />
+                  {errors.address?.line1 && (
+                    <p className="mt-1 text-sm text-red-600">{errors.address.line1.message}</p>
+                  )}
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Address Line 2
+                  </label>
+                  <input
+                    {...register('address.line2')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter address line 2"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    City *
+                  </label>
+                  <input
+                    {...register('address.city')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter city"
+                  />
+                  {errors.address?.city && (
+                    <p className="mt-1 text-sm text-red-600">{errors.address.city.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    State *
+                  </label>
+                  <input
+                    {...register('address.state')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter state"
+                  />
+                  {errors.address?.state && (
+                    <p className="mt-1 text-sm text-red-600">{errors.address.state.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Pincode *
+                  </label>
+                  <input
+                    {...register('address.pincode')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="123456"
+                    maxLength="6"
+                  />
+                  {errors.address?.pincode && (
+                    <p className="mt-1 text-sm text-red-600">{errors.address.pincode.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Country
+                  </label>
+                  <input
+                    {...register('address.country')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value="India"
+                    readOnly
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Contact Section */}
+            <div className="border-t border-gray-200 pt-6">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <Phone className="w-5 h-5 text-purple-600" />
+                </div>
+                <h4 className="text-md font-semibold text-gray-900">Contact Details</h4>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Phone Number *
+                  </label>
+                  <input
+                    {...register('contact.phone')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="9876543210"
+                    maxLength="10"
+                  />
+                  {errors.contact?.phone && (
+                    <p className="mt-1 text-sm text-red-600">{errors.contact.phone.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Email Address *
+                  </label>
+                  <input
+                    {...register('contact.email')}
+                    type="email"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="example@email.com"
+                  />
+                  {errors.contact?.email && (
+                    <p className="mt-1 text-sm text-red-600">{errors.contact.email.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Alternate Phone
+                  </label>
+                  <input
+                    {...register('contact.alternatePhone')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="9876543210"
+                    maxLength="10"
+                  />
+                  {errors.contact?.alternatePhone && (
+                    <p className="mt-1 text-sm text-red-600">{errors.contact.alternatePhone.message}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Bank Accounts Section */}
+            <div className="border-t border-gray-200 pt-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-yellow-100 rounded-lg">
+                    <CreditCard className="w-5 h-5 text-yellow-600" />
+                  </div>
+                  <h4 className="text-md font-semibold text-gray-900">Bank Accounts</h4>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openBankForm()}
+                  className="flex items-center space-x-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Account</span>
+                </Button>
+              </div>
+
+              {bankAccounts.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <CreditCard className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                  <p>No bank accounts added yet</p>
+                  <p className="text-sm">Add at least one account for refund processing</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {bankAccounts.map((account) => (
+                    <div key={account.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-medium text-gray-900">
+                              {account.bankName}
+                            </span>
+                            {account.isPrimary && (
+                              <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                                Primary
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            {account.accountNumber} • {account.ifscCode}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {account.accountType}
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          {!account.isPrimary && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPrimaryAccount(account.id)}
+                            >
+                              Set Primary
+                            </Button>
+                          )}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openBankForm(account)}
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => deleteBankAccount(account.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {errors.bankAccounts && (
+                <p className="mt-2 text-sm text-red-600">{errors.bankAccounts.message}</p>
+              )}
+            </div>
+
+            {/* Form Actions */}
+            <div className="flex justify-between pt-6 border-t border-gray-200">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onPrevious}
+                disabled={isFirstStep}
               >
-                <option value="">Select Marital Status</option>
-                <option value="single">Single</option>
-                <option value="married">Married</option>
-                <option value="widow">Widow/Widower</option>
-                <option value="divorced">Divorced</option>
-              </select>
-              {errors.maritalStatus && <span className="error-message">{errors.maritalStatus}</span>}
+                Previous
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={!isValid}
+              >
+                Save & Continue
+              </Button>
             </div>
-          </div>
-
-          {/* Family Information */}
-          <div className="form-section">
-            <h3>Family Information</h3>
-            
-            <div className="form-group">
-              <label htmlFor="fatherName">
-                Father's Name
-                <Tooltip content="Father's name as per PAN card">
-                  <span className="help-icon">?</span>
-                </Tooltip>
-              </label>
-              <input
-                id="fatherName"
-                type="text"
-                value={formData.fatherName}
-                onChange={(e) => handleInputChange('fatherName', e.target.value)}
-                placeholder="Enter father's name"
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="motherName">
-                Mother's Name
-                <Tooltip content="Mother's name as per PAN card">
-                  <span className="help-icon">?</span>
-                </Tooltip>
-              </label>
-              <input
-                id="motherName"
-                type="text"
-                value={formData.motherName}
-                onChange={(e) => handleInputChange('motherName', e.target.value)}
-                placeholder="Enter mother's name"
-              />
-            </div>
-
-            {formData.maritalStatus === 'married' && (
-              <div className="form-group">
-                <label htmlFor="spouseName">
-                  Spouse's Name
-                  <Tooltip content="Spouse's name (required if married)">
-                    <span className="help-icon">?</span>
-                  </Tooltip>
-                </label>
-                <input
-                  id="spouseName"
-                  type="text"
-                  value={formData.spouseName}
-                  onChange={(e) => handleInputChange('spouseName', e.target.value)}
-                  placeholder="Enter spouse's name"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Contact Information */}
-          <div className="form-section">
-            <h3>Contact Information</h3>
-            
-            <div className="form-group">
-              <label htmlFor="phone">
-                Phone Number *
-                <Tooltip content="10-digit mobile number">
-                  <span className="help-icon">?</span>
-                </Tooltip>
-              </label>
-              <input
-                id="phone"
-                type="tel"
-                value={formData.contact.phone}
-                onChange={(e) => handleNestedInputChange('contact', 'phone', e.target.value)}
-                className={errors.phone ? 'error' : ''}
-                placeholder="9876543210"
-                maxLength="10"
-              />
-              {errors.phone && <span className="error-message">{errors.phone}</span>}
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="email">
-                Email Address *
-                <Tooltip content="Valid email address for communication">
-                  <span className="help-icon">?</span>
-                </Tooltip>
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={formData.contact.email}
-                onChange={(e) => handleNestedInputChange('contact', 'email', e.target.value)}
-                className={errors.email ? 'error' : ''}
-                placeholder="your.email@example.com"
-              />
-              {errors.email && <span className="error-message">{errors.email}</span>}
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="alternatePhone">
-                Alternate Phone
-                <Tooltip content="Optional alternate contact number">
-                  <span className="help-icon">?</span>
-                </Tooltip>
-              </label>
-              <input
-                id="alternatePhone"
-                type="tel"
-                value={formData.contact.alternatePhone}
-                onChange={(e) => handleNestedInputChange('contact', 'alternatePhone', e.target.value)}
-                placeholder="9876543210"
-                maxLength="10"
-              />
-            </div>
-          </div>
-
-          {/* Address Information */}
-          <div className="form-section">
-            <h3>Address Information</h3>
-            
-            <div className="form-group">
-              <label htmlFor="residentialAddress">
-                Residential Address *
-                <Tooltip content="Complete residential address">
-                  <span className="help-icon">?</span>
-                </Tooltip>
-              </label>
-              <textarea
-                id="residentialAddress"
-                value={formData.address.residential}
-                onChange={(e) => handleNestedInputChange('address', 'residential', e.target.value)}
-                placeholder="Enter your complete residential address"
-                rows="3"
-              />
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="city">
-                  City *
-                  <Tooltip content="City of residence">
-                    <span className="help-icon">?</span>
-                  </Tooltip>
-                </label>
-                <input
-                  id="city"
-                  type="text"
-                  value={formData.address.city}
-                  onChange={(e) => handleNestedInputChange('address', 'city', e.target.value)}
-                  placeholder="Enter city"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="state">
-                  State *
-                  <Tooltip content="State of residence">
-                    <span className="help-icon">?</span>
-                  </Tooltip>
-                </label>
-                <input
-                  id="state"
-                  type="text"
-                  value={formData.address.state}
-                  onChange={(e) => handleNestedInputChange('address', 'state', e.target.value)}
-                  placeholder="Enter state"
-                />
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="pincode">
-                PIN Code *
-                <Tooltip content="6-digit postal code">
-                  <span className="help-icon">?</span>
-                </Tooltip>
-              </label>
-              <input
-                id="pincode"
-                type="text"
-                value={formData.address.pincode}
-                onChange={(e) => handleNestedInputChange('address', 'pincode', e.target.value)}
-                placeholder="123456"
-                maxLength="6"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="form-actions">
-          {!isFirstStep && (
-            <Button
-              variant="secondary"
-              onClick={handlePrevious}
-              disabled={isValidating}
-            >
-              Previous
-            </Button>
-          )}
-          
-          <Button
-            variant="primary"
-            onClick={handleNext}
-            disabled={isValidating}
-            loading={isValidating}
-          >
-            {isLastStep ? 'Review & Submit' : 'Next'}
-          </Button>
+          </form>
         </div>
       </Card>
+
+      {/* Bank Account Form Modal */}
+      {showBankForm && (
+        <BankAccountForm
+          account={editingAccount}
+          onSave={editingAccount ? updateBankAccount : addBankAccount}
+          onCancel={() => {
+            setShowBankForm(false);
+            setEditingAccount(null);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// Bank Account Form Component
+const BankAccountForm = ({ account, onSave, onCancel }) => {
+  const [formData, setFormData] = useState({
+    accountNumber: account?.accountNumber || '',
+    ifscCode: account?.ifscCode || '',
+    bankName: account?.bankName || '',
+    accountType: account?.accountType || ''
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave(formData);
+  };
+
+  const handleChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          {account ? 'Edit Bank Account' : 'Add Bank Account'}
+        </h3>
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Bank Name *
+            </label>
+            <input
+              type="text"
+              value={formData.bankName}
+              onChange={(e) => handleChange('bankName', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter bank name"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Account Number *
+            </label>
+            <input
+              type="text"
+              value={formData.accountNumber}
+              onChange={(e) => handleChange('accountNumber', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter account number"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              IFSC Code *
+            </label>
+            <input
+              type="text"
+              value={formData.ifscCode}
+              onChange={(e) => handleChange('ifscCode', e.target.value.toUpperCase())}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="SBIN0001234"
+              maxLength="11"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Account Type *
+            </label>
+            <select
+              value={formData.accountType}
+              onChange={(e) => handleChange('accountType', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              <option value="">Select account type</option>
+              <option value="savings">Savings</option>
+              <option value="current">Current</option>
+              <option value="salary">Salary</option>
+            </select>
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onCancel}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+            >
+              {account ? 'Update' : 'Add'} Account
+            </Button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

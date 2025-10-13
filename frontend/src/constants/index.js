@@ -6,50 +6,50 @@
 export const API_ENDPOINTS = {
   // Authentication
   AUTH: {
-    LOGIN: '/auth/login',
-    REGISTER: '/auth/register',
-    REFRESH: '/auth/refresh',
-    LOGOUT: '/auth/logout',
-    PROFILE: '/auth/profile'
+    LOGIN: '/api/auth/login',
+    REGISTER: '/api/auth/register',
+    REFRESH: '/api/auth/refresh',
+    LOGOUT: '/api/auth/logout',
+    PROFILE: '/api/auth/profile'
   },
   
   // Family Management
   FAMILY: {
-    BASE: '/family',
-    MEMBERS: '/family',
-    STATS: '/family/stats'
+    BASE: '/api/family',
+    MEMBERS: '/api/family',
+    STATS: '/api/family/stats'
   },
   
   // ITR Filing
   ITR: {
-    BASE: '/itr',
-    SESSIONS: '/itr/sessions',
+    BASE: '/api/itr',
+    SESSIONS: '/api/itr/sessions',
     SECTIONS: {
-      '80C': '/itr/sections/80c',
-      '80D': '/itr/sections/80d',
-      '80G': '/itr/sections/80g',
-      '80TTA': '/itr/sections/80tta',
-      '80EE': '/itr/sections/80ee',
-      '80EEA': '/itr/sections/80eea',
-      '80EEB': '/itr/sections/80eeb',
-      '80U': '/itr/sections/80u',
-      '80DD': '/itr/sections/80dd'
+      '80C': '/api/itr/sections/80c',
+      '80D': '/api/itr/sections/80d',
+      '80G': '/api/itr/sections/80g',
+      '80TTA': '/api/itr/sections/80tta',
+      '80EE': '/api/itr/sections/80ee',
+      '80EEA': '/api/itr/sections/80eea',
+      '80EEB': '/api/itr/sections/80eeb',
+      '80U': '/api/itr/sections/80u',
+      '80DD': '/api/itr/sections/80dd'
     },
-    INCOME: '/itr/income',
-    TDS: '/itr/tds',
-    COMPUTATION: '/itr/computation',
-    EXPORT: '/itr/export'
+    INCOME: '/api/itr/income',
+    TDS: '/api/itr/tds',
+    COMPUTATION: '/api/itr/computation',
+    EXPORT: '/api/itr/export'
   },
   
   // Documents
   DOCUMENTS: {
-    BASE: '/documents',
-    UPLOAD: '/documents/upload',
-    DOWNLOAD: '/documents/download'
+    BASE: '/api/documents',
+    UPLOAD: '/api/documents/upload',
+    DOWNLOAD: '/api/documents/download'
   },
   
   // Health
-  HEALTH: '/health'
+  HEALTH: '/api/health'
 };
 
 // ITR Types - Clear enumeration

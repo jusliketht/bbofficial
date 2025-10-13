@@ -1,97 +1,38 @@
 import React, { useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { toast } from 'react-hot-toast';
-import { CheckCircle, User } from 'lucide-react';
 
 const GoogleOAuthSuccess = () => {
-  const navigate = useNavigate();
-  const authContext = useAuth();
+  const { login } = useAuth();
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
     const token = searchParams.get('token');
     const refreshToken = searchParams.get('refreshToken');
-    const userParam = searchParams.get('user');
+    const userJson = searchParams.get('user');
 
-    if (token && refreshToken && userParam) {
+    if (token && userJson) {
       try {
-        const user = JSON.parse(decodeURIComponent(userParam));
-        
-        // Store tokens and user data
-        localStorage.setItem('accessToken', token);
-        localStorage.setItem('refreshToken', refreshToken);
-        localStorage.setItem('user', JSON.stringify(user));
-        
-        // Update auth context immediately
-        authContext.setUser(user);
-        
-        toast.success(`Welcome, ${user.fullName}! Google login successful.`);
-        
-                // Redirect to appropriate dashboard based on role
-                const dashboardRoutes = {
-                  'SUPER_ADMIN': '/admin/super',
-                  'PLATFORM_ADMIN': '/admin/platform',
-                  'CA_FIRM_ADMIN': '/firm/dashboard',
-                  'CA': '/ca/clients',
-                  'END_USER': '/dashboard'
-                };
-        
-        const dashboardRoute = dashboardRoutes[user.role] || '/dashboard';
-        
-        console.log('Google OAuth redirect:', {
-          user: user,
-          role: user.role,
-          dashboardRoute: dashboardRoute,
-          tokenPresent: !!token,
-          refreshTokenPresent: !!refreshToken
-        });
-        
-        setTimeout(() => {
-          console.log('Navigating to:', dashboardRoute);
-          navigate(dashboardRoute, { replace: true });
-        }, 1500);
-        
+        const user = JSON.parse(userJson);
+        login(user, token, refreshToken);
       } catch (error) {
-        console.error('Error parsing user data:', error);
-        toast.error('Error processing login. Please try again.');
-        setTimeout(() => {
-          navigate('/login');
-        }, 2000);
+        console.error('Failed to parse user data:', error);
+        // Redirect to login with error
+        window.location.href = '/login?error=oauth_failed';
       }
     } else {
-      toast.error('Invalid login response. Please try again.');
-      setTimeout(() => {
-        navigate('/login');
-      }, 2000);
+      console.error('Missing token or user data in OAuth callback');
+      // Redirect to login with error
+      window.location.href = '/login?error=oauth_failed';
     }
-  }, [searchParams, navigate, authContext]);
+  }, [login, searchParams]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-6">
-            <CheckCircle className="w-8 h-8 text-green-600" />
-          </div>
-          
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            Google Login Successful!
-          </h1>
-          
-          <p className="text-gray-600 mb-6">
-            You have been successfully authenticated with Google. Redirecting to your dashboard...
-          </p>
-          
-          <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
-            <User className="w-4 h-4" />
-            <span>Setting up your account</span>
-          </div>
-          
-          <div className="mt-6">
-            <div className="animate-spin rounded-full h-8 w-8 border-2 border-green-600 border-t-transparent mx-auto"></div>
-          </div>
-        </div>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <h2 className="text-xl font-semibold text-gray-900">Finalizing your login...</h2>
+        <p className="text-gray-600 mt-2">Please wait while we complete your authentication.</p>
       </div>
     </div>
   );

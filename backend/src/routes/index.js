@@ -152,6 +152,18 @@ try {
   router.use('/ca-firms', require('./ca-firms'));
   enterpriseLogger.info('CA firm routes loaded successfully');
   
+  enterpriseLogger.info('Loading broker routes...');
+  router.use('/broker', require('./broker'));
+  enterpriseLogger.info('Broker routes loaded successfully');
+  
+  enterpriseLogger.info('Loading bank routes...');
+  router.use('/bank', require('./bank'));
+  enterpriseLogger.info('Bank routes loaded successfully');
+  
+  enterpriseLogger.info('Loading CA Bot routes...');
+  router.use('/cabot', require('./cabot'));
+  enterpriseLogger.info('CA Bot routes loaded successfully');
+  
   enterpriseLogger.info('All routes loaded successfully');
 } catch (error) {
   enterpriseLogger.error('Error loading routes', { 
@@ -200,7 +212,8 @@ router.use('*', (req, res) => {
       '/api/documents',
       '/api/notifications',
       '/api/tickets',
-      '/api/ca-firms'
+      '/api/ca-firms',
+      '/api/cabot'
     ]
   });
 });

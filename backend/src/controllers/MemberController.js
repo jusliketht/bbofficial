@@ -41,8 +41,9 @@ class MemberController {
       }
       if (search) {
         whereClause[Op.or] = [
-          { fullName: { [Op.iLike]: `%${search}%` } },
-          { pan: { [Op.iLike]: `%${search}%` } },
+          { firstName: { [Op.iLike]: `%${search}%` } },
+          { lastName: { [Op.iLike]: `%${search}%` } },
+          { panNumber: { [Op.iLike]: `%${search}%` } },
           { relationship: { [Op.iLike]: `%${search}%` } }
         ];
       }
@@ -51,27 +52,31 @@ class MemberController {
         where: whereClause,
         order: [['createdAt', 'DESC']],
         attributes: [
-          'id', 'userId', 'fullName', 'pan', 'relationship', 'dateOfBirth',
-          'gender', 'status', 'createdAt', 'updatedAt', 'metadata'
+          'id', 'userId', 'firstName', 'lastName', 'panNumber', 'relationship', 'dateOfBirth',
+          'gender', 'maritalStatus', 'phone', 'email', 'address', 'isActive', 'panVerified', 'createdAt', 'updatedAt'
         ]
       });
 
       const memberList = members.map(member => ({
         id: member.id,
         userId: member.userId,
-        fullName: member.fullName,
-        pan: member.pan,
+        fullName: `${member.firstName} ${member.lastName}`,
+        firstName: member.firstName,
+        lastName: member.lastName,
+        panNumber: member.panNumber,
         relationship: member.relationship,
         relationshipLabel: this.getRelationshipLabel(member.relationship),
         dateOfBirth: member.dateOfBirth,
         gender: member.gender,
         genderLabel: this.getGenderLabel(member.gender),
-        status: member.status,
-        statusLabel: this.getStatusLabel(member.status),
-        statusColor: this.getStatusColor(member.status),
+        maritalStatus: member.maritalStatus,
+        phone: member.phone,
+        email: member.email,
+        address: member.address,
+        isActive: member.isActive,
+        panVerified: member.panVerified,
         createdAt: member.createdAt,
-        updatedAt: member.updatedAt,
-        metadata: member.metadata
+        updatedAt: member.updatedAt
       }));
 
       enterpriseLogger.info('Members retrieved for user', { userId, count: memberList.length });

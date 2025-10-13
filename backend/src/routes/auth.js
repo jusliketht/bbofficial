@@ -8,11 +8,11 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const passport = require('../config/passport');
 const { v4: uuidv4 } = require('uuid');
-const { User, UserSession, AuditLog, PasswordResetToken } = require('../models');
+const { User, UserSession, AuditLog, PasswordResetToken, CAFirm } = require('../models');
 const enterpriseLogger = require('../utils/logger');
 const emailService = require('../services/emailService');
 const { authenticateToken, authRateLimit } = require('../middleware/auth');
-const { setRefreshTokenCookie, clearRefreshTokenCookie } = require('../middleware/cookieAuth');
+const { setRefreshTokenCookie, clearRefreshTokenCookie, handleTokenRefresh } = require('../middleware/cookieAuth');
 const { auditAuthEvents, auditFailedAuth } = require('../middleware/auditLogger');
 const { progressiveRateLimit, recordFailedAttempt, clearFailedAttempts, strictRateLimit } = require('../middleware/progressiveRateLimit');
 const { requireRole, requirePermission } = require('../middleware/rbac');
@@ -85,7 +85,7 @@ router.post('/register',
       passwordHash: passwordHash,
       fullName: fullName,
       phone: phone || null,
-      role: 'user',
+      role: 'END_USER', // Default role for all public signups
       authProvider: 'LOCAL',
       status: 'active',
       emailVerified: true
@@ -174,7 +174,7 @@ router.post('/login',
         tokenVersion: user.tokenVersion
       },
       process.env.JWT_SECRET || 'fallback-secret',
-      { expiresIn: '15m' }
+      { expiresIn: '1h' }
     );
 
     // Generate refresh token
@@ -225,6 +225,7 @@ router.post('/login',
         full_name: user.fullName,
         role: user.role,
         status: user.status,
+        onboardingCompleted: user.onboardingCompleted,
       },
     });
   } catch (error) {
@@ -235,6 +236,68 @@ router.post('/login',
     res.status(500).json({
       success: false,
       error: 'Internal server error',
+    });
+  }
+});
+
+// =====================================================
+// TOKEN REFRESH ROUTES
+// =====================================================
+
+// Refresh access token using refresh token from HttpOnly cookie
+router.post('/refresh', handleTokenRefresh);
+
+// Logout - invalidate refresh token
+router.post('/logout', async (req, res) => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+    
+    if (refreshToken) {
+      // Find and revoke the specific session
+      const sessions = await UserSession.findAll({
+        where: {
+          revoked: false,
+          expiresAt: {
+            [require('sequelize').Op.gt]: new Date()
+          }
+        }
+      });
+
+      for (const session of sessions) {
+        const bcrypt = require('bcryptjs');
+        const isValid = await bcrypt.compare(refreshToken, session.refreshTokenHash);
+        if (isValid) {
+          await session.update({
+            revoked: true,
+            revokedAt: new Date()
+          });
+          
+          enterpriseLogger.info('User session revoked on logout', {
+            userId: session.userId,
+            sessionId: session.id
+          });
+          break;
+        }
+      }
+    }
+    
+    // Clear refresh token cookie
+    clearRefreshTokenCookie(res);
+    
+    res.json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+    
+  } catch (error) {
+    enterpriseLogger.error('Logout failed', {
+      error: error.message,
+      stack: error.stack
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: 'Logout failed'
     });
   }
 });
@@ -439,9 +502,18 @@ router.post('/verify-otp', authRateLimit, async (req, res) => {
 // =====================================================
 
 // Google OAuth login
-router.get('/google', passport.authenticate('google', {
-  scope: ['profile', 'email']
-}));
+// Google OAuth initiation with CSRF protection
+router.get('/google', (req, res, next) => {
+  // Generate and store state parameter for CSRF protection
+  const state = require('crypto').randomBytes(32).toString('hex');
+  req.session.oauthState = state;
+  
+  passport.authenticate('google', {
+    scope: ['profile', 'email'],
+    prompt: 'select_account', // Force account selection screen
+    state: state // Include state parameter
+  })(req, res, next);
+});
 
 // Google OAuth callback
 router.get('/google/callback', 
@@ -465,7 +537,7 @@ router.get('/google/callback',
           tokenVersion: user.tokenVersion
         },
         process.env.JWT_SECRET || 'fallback-secret',
-        { expiresIn: '15m' }
+        { expiresIn: '1h' }
       );
 
       // Generate refresh token
@@ -509,13 +581,24 @@ router.get('/google/callback',
 
       // Redirect to frontend with token
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-      const redirectUrl = `${frontendUrl}/auth/google/success?token=${token}&refreshToken=${refreshToken}&user=${encodeURIComponent(JSON.stringify({
+      const userData = {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
         role: user.role,
         status: user.status
-      }))}`;
+      };
+      const redirectUrl = `${frontendUrl}/auth/google/success?token=${token}&refreshToken=${refreshToken}&user=${encodeURIComponent(JSON.stringify(userData))}`;
+
+      // --- START DEBUGGING ---
+      enterpriseLogger.info('Google OAuth redirect URL constructed', {
+        frontendUrl,
+        token: token ? `${token.substring(0, 20)}...` : 'null',
+        refreshToken: refreshToken ? `${refreshToken.substring(0, 20)}...` : 'null',
+        userData,
+        redirectUrl: redirectUrl.substring(0, 200) + '...'
+      });
+      // --- END DEBUGGING ---
 
       res.redirect(redirectUrl);
 
@@ -813,7 +896,7 @@ router.post('/refresh', auditAuthEvents('refresh_token'), async (req, res) => {
         tokenVersion: user.tokenVersion
       },
       process.env.JWT_SECRET || 'fallback-secret',
-      { expiresIn: '15m' }
+      { expiresIn: '1h' }
     );
 
     // Update session last active
@@ -1013,6 +1096,180 @@ router.delete('/sessions/:sessionId', authenticateToken, requirePermission('admi
       error: error.message,
       userId: req.user?.userId,
       sessionId: req.params.sessionId
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
+});
+
+// =====================================================
+// UPGRADE TO PROFESSIONAL ROUTES
+// =====================================================
+
+// Upgrade END_USER to CA_FIRM_ADMIN
+router.post('/upgrade-to-professional', 
+  authenticateToken,
+  requireRole(['END_USER']),
+  async (req, res) => {
+    try {
+      const userId = req.user.userId;
+      const {
+        firmName,
+        firmType,
+        address,
+        city,
+        state,
+        pincode,
+        phone,
+        website,
+        description
+      } = req.body;
+
+      // Validate required fields
+      if (!firmName || !city || !state) {
+        return res.status(400).json({
+          success: false,
+          error: 'Firm name, city, and state are required',
+        });
+      }
+
+      // Get current user
+      const user = await User.findByPk(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: 'User not found',
+        });
+      }
+
+      // Check if user is already a professional
+      if (user.role !== 'END_USER') {
+        return res.status(400).json({
+          success: false,
+          error: 'User is already a professional',
+        });
+      }
+
+      // Create CA Firm
+      const caFirm = await CAFirm.create({
+        name: firmName,
+        type: firmType || 'CA_FIRM',
+        address: address || '',
+        city,
+        state,
+        pincode: pincode || '',
+        phone: phone || '',
+        website: website || '',
+        description: description || '',
+        status: 'active',
+        adminUserId: userId
+      });
+
+      // Update user role to CA_FIRM_ADMIN
+      await user.update({
+        role: 'CA_FIRM_ADMIN',
+        firmId: caFirm.id
+      });
+
+      // Log audit event
+      await AuditLog.logAuthEvent({
+        userId,
+        event: 'upgrade_to_professional',
+        details: {
+          firmId: caFirm.id,
+          firmName: firmName,
+          previousRole: 'END_USER',
+          newRole: 'CA_FIRM_ADMIN'
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+
+      enterpriseLogger.info('User upgraded to professional', {
+        userId,
+        firmId: caFirm.id,
+        firmName: firmName
+      });
+
+      res.json({
+        success: true,
+        message: 'Successfully upgraded to professional account',
+        data: {
+          firmId: caFirm.id,
+          firmName: caFirm.name,
+          newRole: 'CA_FIRM_ADMIN'
+        }
+      });
+
+    } catch (error) {
+      enterpriseLogger.error('Upgrade to professional failed', {
+        error: error.message,
+        userId: req.user?.userId
+      });
+
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error',
+      });
+    }
+  }
+);
+
+// =====================================================
+// ONBOARDING ROUTES
+// =====================================================
+
+// Complete onboarding
+router.post('/complete-onboarding', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { onboardingCompleted } = req.body;
+
+    // Get user
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Update onboarding status
+    await user.update({
+      onboardingCompleted: onboardingCompleted || true
+    });
+
+    // Log audit event
+    await AuditLog.logAuthEvent({
+      userId,
+      event: 'onboarding_completed',
+      details: {
+        onboardingCompleted: onboardingCompleted || true
+      },
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent')
+    });
+
+    enterpriseLogger.info('Onboarding completed', {
+      userId,
+      onboardingCompleted: onboardingCompleted || true
+    });
+
+    res.json({
+      success: true,
+      message: 'Onboarding completed successfully',
+      data: {
+        onboardingCompleted: user.onboardingCompleted
+      }
+    });
+
+  } catch (error) {
+    enterpriseLogger.error('Complete onboarding failed', {
+      error: error.message,
+      userId: req.user?.userId
     });
 
     res.status(500).json({

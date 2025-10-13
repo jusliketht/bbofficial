@@ -3,10 +3,10 @@
 // =====================================================
 
 import React, { useState, useEffect } from 'react';
-import { Card } from '../Common/Card';
-import { Button } from '../Common/Button';
-import { StatusBadge } from '../Common/StatusBadge';
-import { Modal } from '../Common/Modal';
+import Card from '../../components/common/Card';
+import Button from '../../components/common/Button';
+import StatusBadge from '../../components/common/StatusBadge';
+import Modal from '../../components/common/Modal';
 import FileUpload from '../Documents/FileUpload';
 import FileManager from '../Documents/FileManager';
 import { useDocumentContext } from '../../contexts/DocumentContext';

@@ -9,6 +9,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
 const cookieParser = require('cookie-parser');
+const session = require('express-session');
 const passport = require('./config/passport');
 const enterpriseLogger = require('./utils/logger');
 const { globalErrorHandler } = require('./middleware/errorHandler');
@@ -48,6 +49,18 @@ app.use(
 
 // Cookie parser
 app.use(cookieParser());
+
+// Session configuration for OAuth state parameter
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-session-secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 15 * 60 * 1000 // 15 minutes for OAuth state
+  }
+}));
 
 // Initialize Passport
 app.use(passport.initialize());

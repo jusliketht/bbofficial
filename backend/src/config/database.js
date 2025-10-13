@@ -1,11 +1,11 @@
 // =====================================================
-// DATABASE CONFIGURATION - SEQUELIZE STANDARDIZED
+// DATABASE CONFIGURATION - LOCAL POSTGRESQL
 // =====================================================
 
 const { Sequelize } = require('sequelize');
 const enterpriseLogger = require('../utils/logger');
 
-// Database configuration
+// Database configuration for local PostgreSQL
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
   port: process.env.DB_PORT || 5432,
@@ -18,10 +18,19 @@ const dbConfig = {
   
   // Connection pool settings
   pool: {
-    max: 20,
-    min: 5,
-    acquire: 30000,
-    idle: 10000
+    max: parseInt(process.env.DB_POOL_MAX) || 20,
+    min: parseInt(process.env.DB_POOL_MIN) || 5,
+    acquire: parseInt(process.env.DB_POOL_ACQUIRE) || 30000,
+    idle: parseInt(process.env.DB_POOL_IDLE) || 10000
+  },
+  
+  // Connection timeout settings
+  dialectOptions: {
+    connectTimeout: 60000,
+    requestTimeout: 60000,
+    connectionTimeoutMillis: 60000,
+    idleTimeoutMillis: 30000
+    // SSL disabled for local development
   },
   
   // Additional options
@@ -39,10 +48,10 @@ const sequelize = new Sequelize(dbConfig);
 const testConnection = async () => {
   try {
     await sequelize.authenticate();
-    enterpriseLogger.info('Database connection established successfully');
+    enterpriseLogger.info('Local PostgreSQL database connection established successfully');
     return true;
   } catch (error) {
-    enterpriseLogger.error('Unable to connect to database', { 
+    enterpriseLogger.error('Unable to connect to local PostgreSQL database', { 
       error: error.message,
       config: {
         host: dbConfig.host,
@@ -62,14 +71,14 @@ const initializeDatabase = async () => {
     if (isConnected) {
       // Sync models (create tables if they don't exist)
       await sequelize.sync({ alter: false }); // Don't alter existing tables
-      enterpriseLogger.info('Database initialized successfully');
+      enterpriseLogger.info('Local PostgreSQL database initialized successfully');
       return true;
     } else {
-      enterpriseLogger.error('Database initialization failed');
+      enterpriseLogger.error('Local PostgreSQL database initialization failed');
       return false;
     }
   } catch (error) {
-    enterpriseLogger.error('Database initialization error', { error: error.message });
+    enterpriseLogger.error('Local PostgreSQL database initialization error', { error: error.message });
     return false;
   }
 };
@@ -78,9 +87,9 @@ const initializeDatabase = async () => {
 const closeDatabase = async () => {
   try {
     await sequelize.close();
-    enterpriseLogger.info('Database connection closed');
+    enterpriseLogger.info('Local PostgreSQL database connection closed');
   } catch (error) {
-    enterpriseLogger.error('Error closing database connection', { error: error.message });
+    enterpriseLogger.error('Error closing local PostgreSQL database connection', { error: error.message });
   }
 };
 

@@ -3,9 +3,9 @@
 // =====================================================
 
 import React, { useState, useRef, useCallback } from 'react';
-import { Button } from '../Common/Button';
-import { Card } from '../Common/Card';
-import Tooltip from '../Common/Tooltip';
+import Button from '../common/Button';
+import Card from '../common/Card';
+import Tooltip from '../common/Tooltip';
 import { enterpriseLogger } from '../../utils/logger';
 
 const DocumentUpload = ({ 

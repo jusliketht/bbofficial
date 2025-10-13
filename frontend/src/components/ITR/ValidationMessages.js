@@ -3,7 +3,7 @@
 // =====================================================
 
 import React from 'react';
-import { Card } from '../Common/Card';
+import Card from '../common/Card';
 
 const ValidationMessages = ({ errors = [], warnings = [], info = [] }) => {
   if (errors.length === 0 && warnings.length === 0 && info.length === 0) {

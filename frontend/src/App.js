@@ -1,23 +1,22 @@
 // =====================================================
-// MINIMAL APP.JS - WORKING BUILD
+// MAIN APP COMPONENT - CLEAN ROUTE STRUCTURE
+// Clear separation of public and protected routes
 // =====================================================
 
-import React, { useState, Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 
 // Core components
 import Layout from './components/Layout.js';
 import CompactMobileNav from './components/UI/CompactMobileNav.js';
-import UserDashboard from './pages/Dashboard/UserDashboard';
-import ConsolidatedLogin from './pages/Auth/ConsolidatedLogin';
-import Register from './pages/Auth/Register';
+import LandingPage from './pages/Landing/LandingPage';
+import HomeRedirect from './pages/HomeRedirect';
+
+// Auth components
+import LoginPage from './pages/Auth/LoginPage';
 import GoogleOAuthSuccess from './pages/Auth/GoogleOAuthSuccess';
-import GoogleOAuthError from './pages/Auth/GoogleOAuthError';
-import GoogleOAuthLinkRequired from './pages/Auth/GoogleOAuthLinkRequired';
-import ForgotPassword from './pages/Auth/ForgotPassword';
-import ResetPassword from './pages/Auth/ResetPassword';
 
 // Admin components
 import AdminDashboard from './pages/Admin/AdminDashboard';
@@ -27,9 +26,36 @@ import AdminLayout from './components/Admin/AdminLayout';
 import CAFirmAdminDashboard from './pages/Dashboard/CAFirmAdminDashboard';
 import CAStaffDashboard from './pages/Dashboard/CAStaffDashboard';
 
+// User pages
+import UserDashboard from './pages/Dashboard/UserDashboard';
+import StartFiling from './pages/ITR/StartFiling';
+import ITRFiling from './pages/ITR/ITRFiling';
+import FilingHistory from './pages/ITR/FilingHistory';
+import AddMembers from './pages/Members/AddMembers';
+import UserSettings from './pages/User/UserSettings';
+import ProfileSettings from './pages/User/ProfileSettings';
+import FinancialProfilePage from './pages/FinancialProfile/FinancialProfilePage';
+import ServiceTicketManagement from './pages/Service/ServiceTicketManagement';
+import BillingInvoicing from './pages/Service/BillingInvoicing';
+import CABotPage from './pages/CABot/CABotPage';
+import UpgradeToProfessional from './pages/Upgrade/UpgradeToProfessional';
+
+// Design System Components
+import StyleGuide from './components/DesignSystem/StyleGuide';
+import KeyboardNavigationTest from './components/DesignSystem/KeyboardNavigationTest';
+import ContentReview from './components/DesignSystem/ContentReview';
+
+// Test Components
+import TestRunner from './test-data/testRunner';
+import TestReport from './test-data/testReport';
+
 // Context providers
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AuthProvider } from './contexts/AuthContext';
 import { FilingProvider } from './contexts/FilingContext';
+import { CABotProvider } from './contexts/CABotContext';
+
+// Auth components
+import ProtectedRoute from './components/auth/ProtectedRoute';
 
 // Error boundaries
 import ErrorBoundary from './components/ErrorBoundary';
@@ -47,111 +73,204 @@ const queryClient = new QueryClient({
   },
 });
 
-// Protected Route Component
-const ProtectedRoute = ({ children }) => {
-  const { user, loading } = useAuth();
-  
-  if (loading) {
-    return (
-      <div className="loading-container">
-        <div className="spinner"></div>
-        <p>Loading...</p>
-      </div>
-    );
-  }
-  
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-  
-  return children;
-};
-
 // Main App Component
 const AppContent = () => {
-  const { user } = useAuth();
-  
   return (
     <div className="app">
-      <Router>
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/login" element={<ConsolidatedLogin variant="hybrid" showOAuth={true} />} />
-          <Route path="/login/role" element={<ConsolidatedLogin variant="role-based" />} />
-          <Route path="/login/manual" element={<ConsolidatedLogin variant="manual" />} />
-          <Route path="/register" element={<Register />} />
+      <Routes>
+        {/* Public Routes */}
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/auth/google/success" element={<GoogleOAuthSuccess />} />
+        
+        {/* Protected Routes */}
+        <Route element={<ProtectedRoute />}>
+          {/* Smart redirector - determines correct dashboard based on role */}
+          <Route path="/home" element={<HomeRedirect />} />
           
-          {/* Protected Routes */}
+          {/* User Routes */}
           <Route 
             path="/dashboard" 
             element={
-              <ProtectedRoute>
-                <Layout>
-                  <UserDashboard />
-                </Layout>
-              </ProtectedRoute>
+              <Layout>
+                <UserDashboard />
+              </Layout>
             } 
           />
           
           {/* Admin Routes */}
           <Route 
-            path="/admin/super" 
+            path="/admin/dashboard" 
             element={
-              <ProtectedRoute>
-                <AdminLayout>
-                  <AdminDashboard />
-                </AdminLayout>
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/admin/platform" 
-            element={
-              <ProtectedRoute>
-                <AdminLayout>
-                  <AdminDashboard />
-                </AdminLayout>
-              </ProtectedRoute>
+              <AdminLayout>
+                <AdminDashboard />
+              </AdminLayout>
             } 
           />
           <Route 
             path="/firm/dashboard" 
             element={
-              <ProtectedRoute>
-                <AdminLayout>
-                  <CAFirmAdminDashboard />
-                </AdminLayout>
-              </ProtectedRoute>
+              <AdminLayout>
+                <CAFirmAdminDashboard />
+              </AdminLayout>
             } 
           />
           <Route 
             path="/ca/clients" 
             element={
-              <ProtectedRoute>
-                <Layout>
-                  <CAStaffDashboard />
-                </Layout>
-              </ProtectedRoute>
+              <Layout>
+                <CAStaffDashboard />
+              </Layout>
             } 
           />
           
-          {/* Google OAuth Routes */}
-          <Route path="/auth/google/success" element={<GoogleOAuthSuccess />} />
-          <Route path="/auth/google/error" element={<GoogleOAuthError />} />
-          <Route path="/auth/google/link-required" element={<GoogleOAuthLinkRequired />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
+          {/* ITR Filing Routes */}
+          <Route 
+            path="/itr/start" 
+            element={
+              <Layout>
+                <StartFiling />
+              </Layout>
+            } 
+          />
+          <Route 
+            path="/itr/filing" 
+            element={
+              <Layout>
+                <ITRFiling />
+              </Layout>
+            } 
+          />
+          <Route 
+            path="/filing-history" 
+            element={
+              <Layout>
+                <FilingHistory />
+              </Layout>
+            } 
+          />
           
-          {/* Default redirect */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          {/* Other User Routes */}
+          <Route 
+            path="/add-members" 
+            element={
+              <Layout>
+                <AddMembers />
+              </Layout>
+            } 
+          />
+          <Route 
+            path="/financial-profile" 
+            element={
+              <Layout>
+                <FinancialProfilePage />
+              </Layout>
+            } 
+          />
+          <Route 
+            path="/service-tickets" 
+            element={
+              <Layout>
+                <ServiceTicketManagement />
+              </Layout>
+            } 
+          />
+          <Route 
+            path="/billing-invoicing" 
+            element={
+              <Layout>
+                <BillingInvoicing />
+              </Layout>
+            } 
+          />
+          <Route 
+            path="/settings" 
+            element={
+              <Layout>
+                <UserSettings />
+              </Layout>
+            } 
+          />
+          <Route 
+            path="/profile" 
+            element={
+              <Layout>
+                <ProfileSettings />
+              </Layout>
+            } 
+          />
           
-          {/* Catch all */}
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
+          {/* CA Bot Route */}
+          <Route 
+            path="/ca-bot" 
+            element={
+              <CABotProvider>
+                <CABotPage />
+              </CABotProvider>
+            } 
+          />
+          
+          {/* Upgrade Route */}
+          <Route 
+            path="/upgrade" 
+            element={
+              <Layout>
+                <UpgradeToProfessional />
+              </Layout>
+            } 
+          />
+          
+          {/* Design System Routes */}
+          <Route 
+            path="/style-guide" 
+            element={
+              <Layout>
+                <StyleGuide />
+              </Layout>
+            } 
+          />
+          <Route 
+            path="/keyboard-test" 
+            element={
+              <Layout>
+                <KeyboardNavigationTest />
+              </Layout>
+            } 
+          />
+          <Route 
+            path="/content-review" 
+            element={
+              <Layout>
+                <ContentReview />
+              </Layout>
+            } 
+          />
+          
+          {/* Test Routes */}
+          <Route 
+            path="/test-runner" 
+            element={
+              <Layout>
+                <TestRunner />
+              </Layout>
+            } 
+          />
+          <Route 
+            path="/test-report" 
+            element={
+              <Layout>
+                <TestReport />
+              </Layout>
+            } 
+          />
+        </Route>
         
-        {/* Mobile Navigation */}
-        <CompactMobileNav />
-      </Router>
+        {/* Catch all - redirect to landing page */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+      
+      {/* Mobile Navigation */}
+      <CompactMobileNav />
     </div>
   );
 };

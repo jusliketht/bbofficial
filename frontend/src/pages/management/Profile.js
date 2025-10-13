@@ -104,7 +104,7 @@ const Profile = () => {
 
   const updatePasswordMutation = useMutation(
     async (data) => {
-      const response = await fetch('/auth/change-password', {
+      const response = await fetch('/api/auth/change-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

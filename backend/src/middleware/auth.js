@@ -41,7 +41,7 @@ const authenticateToken = (req, res, next) => {
       });
     }
 
-    jwt.verify(token, JWT_SECRET, (err, user) => {
+    jwt.verify(token, JWT_SECRET, { clockTolerance: 60 }, (err, user) => {
       if (err) {
         enterpriseLogger.warn('Invalid token attempt', { 
           error: err.message,
@@ -49,7 +49,7 @@ const authenticateToken = (req, res, next) => {
           userAgent: req.get('User-Agent')
         });
         
-        return res.status(403).json({
+        return res.status(401).json({
           status: 'error',
           message: 'Invalid or expired token',
           code: 'AUTH_TOKEN_INVALID'
@@ -83,7 +83,7 @@ const optionalAuth = (req, res, next) => {
     const token = authHeader && authHeader.split(' ')[1];
 
     if (token) {
-      jwt.verify(token, JWT_SECRET, (err, user) => {
+      jwt.verify(token, JWT_SECRET, { clockTolerance: 60 }, (err, user) => {
         if (!err) {
           req.user = user;
         }

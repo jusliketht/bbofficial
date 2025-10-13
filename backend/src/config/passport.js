@@ -7,17 +7,35 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { User } = require('../models');
 const enterpriseLogger = require('../utils/logger');
 
-// Configure Google OAuth Strategy
+// Configure Google OAuth Strategy with CSRF protection
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: process.env.GOOGLE_CALLBACK_URL || '/api/auth/google/callback'
-}, async (accessToken, refreshToken, profile, done) => {
+  callbackURL: process.env.GOOGLE_CALLBACK_URL || '/api/auth/google/callback',
+  passReqToCallback: true // Enable access to request object for state validation
+}, async (req, accessToken, refreshToken, profile, done) => {
   try {
+    // CSRF Protection: Validate state parameter
+    const state = req.query.state;
+    const sessionState = req.session?.oauthState;
+    
+    if (!state || !sessionState || state !== sessionState) {
+      enterpriseLogger.warn('OAuth state validation failed', {
+        providedState: state,
+        sessionState: sessionState,
+        ip: req.ip
+      });
+      return done(new Error('Invalid state parameter'), null);
+    }
+    
+    // Clear the state from session after validation
+    delete req.session.oauthState;
+
     enterpriseLogger.info('Google OAuth callback', {
       googleId: profile.id,
       email: profile.emails[0].value,
-      name: profile.displayName
+      name: profile.displayName,
+      stateValidated: true
     });
 
     // Check if user already exists with this Google ID

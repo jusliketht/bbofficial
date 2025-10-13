@@ -571,8 +571,8 @@ constructor() {
       where: { userId },
       attributes: [
         [sequelize.fn('COUNT', sequelize.col('id')), 'totalDrafts'],
-        [sequelize.fn('COUNT', sequelize.literal('CASE WHEN status = \'draft\' THEN 1 END')), 'activeDrafts'],
-        [sequelize.fn('COUNT', sequelize.literal('CASE WHEN status = \'submitted\' THEN 1 END')), 'submittedDrafts']
+        [sequelize.fn('COUNT', sequelize.literal('CASE WHEN is_completed = false THEN 1 END')), 'activeDrafts'],
+        [sequelize.fn('COUNT', sequelize.literal('CASE WHEN is_completed = true THEN 1 END')), 'submittedDrafts']
       ],
       raw: true
     });

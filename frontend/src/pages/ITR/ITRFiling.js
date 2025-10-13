@@ -1,272 +1,329 @@
 // =====================================================
-// ITR FILING ORCHESTRATOR - CANONICAL FRONTEND COMPONENT
-// Single component handling all ITR types (ITR1, ITR2, ITR3, ITR4)
+// ITR FILING MAIN COMPONENT - WORLD-CLASS UX DESIGN
+// Master stepper with live tax summary and guided momentum
 // =====================================================
 
-import React, { useState, useEffect, useContext } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useFilingContext } from '../../contexts/FilingContext';
-import { AuthContext } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
+import Button from '../../components/UI/Button';
+import Card from '../../components/common/Card';
+import { 
+  User, 
+  DollarSign, 
+  Calculator, 
+  FileText, 
+  Save, 
+  ArrowLeft, 
+  ArrowRight,
+  CheckCircle,
+  AlertCircle,
+  TrendingUp,
+  TrendingDown
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+
+// Enhanced Components
+import ITRFilingStepper from '../../components/ITR/ITRFilingStepper';
+import LiveTaxSummary from '../../components/ITR/LiveTaxSummary';
+import AddSourcePattern from '../../components/ITR/AddSourcePattern';
+import VisualLimitGauge from '../../components/ITR/VisualLimitGauge';
+
+// Form Components
 import PersonalInfoForm from '../../components/ITR/PersonalInfoForm';
-import IncomeForm from '../../components/ITR/IncomeForm';
-import DeductionForm from '../../components/ITR/DeductionForm';
-import TaxSummaryPanel from '../../components/ITR/TaxSummaryPanel';
 import ReviewForm from '../../components/ITR/ReviewForm';
-import ValidationMessages from '../../components/ITR/ValidationMessages';
-import { enterpriseLogger } from '../../utils/logger';
 
 const ITRFiling = () => {
-  const { itrType, draftId } = useParams();
+  const { itrType } = useParams();
   const navigate = useNavigate();
-  const { user } = useContext(AuthContext);
+  const location = useLocation();
+  const { user } = useAuth();
+  
   const { 
     filingData, 
     updateFilingData, 
-    saveDraft, 
-    validateDraft, 
-    computeTax, 
-    submitITR,
-    loadDraft,
-    loading: contextLoading 
+    updateSection,
+    saveDraft,
+    progress,
+    isLoading 
   } = useFilingContext();
-  
+
   const [currentStep, setCurrentStep] = useState(0);
-  const [validation, setValidation] = useState({ isValid: true, errors: [], warnings: [] });
-  const [taxComputation, setTaxComputation] = useState(null);
-
-  // Valid ITR types
-  const validTypes = ['ITR1', 'ITR2', 'ITR3', 'ITR4'];
+  const [isSaving, setIsSaving] = useState(false);
   
-  // Step configuration based on ITR type
-  const getSteps = (type) => {
-    const baseSteps = [
-      { id: 'personalInfo', title: 'Personal Information', component: 'PersonalInfoForm' },
-      { id: 'income', title: 'Income Details', component: 'IncomeForm' },
-      { id: 'deductions', title: 'Deductions', component: 'DeductionForm' },
-      { id: 'taxComputation', title: 'Tax Computation', component: 'TaxSummaryPanel' },
-      { id: 'review', title: 'Review & Submit', component: 'ReviewForm' }
-    ];
+  // Enhanced steps configuration
+  const steps = [
+    {
+      id: 'personalInfo',
+      title: 'Personal Information',
+      description: 'Basic details and contact information',
+      icon: User
+    },
+    {
+      id: 'income',
+      title: 'Income Details',
+      description: 'Salary, business, and other income sources',
+      icon: DollarSign
+    },
+    {
+      id: 'deductions',
+      title: 'Deductions',
+      description: 'Tax-saving investments and expenses',
+      icon: Calculator
+    },
+    {
+      id: 'taxesPaid',
+      title: 'Taxes Paid',
+      description: 'TDS, advance tax, and other payments',
+      icon: FileText
+    },
+    {
+      id: 'review',
+      title: 'Review & File',
+      description: 'Final review and submission',
+      icon: CheckCircle
+    }
+  ];
 
-    if (type === 'ITR2') {
-      baseSteps.splice(2, 0, { id: 'capitalGains', title: 'Capital Gains', component: 'CapitalGainsForm' });
-    }
-    
-    if (type === 'ITR3') {
-      baseSteps.splice(2, 0, { id: 'businessIncome', title: 'Business Income', component: 'BusinessIncomeForm' });
-    }
-    
-    if (type === 'ITR4') {
-      baseSteps.splice(2, 0, { id: 'presumptiveIncome', title: 'Presumptive Income', component: 'PresumptiveIncomeForm' });
-    }
+  // Mock data for live tax summary
+  const [incomeData, setIncomeData] = useState({
+    salary: 1200000,
+    interest: 8500,
+    other: 0
+  });
+  
+  const [deductionData, setDeductionData] = useState({
+    section80C: 120000,
+    section80D: 25000,
+    section80G: 10000
+  });
 
-    return baseSteps;
+  // Step navigation handlers
+  const handleStepClick = (stepIndex) => {
+    if (stepIndex <= currentStep) {
+      setCurrentStep(stepIndex);
+    }
   };
 
-  const steps = getSteps(itrType);
-
-  // Load existing draft if draftId is provided
-  useEffect(() => {
-    if (draftId) {
-      handleLoadDraft();
-    } else {
-      initializeNewFiling();
-    }
-  }, [draftId, itrType]);
-
-  const handleLoadDraft = async () => {
-    try {
-      await loadDraft(draftId);
-      enterpriseLogger.info('Draft loaded successfully', { draftId, itrType });
-    } catch (error) {
-      enterpriseLogger.error('Failed to load draft', { error: error.message, draftId });
-      navigate('/dashboard');
+  const handleNextStep = () => {
+    if (currentStep < steps.length - 1) {
+      setCurrentStep(currentStep + 1);
     }
   };
 
-  const initializeNewFiling = () => {
-    const initialData = {
-      personalInfo: {
-        firstName: user?.firstName || '',
-        lastName: user?.lastName || '',
-        panNumber: user?.panNumber || '',
-        dateOfBirth: user?.dateOfBirth || ''
-      },
-      income: {},
-      deductions: {},
-      itrType: itrType
-    };
-    updateFilingData(initialData);
-  };
-
-  const handleStepChange = async (stepIndex) => {
-    // Validate current step before moving
-    if (stepIndex > currentStep) {
-      const isValid = await validateCurrentStep();
-      if (!isValid) return;
-    }
-    setCurrentStep(stepIndex);
-  };
-
-  const validateCurrentStep = async () => {
-    try {
-      const response = await validateDraft(filingData);
-      setValidation(response);
-      return response.isValid;
-    } catch (error) {
-      enterpriseLogger.error('Validation failed', { error: error.message });
-      return false;
+  const handlePrevStep = () => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
     }
   };
 
   const handleSaveDraft = async () => {
+    setIsSaving(true);
     try {
-      const response = await saveDraft(itrType, filingData);
-      enterpriseLogger.info('Draft saved successfully', { draftId: response.draft.id });
-      return response.draft.id;
+      await saveDraft();
+      toast.success('Draft saved successfully');
     } catch (error) {
-      enterpriseLogger.error('Failed to save draft', { error: error.message });
-      throw error;
+      toast.error('Failed to save draft');
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleComputeTax = async () => {
-    try {
-      const response = await computeTax(filingData);
-      setTaxComputation(response.computation);
-      enterpriseLogger.info('Tax computation completed', { totalTax: response.computation.totalTax });
-    } catch (error) {
-      enterpriseLogger.error('Tax computation failed', { error: error.message });
+  // Initialize filing data from navigation state
+  useEffect(() => {
+    if (location.state) {
+      const { context, userId } = location.state;
+      updateFilingData({
+        context: context || 'self',
+        userId: userId || user?.id,
+        assessmentYear: '2024-25',
+        status: 'draft'
+      });
     }
-  };
+  }, [location.state, user?.id, updateFilingData]);
 
-  const handleSubmitITR = async () => {
-    try {
-      const response = await submitITR(filingData);
-      enterpriseLogger.info('ITR submitted successfully', { filingId: response.filing.id });
-      navigate('/dashboard', { state: { success: 'ITR submitted successfully!' } });
-    } catch (error) {
-      enterpriseLogger.error('ITR submission failed', { error: error.message });
-    }
-  };
+  // Calculate progress percentage
+  const progressPercentage = ((currentStep + 1) / steps.length) * 100;
 
-  const renderStepComponent = () => {
+  // Render current step content
+  const renderStepContent = () => {
     const currentStepData = steps[currentStep];
     
-    switch (currentStepData.component) {
-      case 'PersonalInfoForm':
+    switch (currentStepData.id) {
+      case 'personalInfo':
+        return <PersonalInfoForm />;
+      case 'income':
         return (
-          <PersonalInfoForm 
-            data={filingData.personalInfo} 
-            onChange={(data) => updateFilingData({ personalInfo: data })}
-            onNext={() => handleStepChange(currentStep + 1)}
-            onPrevious={() => handleStepChange(currentStep - 1)}
-            isFirstStep={currentStep === 0}
-            isLastStep={currentStep === steps.length - 1}
-          />
+          <div className="space-y-6">
+            <AddSourcePattern
+              title="Income Sources"
+              subtitle="Add all your income sources for the assessment year"
+              sources={[
+                { id: 1, name: 'Salary from XYZ Corp', amount: 1200000, type: 'salary' },
+                { id: 2, name: 'Interest Income', amount: 8500, type: 'interest' }
+              ]}
+              sourceTypes={[
+                { id: 'salary', name: 'Salary', description: 'Income from employment' },
+                { id: 'business', name: 'Business', description: 'Income from business or profession' },
+                { id: 'interest', name: 'Interest', description: 'Interest from savings, FDs, etc.' },
+                { id: 'other', name: 'Other Sources', description: 'Any other income sources' }
+              ]}
+              onAddSource={(data) => console.log('Add income source:', data)}
+              onEditSource={(id, data) => console.log('Edit income source:', id, data)}
+              onDeleteSource={(id) => console.log('Delete income source:', id)}
+            />
+          </div>
         );
-      case 'IncomeForm':
+      case 'deductions':
         return (
-          <IncomeForm 
-            data={filingData.income} 
-            itrType={itrType} 
-            onChange={(data) => updateFilingData({ income: data })}
-            onNext={() => handleStepChange(currentStep + 1)}
-            onPrevious={() => handleStepChange(currentStep - 1)}
-          />
+          <div className="space-y-6">
+            <VisualLimitGauge
+              title="Section 80C - Investments"
+              currentAmount={120000}
+              limitAmount={150000}
+              description="Life insurance, PPF, ELSS, NSC, etc."
+            />
+            <VisualLimitGauge
+              title="Section 80D - Health Insurance"
+              currentAmount={25000}
+              limitAmount={25000}
+              description="Health insurance premiums for self and family"
+            />
+            <AddSourcePattern
+              title="Other Deductions"
+              subtitle="Add other eligible deductions"
+              sources={[
+                { id: 1, name: 'Donation to Charity', amount: 10000, type: 'donation' }
+              ]}
+              sourceTypes={[
+                { id: 'donation', name: 'Donation', description: 'Charitable donations under 80G' },
+                { id: 'education', name: 'Education', description: 'Education loan interest' },
+                { id: 'home', name: 'Home Loan', description: 'Home loan interest and principal' }
+              ]}
+              onAddSource={(data) => console.log('Add deduction:', data)}
+              onEditSource={(id, data) => console.log('Edit deduction:', id, data)}
+              onDeleteSource={(id) => console.log('Delete deduction:', id)}
+            />
+          </div>
         );
-      case 'DeductionForm':
-        return (
-          <DeductionForm 
-            data={filingData.deductions} 
-            itrType={itrType} 
-            onChange={(data) => updateFilingData({ deductions: data })}
-            onNext={() => handleStepChange(currentStep + 1)}
-            onPrevious={() => handleStepChange(currentStep - 1)}
-          />
-        );
-      case 'TaxSummaryPanel':
-        return (
-          <TaxSummaryPanel 
-            incomeData={filingData.income}
-            deductionData={filingData.deductions}
-            personalInfo={filingData.personalInfo}
-            computation={taxComputation}
-            onCompute={setTaxComputation}
-            onNext={() => handleStepChange(currentStep + 1)}
-            onPrevious={() => handleStepChange(currentStep - 1)}
-            loading={contextLoading}
-          />
-        );
-      case 'CapitalGainsForm':
-        return <CapitalGainsForm data={filingData.capitalGains} onChange={(data) => updateFilingData({ capitalGains: data })} />;
-      case 'BusinessIncomeForm':
-        return <BusinessIncomeForm data={filingData.businessIncome} onChange={(data) => updateFilingData({ businessIncome: data })} />;
-      case 'PresumptiveIncomeForm':
-        return <PresumptiveIncomeForm data={filingData.presumptiveIncome} onChange={(data) => updateFilingData({ presumptiveIncome: data })} />;
-      case 'ReviewForm':
-        return (
-          <ReviewForm 
-            data={filingData} 
-            onSave={handleSaveDraft} 
-            onSubmit={handleSubmitITR}
-            onPrevious={() => handleStepChange(currentStep - 1)}
-            taxComputation={taxComputation}
-            loading={contextLoading}
-          />
-        );
+      case 'taxesPaid':
+        return <div className="text-center py-12">Taxes Paid Form - Coming Soon</div>;
+      case 'review':
+        return <ReviewForm />;
       default:
-        return <div>Step component not found</div>;
+        return <PersonalInfoForm />;
     }
   };
 
-  if (!validTypes.includes(itrType)) {
-    return (
-      <div className="error-container">
-        <h2>Invalid ITR Type</h2>
-        <p>The ITR type "{itrType}" is not supported.</p>
-        <button onClick={() => navigate('/dashboard')}>Return to Dashboard</button>
-      </div>
-    );
-  }
+  // Handle form data update
+  const handleFormUpdate = (data) => {
+    updateSection(steps[currentStep].id, data);
+  };
 
-  if (contextLoading) {
-    return (
-      <div className="loading-container">
-        <div className="spinner"></div>
-        <p>Loading...</p>
-      </div>
-    );
-  }
+  // Navigation handlers
+  const handlePrevious = () => {
+    handlePrevStep();
+  };
+
+  const handleNext = () => {
+    handleNextStep();
+  };
+
+  const handleBackToStart = () => {
+    navigate('/itr/start');
+  };
 
   return (
-    <div className="itr-filing-container">
-      <div className="filing-header">
-        <h1>ITR {itrType} Filing</h1>
-        <div className="progress-indicator">
-          Step {currentStep + 1} of {steps.length}: {steps[currentStep].title}
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between py-4">
+            <div className="flex items-center space-x-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBackToStart}
+                className="flex items-center space-x-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Back to Start</span>
+              </Button>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">
+                  ITR Filing - {itrType || 'ITR-1'}
+                </h1>
+                <p className="text-sm text-gray-600">
+                  Assessment Year: {filingData.assessmentYear || '2024-25'}
+                </p>
+              </div>
+            </div>
+            
+            <Button
+              variant="outline"
+              onClick={handleSaveDraft}
+              disabled={isSaving}
+              className="flex items-center space-x-2"
+            >
+              <Save className="w-4 h-4" />
+              <span>{isSaving ? 'Saving...' : 'Save Draft'}</span>
+            </Button>
+          </div>
         </div>
       </div>
 
-      <div className="filing-content">
-        <div className="step-navigation">
-          {steps.map((step, index) => (
-            <button
-              key={step.id}
-              className={`step-button ${index === currentStep ? 'active' : ''} ${index < currentStep ? 'completed' : ''}`}
-              onClick={() => handleStepChange(index)}
-              disabled={index > currentStep + 1}
-            >
-              {step.title}
-            </button>
-          ))}
-        </div>
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Master Stepper */}
+        <ITRFilingStepper
+          currentStep={currentStep}
+          steps={steps}
+          onStepClick={handleStepClick}
+          progress={progressPercentage}
+        />
 
-        <div className="step-content">
-          {validation.errors.length > 0 && (
-            <ValidationMessages errors={validation.errors} warnings={validation.warnings} />
-          )}
-          
-          {renderStepComponent()}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Main Content Area */}
+          <div className="lg:col-span-2">
+            <Card>
+              <div className="p-6">
+                {renderStepContent()}
+                
+                {/* Navigation Buttons */}
+                <div className="flex justify-between items-center mt-8 pt-6 border-t border-gray-200">
+                  <Button
+                    onClick={handlePrevious}
+                    disabled={currentStep === 0}
+                    variant="outline"
+                    className="flex items-center"
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Previous
+                  </Button>
+                  
+                  <Button
+                    onClick={handleNext}
+                    disabled={currentStep === steps.length - 1}
+                    className="flex items-center"
+                  >
+                    Next
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Right Sidebar - Live Tax Summary */}
+          <div className="lg:col-span-1">
+            <LiveTaxSummary
+              incomeData={incomeData}
+              deductionData={deductionData}
+              onSaveDraft={handleSaveDraft}
+              isSaving={isSaving}
+            />
+          </div>
         </div>
       </div>
     </div>

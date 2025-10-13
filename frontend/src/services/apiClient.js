@@ -59,9 +59,27 @@ class ApiClient {
             toast.error('Session expired. Please login again.');
           }
         } else if (error.response?.status === 403) {
-          toast.error(
-            'Access denied. You do not have permission to perform this action.'
-          );
+          // Check if it's a token expiration error
+          if (error.response?.data?.message?.includes('expired') || 
+              error.response?.data?.code === 'AUTH_TOKEN_INVALID') {
+            // Token expired, try to refresh
+            if (!originalRequest._retry) {
+              originalRequest._retry = true;
+              try {
+                const authService = (await import('./authService')).default;
+                await authService.refreshToken();
+                return this.client(originalRequest);
+              } catch (refreshError) {
+                this.clearTokens();
+                window.location.href = '/login';
+                toast.error('Session expired. Please login again.');
+              }
+            }
+          } else {
+            toast.error(
+              'Access denied. You do not have permission to perform this action.'
+            );
+          }
         } else if (error.response?.status >= 500) {
           toast.error('Server error. Please try again later.');
         } else if (error.response?.data?.message) {

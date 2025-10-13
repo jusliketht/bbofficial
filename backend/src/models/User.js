@@ -95,6 +95,12 @@ const User = sequelize.define('User', {
     defaultValue: 'active',
     allowNull: false
   },
+  onboardingCompleted: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
+    field: 'onboarding_completed'
+  },
   createdAt: {
     type: DataTypes.DATE,
     allowNull: false,

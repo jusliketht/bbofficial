@@ -3,8 +3,8 @@
 // =====================================================
 
 import React from 'react';
-import { Button } from '../Common/Button';
-import { Card } from '../Common/Card';
+import Button from '../UI/Button';
+import Card from '../common/Card';
 import { enterpriseLogger } from '../../utils/logger';
 
 const ReviewForm = ({ 

@@ -16,7 +16,7 @@ const useAuthStore = create(
         set({ loading: true, error: null });
         try {
           // Mock login - replace with actual API call
-          const response = await fetch('/auth/login', {
+          const response = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(credentials)

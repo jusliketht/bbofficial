@@ -319,7 +319,7 @@ export const authService = {
   // Login user
   async login(email, password) {
     try {
-      const response = await apiClient.post('/auth/login', {
+      const response = await apiClient.post('/api/auth/login', {
         email,
         password
       });
@@ -341,7 +341,7 @@ export const authService = {
   // Register user
   async register(userData) {
     try {
-      const response = await apiClient.post('/auth/register', userData);
+      const response = await apiClient.post('/api/auth/register', userData);
       
       if (response.success) {
         const { token, user } = response.data;

@@ -14,6 +14,10 @@ import itrService from './api/itrService';
 import documentService from './api/documentService';
 import paymentService from './api/paymentService';
 
+// Utility services
+import validationService from './utils/validationService';
+import storageService from './utils/storageService';
+
 // =====================================================
 // EXPORTS
 // =====================================================

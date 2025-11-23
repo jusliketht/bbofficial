@@ -87,39 +87,126 @@ export const ROLE_DASHBOARD_ROUTES = {
   [ROLES.END_USER]: '/dashboard'
 };
 
+// Module-based permission definitions
+export const PERMISSION_MODULES = {
+  ITR_FILING: 'itr_filing',
+  USER_MANAGEMENT: 'user_management',
+  STAFF_MANAGEMENT: 'staff_management',
+  BILLING_INVOICING: 'billing_invoicing',
+  REPORTS_ANALYTICS: 'reports_analytics',
+  SYSTEM_SETTINGS: 'system_settings',
+  DOCUMENT_MANAGEMENT: 'document_management',
+  CLIENT_MANAGEMENT: 'client_management',
+  AUDIT_LOGS: 'audit_logs'
+};
+
+export const PERMISSION_ACTIONS = {
+  CREATE: 'create',
+  READ: 'read',
+  UPDATE: 'update',
+  DELETE: 'delete',
+  SUBMIT: 'submit',
+  APPROVE: 'approve',
+  ASSIGN: 'assign',
+  VIEW_BILLING: 'view_billing',
+  EXPORT: 'export'
+};
+
 export const ROLE_PERMISSIONS = {
   [ROLES.SUPER_ADMIN]: [
+    // System-wide permissions
+    'system.create', 'system.read', 'system.update', 'system.delete',
     'users.create', 'users.read', 'users.update', 'users.delete',
     'ca_firms.create', 'ca_firms.read', 'ca_firms.update', 'ca_firms.delete',
-    'filings.create', 'filings.read', 'filings.update', 'filings.delete', 'filings.submit',
-    'documents.create', 'documents.read', 'documents.update', 'documents.delete',
+
+    // All module permissions
+    ...Object.values(PERMISSION_MODULES).flatMap(module =>
+      Object.values(PERMISSION_ACTIONS).map(action => `${module}.${action}`)
+    ),
+
+    // Administrative
     'admin.system_config', 'admin.audit_logs', 'admin.user_sessions', 'admin.feature_flags',
-    'ca_firm.staff_manage', 'ca_firm.clients_assign', 'ca_firm.billing_view'
+    'admin.grant_temporary_access', 'admin.revoke_access'
   ],
+
   [ROLES.PLATFORM_ADMIN]: [
     'users.create', 'users.read', 'users.update',
     'ca_firms.create', 'ca_firms.read', 'ca_firms.update',
-    'filings.create', 'filings.read', 'filings.update', 'filings.submit',
-    'documents.create', 'documents.read', 'documents.update', 'documents.delete',
-    'admin.audit_logs', 'admin.user_sessions', 'admin.feature_flags',
-    'ca_firm.staff_manage', 'ca_firm.clients_assign', 'ca_firm.billing_view'
+    `${PERMISSION_MODULES.ITR_FILING}.create`, `${PERMISSION_MODULES.ITR_FILING}.read`,
+    `${PERMISSION_MODULES.ITR_FILING}.update`, `${PERMISSION_MODULES.ITR_FILING}.submit`,
+    `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.create`, `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.read`,
+    `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.update`, `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.delete`,
+    `${PERMISSION_MODULES.STAFF_MANAGEMENT}.create`, `${PERMISSION_MODULES.STAFF_MANAGEMENT}.read`,
+    `${PERMISSION_MODULES.STAFF_MANAGEMENT}.update`,
+    `${PERMISSION_MODULES.CLIENT_MANAGEMENT}.assign`,
+    `${PERMISSION_MODULES.BILLING_INVOICING}.view_billing`,
+    `${PERMISSION_MODULES.REPORTS_ANALYTICS}.read`,
+    'admin.audit_logs', 'admin.user_sessions', 'admin.feature_flags'
   ],
+
+  // B2B Model - CA Firm Admin
   [ROLES.CA_FIRM_ADMIN]: [
-    'users.read', 'users.update',
-    'ca_firms.read', 'ca_firms.update',
-    'filings.create', 'filings.read', 'filings.update', 'filings.submit',
-    'documents.create', 'documents.read', 'documents.update', 'documents.delete',
-    'ca_firm.staff_manage', 'ca_firm.clients_assign', 'ca_firm.billing_view'
+    `${PERMISSION_MODULES.USER_MANAGEMENT}.read`, `${PERMISSION_MODULES.USER_MANAGEMENT}.update`,
+    `${PERMISSION_MODULES.STAFF_MANAGEMENT}.create`, `${PERMISSION_MODULES.STAFF_MANAGEMENT}.read`,
+    `${PERMISSION_MODULES.STAFF_MANAGEMENT}.update`, `${PERMISSION_MODULES.STAFF_MANAGEMENT}.delete`,
+    `${PERMISSION_MODULES.ITR_FILING}.create`, `${PERMISSION_MODULES.ITR_FILING}.read`,
+    `${PERMISSION_MODULES.ITR_FILING}.update`, `${PERMISSION_MODULES.ITR_FILING}.submit`,
+    `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.create`, `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.read`,
+    `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.update`, `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.delete`,
+    `${PERMISSION_MODULES.CLIENT_MANAGEMENT}.create`, `${PERMISSION_MODULES.CLIENT_MANAGEMENT}.read`,
+    `${PERMISSION_MODULES.CLIENT_MANAGEMENT}.update`, `${PERMISSION_MODULES.CLIENT_MANAGEMENT}.assign`,
+    `${PERMISSION_MODULES.BILLING_INVOICING}.read`, `${PERMISSION_MODULES.BILLING_INVOICING}.view_billing`,
+    `${PERMISSION_MODULES.REPORTS_ANALYTICS}.read`,
+    'firm.grant_temporary_access', 'firm.manage_permissions'
   ],
-  [ROLES.CA]: [
-    'users.read',
-    'filings.create', 'filings.read', 'filings.update', 'filings.submit',
-    'documents.create', 'documents.read', 'documents.update', 'documents.delete',
-    'ca_firm.clients_assign'
+
+  // Independent CA Admin
+  [ROLES.INDEPENDENT_CA_ADMIN]: [
+    `${PERMISSION_MODULES.USER_MANAGEMENT}.read`, `${PERMISSION_MODULES.USER_MANAGEMENT}.update`,
+    `${PERMISSION_MODULES.STAFF_MANAGEMENT}.create`, `${PERMISSION_MODULES.STAFF_MANAGEMENT}.read`,
+    `${PERMISSION_MODULES.STAFF_MANAGEMENT}.update`, `${PERMISSION_MODULES.STAFF_MANAGEMENT}.delete`,
+    `${PERMISSION_MODULES.ITR_FILING}.create`, `${PERMISSION_MODULES.ITR_FILING}.read`,
+    `${PERMISSION_MODULES.ITR_FILING}.update`, `${PERMISSION_MODULES.ITR_FILING}.submit`,
+    `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.create`, `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.read`,
+    `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.update`, `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.delete`,
+    `${PERMISSION_MODULES.CLIENT_MANAGEMENT}.create`, `${PERMISSION_MODULES.CLIENT_MANAGEMENT}.read`,
+    `${PERMISSION_MODULES.CLIENT_MANAGEMENT}.update`, `${PERMISSION_MODULES.CLIENT_MANAGEMENT}.assign`,
+    `${PERMISSION_MODULES.BILLING_INVOICING}.read`, `${PERMISSION_MODULES.BILLING_INVOICING}.view_billing`,
+    `${PERMISSION_MODULES.REPORTS_ANALYTICS}.read`,
+    'independent.grant_temporary_access', 'independent.manage_permissions'
   ],
+
+  // CA Professional (Both Firm and Independent)
+  [ROLES.CA_FIRM_CA]: [ROLES.INDEPENDENT_CA]: [
+    `${PERMISSION_MODULES.USER_MANAGEMENT}.read`,
+    `${PERMISSION_MODULES.ITR_FILING}.create`, `${PERMISSION_MODULES.ITR_FILING}.read`,
+    `${PERMISSION_MODULES.ITR_FILING}.update`, `${PERMISSION_MODULES.ITR_FILING}.submit`,
+    `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.create`, `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.read`,
+    `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.update`, `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.delete`,
+    `${PERMISSION_MODULES.CLIENT_MANAGEMENT}.read`, `${PERMISSION_MODULES.CLIENT_MANAGEMENT}.assign`,
+    `${PERMISSION_MODULES.REPORTS_ANALYTICS}.read`
+  ],
+
+  // Junior CAs
+  [ROLES.CA_FIRM_JUNIOR_CA]: [ROLES.INDEPENDENT_CA_JUNIOR]: [
+    `${PERMISSION_MODULES.ITR_FILING}.read`, `${PERMISSION_MODULES.ITR_FILING}.update`,
+    `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.create`, `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.read`,
+    `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.update`,
+    `${PERMISSION_MODULES.CLIENT_MANAGEMENT}.read`
+  ],
+
+  // Assistants
+  [ROLES.CA_FIRM_ASSISTANT]: [ROLES.INDEPENDENT_CA_ASSISTANT]: [
+    `${PERMISSION_MODULES.ITR_FILING}.read`,
+    `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.create`, `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.read`,
+    `${PERMISSION_MODULES.CLIENT_MANAGEMENT}.read`
+  ],
+
   [ROLES.END_USER]: [
-    'filings.create', 'filings.read', 'filings.update',
-    'documents.create', 'documents.read', 'documents.update'
+    `${PERMISSION_MODULES.ITR_FILING}.create`, `${PERMISSION_MODULES.ITR_FILING}.read`,
+    `${PERMISSION_MODULES.ITR_FILING}.update`,
+    `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.create`, `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.read`,
+    `${PERMISSION_MODULES.DOCUMENT_MANAGEMENT}.update`
   ]
 };
 

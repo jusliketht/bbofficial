@@ -71,5 +71,6 @@ export const utils = {
 export default {
   ...core,
   ...api,
-  ...utils
+  ...utils,
+  itrJsonExportService
 };

@@ -369,7 +369,7 @@ class AutoPopulationITRService {
             standardDeduction: consolidatedData.rentalIncome?.standardDeduction || 0,
             interestOnHousingLoan: consolidatedData.rentalIncome?.housingLoanInterest || 0
           }
-        }
+        },
         },
         foreignIncome: {
           addressOutsideIndia: [],

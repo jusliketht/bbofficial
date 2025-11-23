@@ -78,6 +78,10 @@ const AppContent = () => {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/auth/google/success" element={<GoogleOAuthSuccess />} />
+
+        {/* CA Registration Routes */}
+        <Route path="/ca/register" element={<RegisterCAFirm />} />
+        <Route path="/ca/registration-success" element={<RegistrationSuccess />} />
         
         {/* Protected Routes */}
         <Route element={<ProtectedRoute />}>

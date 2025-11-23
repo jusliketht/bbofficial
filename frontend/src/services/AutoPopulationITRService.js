@@ -591,7 +591,7 @@ class AutoPopulationITRService {
 
       // Calculate TDS credits
       const tdsCredits = structuredData.common?.tdsDetails?.total || 0;
-      const taxPaid = structuredatedData.common?.taxPaid?.total || 0;
+      const taxPaid = structuredData.common?.taxPaid?.total || 0;
       const totalCredits = tdsCredits + taxPaid;
 
       const taxPayable = Math.max(0, taxAfterRebates - totalCredits);

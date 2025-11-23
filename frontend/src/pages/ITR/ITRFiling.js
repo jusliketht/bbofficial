@@ -218,7 +218,7 @@ const ITRFiling = () => {
 
   // Handle form data update
   const handleFormUpdate = (data) => {
-    updateSection(steps[currentStep].id, data);
+    updateFilingSection(steps[currentStep].id, data);
   };
 
   // Navigation handlers

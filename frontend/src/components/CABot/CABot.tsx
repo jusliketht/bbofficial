@@ -49,7 +49,7 @@ interface FilingState {
 }
 
 const CABot: React.FC = () => {
-  const { filingData } = useFilingContext();
+  const { currentFiling } = useITR();
   
   // State management
   const [messages, setMessages] = useState<Message[]>([]);

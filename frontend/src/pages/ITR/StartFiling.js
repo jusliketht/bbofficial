@@ -25,7 +25,7 @@ const StartFiling = () => {
       setFilingContext(context);
       
       // Reset filing data for new filing
-      resetFilingData();
+      resetFiling();
       
       // Navigate to ITR filing form
       navigate('/itr/filing', { 

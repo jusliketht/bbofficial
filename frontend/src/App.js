@@ -37,7 +37,7 @@ import ProfileSettings from './pages/User/ProfileSettings';
 import FinancialProfilePage from './pages/FinancialProfile/FinancialProfilePage';
 import ServiceTicketManagement from './pages/Service/ServiceTicketManagement';
 // Design System Components (Development only)
-import StyleGuide from './components/DesignSystem/StyleGuide';
+// import StyleGuide from './components/DesignSystem/StyleGuide'; // Temporarily disabled
 
 // CABot Page (Development/Testing)
 // import CABotPage from './pages/CABot/CABotPage'; // Temporarily disabled

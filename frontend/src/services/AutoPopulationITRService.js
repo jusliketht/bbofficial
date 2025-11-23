@@ -363,13 +363,13 @@ class AutoPopulationITRService {
           selfOccupied: {
             interestOnHousingLoan: consolidatedData.housingLoan?.interest || 0
           },
-            letOut: {
-              annualRent: consolidatedData.rentalIncome?.annual || 0,
-              municipalTaxes: consolidatedData.rentalIncome?.municipalTaxes || 0,
-              standardDeduction: consolidatedData.rentalIncome?.standardDeduction || 0,
-              interestOnHousingLoan: consolidatedData.rentalIncome?.housingLoanInterest || 0
-            }
+          letOut: {
+            annualRent: consolidatedData.rentalIncome?.annual || 0,
+            municipalTaxes: consolidatedData.rentalIncome?.municipalTaxes || 0,
+            standardDeduction: consolidatedData.rentalIncome?.standardDeduction || 0,
+            interestOnHousingLoan: consolidatedData.rentalIncome?.housingLoanInterest || 0
           }
+        }
         },
         foreignIncome: {
           addressOutsideIndia: [],

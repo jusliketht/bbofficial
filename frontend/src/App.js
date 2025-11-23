@@ -161,51 +161,7 @@ const AppContent = () => {
               </CABotProvider>
             }
           />
-          
-          {/* Design System Routes */}
-          <Route 
-            path="/style-guide" 
-            element={
-              <Layout>
-                <StyleGuide />
-              </Layout>
-            } 
-          />
-          <Route 
-            path="/keyboard-test" 
-            element={
-              <Layout>
-                <KeyboardNavigationTest />
-              </Layout>
-            } 
-          />
-          <Route 
-            path="/content-review" 
-            element={
-              <Layout>
-                <ContentReview />
-              </Layout>
-            } 
-          />
-          
-          {/* Test Routes */}
-          <Route 
-            path="/test-runner" 
-            element={
-              <Layout>
-                <TestRunner />
-              </Layout>
-            } 
-          />
-          <Route 
-            path="/test-report" 
-            element={
-              <Layout>
-                <TestReport />
-              </Layout>
-            } 
-          />
-        </Route>
+          </Route>
         
         {/* Catch all - redirect to landing page */}
         <Route path="*" element={<Navigate to="/" replace />} />

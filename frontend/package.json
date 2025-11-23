@@ -41,20 +41,14 @@
     "dev": "set PORT=3000 && react-scripts start"
   },
   "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ],
-    "rules": {
-      "import/no-cycle": "off",
-      "import/order": "off",
-      "comma-dangle": "off",
-      "no-trailing-spaces": "off",
-      "eol-last": "off",
-      "pascalcase": "off",
-      "let-const": "off",
-      "prettier/prettier": "off"
-    }
+    "overrides": [
+      {
+        "files": ["**/*.js"],
+        "rules": {
+          "no-unused-vars": "off"
+        }
+      }
+    ]
   },
   "browserslist": {
     "production": [

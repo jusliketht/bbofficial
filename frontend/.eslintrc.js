@@ -31,7 +31,7 @@ module.exports = {
     'react-hooks/rules-of-hooks': 'warn',
     'react-hooks/exhaustive-deps': 'warn',
     'react/jsx-uses-react': 'off',
-    'react/jsx-fragments': ['error', { syntax: 'jsx' }],
+    'react/jsx-fragments': 'error',
     'react/self-closing-comp': 'off',
 
     // Import/Export rules

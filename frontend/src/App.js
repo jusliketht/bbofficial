@@ -52,7 +52,6 @@ import TestReport from './test-data/testReport';
 
 // Context providers
 import { AuthProvider } from './contexts/AuthContext';
-import { FilingProvider } from './contexts/FilingContext';
 import { CABotProvider } from './contexts/CABotContext';
 
 // Auth components

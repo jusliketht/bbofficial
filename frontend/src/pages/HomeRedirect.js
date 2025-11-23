@@ -28,18 +28,43 @@ const HomeRedirect = () => {
     return <Navigate to="/login" replace />;
   }
 
-  // THE CORE LOGIC - Role-based redirection
+  // ENHANCED LOGIC - Multi-tenant role-based redirection
   switch (user.role) {
+    // Platform Administrators
     case 'SUPER_ADMIN':
+      return <Navigate to="/admin/super" replace />;
     case 'PLATFORM_ADMIN':
-      return <Navigate to="/admin/dashboard" replace />;
-    
+      return <Navigate to="/admin/platform" replace />;
+
+    // B2B Model - Admin-managed CA Firms
     case 'CA_FIRM_ADMIN':
       return <Navigate to="/firm/dashboard" replace />;
-      
+    case 'CA_FIRM_SENIOR_CA':
+      return <Navigate to="/firm/clients" replace />;
+    case 'CA_FIRM_CA':
+      return <Navigate to="/firm/clients" replace />;
+    case 'CA_FIRM_JUNIOR_CA':
+      return <Navigate to="/firm/tasks" replace />;
+    case 'CA_FIRM_ASSISTANT':
+      return <Navigate to="/firm/tasks" replace />;
+
+    // Independent CAs - Self-registered practices
+    case 'INDEPENDENT_CA_ADMIN':
+      return <Navigate to="/independent/dashboard" replace />;
+    case 'INDEPENDENT_CA_SENIOR_CA':
+      return <Navigate to="/independent/clients" replace />;
+    case 'INDEPENDENT_CA':
+      return <Navigate to="/independent/clients" replace />;
+    case 'INDEPENDENT_CA_JUNIOR':
+      return <Navigate to="/independent/tasks" replace />;
+    case 'INDEPENDENT_CA_ASSISTANT':
+      return <Navigate to="/independent/tasks" replace />;
+
+    // Legacy roles for backward compatibility
     case 'CA':
       return <Navigate to="/ca/clients" replace />;
-      
+
+    // End Users
     case 'END_USER':
     default:
       return <Navigate to="/dashboard" replace />;

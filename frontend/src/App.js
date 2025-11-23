@@ -150,74 +150,16 @@ const AppContent = () => {
             } 
           />
           
-          {/* Other User Routes */}
-          <Route 
-            path="/add-members" 
-            element={
-              <Layout>
-                <AddMembers />
-              </Layout>
-            } 
-          />
-          <Route 
-            path="/financial-profile" 
-            element={
-              <Layout>
-                <FinancialProfilePage />
-              </Layout>
-            } 
-          />
-          <Route 
-            path="/service-tickets" 
-            element={
-              <Layout>
-                <ServiceTicketManagement />
-              </Layout>
-            } 
-          />
-          <Route 
-            path="/billing-invoicing" 
-            element={
-              <Layout>
-                <BillingInvoicing />
-              </Layout>
-            } 
-          />
-          <Route 
-            path="/settings" 
-            element={
-              <Layout>
-                <UserSettings />
-              </Layout>
-            } 
-          />
-          <Route 
-            path="/profile" 
-            element={
-              <Layout>
-                <ProfileSettings />
-              </Layout>
-            } 
-          />
-          
           {/* CA Bot Route */}
-          <Route 
-            path="/ca-bot" 
+          <Route
+            path="/ca-bot"
             element={
               <CABotProvider>
-                <CABotPage />
+                <Layout>
+                  <CABotPage />
+                </Layout>
               </CABotProvider>
-            } 
-          />
-          
-          {/* Upgrade Route */}
-          <Route 
-            path="/upgrade" 
-            element={
-              <Layout>
-                <UpgradeToProfessional />
-              </Layout>
-            } 
+            }
           />
           
           {/* Design System Routes */}

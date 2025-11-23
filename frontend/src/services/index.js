@@ -47,7 +47,10 @@ export {
 export {
   validationService,
   storageService,
-  itrJsonExportService
+  itrJsonExportService,
+  form16ExtractionService,
+  bankStatementService,
+  taxSavingsService
 };
 
 // Service categories

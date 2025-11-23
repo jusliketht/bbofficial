@@ -70,7 +70,10 @@ export const api = {
 export const utils = {
   validationService,
   storageService,
-  itrJsonExportService
+  itrJsonExportService,
+  form16ExtractionService,
+  bankStatementService,
+  taxSavingsService
 };
 
 // Default export

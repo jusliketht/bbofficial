@@ -63,7 +63,8 @@ export const api = {
 
 export const utils = {
   validationService,
-  storageService
+  storageService,
+  itrJsonExportService
 };
 
 // Default export

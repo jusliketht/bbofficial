@@ -150,8 +150,8 @@ const AppContent = () => {
             } 
           />
           
-          {/* CA Bot Route */}
-          <Route
+          {/* CA Bot Route - Temporarily disabled */}
+          {/* <Route
             path="/ca-bot"
             element={
               <CABotProvider>
@@ -160,7 +160,7 @@ const AppContent = () => {
                 </Layout>
               </CABotProvider>
             }
-          />
+          /> */}
           </Route>
         
         {/* Catch all - redirect to landing page */}

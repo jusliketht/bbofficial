@@ -5,7 +5,7 @@
 
 import { apiClient } from './core/APIClient';
 import { bankStatementService } from './bankStatementService';
-import { BrokerAPIService } from './BrokerAPIService';
+import BrokerAPIService from './BrokerAPIService';
 import { BankAPIService } from './BankAPIService';
 
 class DataIntegrationService {

@@ -20,6 +20,9 @@ import storageService from './utils/storageService';
 
 // Export services
 import { itrJsonExportService } from './itrJsonExportService';
+import { form16ExtractionService } from './form16ExtractionService';
+import { bankStatementService } from './bankStatementService';
+import { taxSavingsService } from './taxSavingsService';
 
 // =====================================================
 // EXPORTS

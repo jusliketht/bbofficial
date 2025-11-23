@@ -17,6 +17,10 @@ import HomeRedirect from './pages/HomeRedirect';
 import LoginPage from './pages/Auth/LoginPage';
 import GoogleOAuthSuccess from './pages/Auth/GoogleOAuthSuccess';
 
+// CA Registration components
+import RegisterCAFirm from './pages/CA/RegisterCAFirm';
+import RegistrationSuccess from './pages/CA/RegistrationSuccess';
+
 // Admin components
 import AdminDashboard from './pages/Admin/AdminDashboard';
 import AdminLayout from './components/Admin/AdminLayout';

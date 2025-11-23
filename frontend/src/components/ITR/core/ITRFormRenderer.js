@@ -18,6 +18,7 @@ const ITRFormRenderer = ({ itrType, initialData = null, onSubmit, onSaveDraft })
   const [formData, setFormData] = useState({});
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const [showDownloadSection, setShowDownloadSection] = useState(false);
 
   // Load ITR configuration
   useEffect(() => {

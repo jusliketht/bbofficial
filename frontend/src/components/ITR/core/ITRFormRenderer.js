@@ -343,6 +343,24 @@ const ITRFormRenderer = ({ itrType, initialData = null, onSubmit, onSaveDraft })
           </div>
         </Card>
       </motion.div>
+
+      {/* JSON Download Section - Shows after form completion */}
+      {showDownloadSection && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <ITRJsonDownload
+            itrData={formData}
+            itrType={itrType}
+            assessmentYear="2024-25"
+            onDownloadComplete={(result) => {
+              console.log('JSON download completed:', result);
+            }}
+          />
+        </motion.div>
+      )}
     </div>
   );
 };

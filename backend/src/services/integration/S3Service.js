@@ -22,6 +22,19 @@ class S3Service {
   constructor() {
     this.isS3Enabled = featureFlags.isEnabled('FEATURE_DOCUMENT_S3');
 
+    // File upload configuration
+    this.maxFileSize = 10 * 1024 * 1024; // 10MB
+    this.allowedTypes = {
+      'application/pdf': '.pdf',
+      'image/jpeg': '.jpg',
+      'image/jpg': '.jpg',
+      'image/png': '.png',
+      'application/msword': '.doc',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+      'application/vnd.ms-excel': '.xls',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx'
+    };
+
     if (this.isS3Enabled) {
       this.s3Client = new S3Client({
         region: process.env.AWS_REGION || 'ap-south-1',
@@ -31,10 +44,46 @@ class S3Service {
         },
       });
       this.bucketName = process.env.AWS_S3_BUCKET_NAME || 'burnblack-documents';
-      enterpriseLogger.info('S3Service initialized with AWS S3', { bucket: this.bucketName, region: process.env.AWS_REGION });
+      enterpriseLogger.info('Unified File Storage Service initialized with AWS S3', { bucket: this.bucketName, region: process.env.AWS_REGION });
     } else {
-      enterpriseLogger.warn('S3Service initialized with LOCAL FILE SYSTEM fallback (FEATURE_DOCUMENT_S3 is disabled)');
+      enterpriseLogger.warn('Unified File Storage Service initialized with LOCAL FILE SYSTEM fallback (FEATURE_DOCUMENT_S3 is disabled)');
     }
+
+    this.setupMulter();
+  }
+
+  /**
+   * Setup multer middleware for file uploads
+   */
+  setupMulter() {
+    const storage = multer.diskStorage({
+      destination: (req, file, cb) => {
+        const uploadPath = path.join(UPLOAD_DIR_LOCAL, 'temp');
+        fs.ensureDirSync(uploadPath);
+        cb(null, uploadPath);
+      },
+      filename: (req, file, cb) => {
+        const uniqueName = `${uuid_generate_v4()}-${Date.now()}${path.extname(file.originalname)}`;
+        cb(null, uniqueName);
+      }
+    });
+
+    const fileFilter = (req, file, cb) => {
+      if (this.allowedTypes[file.mimetype]) {
+        cb(null, true);
+      } else {
+        cb(new AppError(`File type ${file.mimetype} is not allowed`, 400), false);
+      }
+    };
+
+    this.upload = multer({
+      storage: storage,
+      limits: {
+        fileSize: this.maxFileSize,
+        files: 10 // Max 10 files per request
+      },
+      fileFilter: fileFilter
+    });
   }
 
   /**

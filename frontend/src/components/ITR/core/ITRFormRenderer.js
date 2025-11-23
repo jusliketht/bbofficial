@@ -257,6 +257,8 @@ const ITRFormRenderer = ({ itrType, initialData = null, onSubmit, onSaveDraft })
       if (onSubmit) {
         await onSubmit(formData);
       }
+      // Show download section after successful submission
+      setShowDownloadSection(true);
     } catch (error) {
       console.error('Form submission error:', error);
     } finally {

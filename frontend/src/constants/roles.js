@@ -27,8 +27,21 @@ export const ROLES = {
 export const ROLE_LABELS = {
   [ROLES.SUPER_ADMIN]: 'Super Administrator',
   [ROLES.PLATFORM_ADMIN]: 'Platform Administrator',
+
+  // B2B Model
   [ROLES.CA_FIRM_ADMIN]: 'CA Firm Administrator',
-  [ROLES.CA]: 'CA Professional',
+  [ROLES.CA_FIRM_SENIOR_CA]: 'Senior CA (Firm)',
+  [ROLES.CA_FIRM_CA]: 'CA Professional (Firm)',
+  [ROLES.CA_FIRM_JUNIOR_CA]: 'Junior CA (Firm)',
+  [ROLES.CA_FIRM_ASSISTANT]: 'Assistant (Firm)',
+
+  // Independent CAs
+  [ROLES.INDEPENDENT_CA_ADMIN]: 'Independent CA Practice',
+  [ROLES.INDEPENDENT_CA_SENIOR_CA]: 'Senior CA (Independent)',
+  [ROLES.INDEPENDENT_CA]: 'CA Professional (Independent)',
+  [ROLES.INDEPENDENT_CA_JUNIOR]: 'Junior CA (Independent)',
+  [ROLES.INDEPENDENT_CA_ASSISTANT]: 'Assistant (Independent)',
+
   [ROLES.END_USER]: 'End User'
 };
 

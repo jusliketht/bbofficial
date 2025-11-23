@@ -141,7 +141,7 @@ const ITRFiling = () => {
         status: 'draft'
       });
     }
-  }, [location.state, user?.id, updateFilingData]);
+  }, [location.state, user?.id, updateFiling]);
 
   // Calculate progress percentage
   const progressPercentage = ((currentStep + 1) / steps.length) * 100;

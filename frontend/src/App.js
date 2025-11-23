@@ -277,7 +277,6 @@ const AppContent = () => {
       </Routes>
       
       {/* Mobile Navigation */}
-      <CompactMobileNav />
     </div>
   );
 };

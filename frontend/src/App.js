@@ -44,7 +44,7 @@ import StyleGuide from './components/DesignSystem/StyleGuide';
 
 // Context providers
 import { AuthProvider } from './contexts/AuthContext';
-import { CABotProvider } from './contexts/CABotContext';
+// import { CABotProvider } from './contexts/CABotContext'; // Temporarily disabled
 
 // Auth components
 import ProtectedRoute from './components/auth/ProtectedRoute';

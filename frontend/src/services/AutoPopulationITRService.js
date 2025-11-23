@@ -300,20 +300,20 @@ class AutoPopulationITRService {
           epf: consolidatedData.deductions?.section80C?.epf || 0,
           elss: consolidatedData.deductions?.section80C?.elss || 0,
           tuitionFees: consolidatedData.deductions?.section80C?.tuitionFees || 0,
-          homeLoanPrincipal: consolidatedatedData.deductions?.section80C?.homeLoanPrincipal || 0,
+          homeLoanPrincipal: consolidatedData.deductions?.section80C?.homeLoanPrincipal || 0,
           other: consolidatedData.deductions?.section80C?.other || 0
         },
         section80D: {
-          total: consolidatedatedData.deductions?.section80D?.total || 0,
+          total: consolidatedData.deductions?.section80D?.total || 0,
           self: consolidatedData.deductions?.section80D?.self || 0,
           parents: consolidatedData.deductions?.section80D?.parents || 0
         },
-        section80EE: consolidatedatedData.deductions?.section80EE || 0,
+        section80EE: consolidatedData.deductions?.section80EE || 0,
         hra: {
-          total: consolidatedatedData.deductions?.hra?.total || 0,
-          hraReceived: consolidatedatedData.deductions?.hra?.hraReceived || 0,
-          rentPaid: consolidatedatedData.deductions?.hra?.rentPaid || 0,
-          basicSalary: consolidatedatedData.deductions?.hra?.basicSalary || 0
+          total: consolidatedData.deductions?.hra?.total || 0,
+          hraReceived: consolidatedData.deductions?.hra?.hraReceived || 0,
+          rentPaid: consolidatedData.deductions?.hra?.rentPaid || 0,
+          basicSalary: consolidatedData.deductions?.hra?.basicSalary || 0
         }
       },
       taxComputation: {
@@ -328,7 +328,7 @@ class AutoPopulationITRService {
         },
         taxPayable: 0,
         tdsCredits: consolidatedData.tdsDetails?.total || 0,
-        taxPaid: consolidatedatedData.taxPaid?.total || 0,
+        taxPaid: consolidatedData.taxPaid?.total || 0,
         refundDue: 0
       }
     };
@@ -346,28 +346,28 @@ class AutoPopulationITRService {
         ...itr1Data.income,
         capitalGains: {
           shortTerm: {
-            equityShares: consolidatedatedData.capitalGains?.shortTerm?.equity || 0,
-            equityMF: consolidatedatedData.capitalGains?.shortTerm?.mutualFunds || 0,
-            debtMF: consolidatedatedData.capitalGains?.shortTerm?.debtFunds || 0,
-            other: consolidatedatedData.capitalGains?.shortTerm?.other || 0
+            equityShares: consolidatedData.capitalGains?.shortTerm?.equity || 0,
+            equityMF: consolidatedData.capitalGains?.shortTerm?.mutualFunds || 0,
+            debtMF: consolidatedData.capitalGains?.shortTerm?.debtFunds || 0,
+            other: consolidatedData.capitalGains?.shortTerm?.other || 0
           },
           longTerm: {
-            equityShares: consolidatedatedData.capitalGains?.longTerm?.equity || 0,
-            equityMF: consolidatedatedData.capitalGains?.longTerm?.mutualFunds || 0,
-            debtMF: consolidatedatedData.capitalGains?.longTerm?.debtFunds || 0,
-            other: consolidatedatedData.capitalGains?.longTerm?.other || 0,
-            exempt: consolidatedatedData.capitalGains?.longTerm?.exempt || 0
+            equityShares: consolidatedData.capitalGains?.longTerm?.equity || 0,
+            equityMF: consolidatedData.capitalGains?.longTerm?.mutualFunds || 0,
+            debtMF: consolidatedData.capitalGains?.longTerm?.debtFunds || 0,
+            other: consolidatedData.capitalGains?.longTerm?.other || 0,
+            exempt: consolidatedData.capitalGains?.longTerm?.exempt || 0
           }
         },
         incomeFromHouseProperty: {
           selfOccupied: {
-            interestOnHousingLoan: consolidatedatedData.housingLoan?.interest || 0
+            interestOnHousingLoan: consolidatedData.housingLoan?.interest || 0
           },
             letOut: {
-              annualRent: consolidatedatedData.rentalIncome?.annual || 0,
-              municipalTaxes: consolidatedatedData.rentalIncome?.municipalTaxes || 0,
-              standardDeduction: consolidatedatedData.rentalIncome?.standardDeduction || 0,
-              interestOnHousingLoan: consolidatedatedData.rentalIncome?.housingLoanInterest || 0
+              annualRent: consolidatedData.rentalIncome?.annual || 0,
+              municipalTaxes: consolidatedData.rentalIncome?.municipalTaxes || 0,
+              standardDeduction: consolidatedData.rentalIncome?.standardDeduction || 0,
+              interestOnHousingLoan: consolidatedData.rentalIncome?.housingLoanInterest || 0
             }
           }
         },
@@ -695,13 +695,13 @@ class AutoPopulationITRService {
   calculateGrossTotalIncome(consolidatedData) {
     let total = 0;
 
-    total += consolidatedatedData.salaryIncome?.total || 0;
-    total += consolidatedatedData.interestIncome?.total || 0;
-    total += consolidatedatedData.dividendIncome?.total || 0;
-    total += consolidatedatedData.capitalGains?.total || 0;
-    total += consolidatedatedData.rentalIncome?.total || 0;
-    total += consolidatedatedData.businessIncome?.total || 0;
-    total += consolidatedatedData.otherIncome?.total || 0;
+    total += consolidatedData.salaryIncome?.total || 0;
+    total += consolidatedData.interestIncome?.total || 0;
+    total += consolidatedData.dividendIncome?.total || 0;
+    total += consolidatedData.capitalGains?.total || 0;
+    total += consolidatedData.rentalIncome?.total || 0;
+    total += consolidatedData.businessIncome?.total || 0;
+    total += consolidatedData.otherIncome?.total || 0;
 
     return total;
   }
@@ -709,11 +709,11 @@ class AutoPopulationITRService {
   calculateTotalDeductions(consolidatedData) {
     let total = 0;
 
-    total += consolidatedatedData.deductions?.section80C?.total || 0;
-    total += consolidatedatedData.deductions?.section80D?.total || 0;
-    total += consolidatedatedData.deductions?.section80E || 0;
-    total += consolidatedatedData.deductions?.hra?.total || 0;
-    total += consolidatedatedData.deductions?.housingLoan?.interest || 0;
+    total += consolidatedData.deductions?.section80C?.total || 0;
+    total += consolidatedData.deductions?.section80D?.total || 0;
+    total += consolidatedData.deductions?.section80E || 0;
+    total += consolidatedData.deductions?.hra?.total || 0;
+    total += consolidatedData.deductions?.housingLoan?.interest || 0;
 
     return total;
   }

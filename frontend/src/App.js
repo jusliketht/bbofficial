@@ -10,7 +10,6 @@ import { Toaster } from 'react-hot-toast';
 
 // Core components
 import Layout from './components/Layout.js';
-import CompactMobileNav from './components/UI/CompactMobileNav.js';
 import LandingPage from './pages/Landing/LandingPage';
 import HomeRedirect from './pages/HomeRedirect';
 

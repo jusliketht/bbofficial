@@ -81,5 +81,8 @@ export default {
   ...core,
   ...api,
   ...utils,
-  itrJsonExportService
+  itrJsonExportService,
+  form16ExtractionService,
+  bankStatementService,
+  taxSavingsService
 };

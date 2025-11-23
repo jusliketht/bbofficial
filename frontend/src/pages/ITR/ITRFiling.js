@@ -40,14 +40,14 @@ const ITRFiling = () => {
   const location = useLocation();
   const { user } = useAuth();
   
-  const { 
-    filingData, 
-    updateFilingData, 
-    updateSection,
+  const {
+    currentFiling,
+    updateFiling,
+    updateFilingSection,
     saveDraft,
     progress,
-    isLoading 
-  } = useFilingContext();
+    isLoading
+  } = useITR();
 
   const [currentStep, setCurrentStep] = useState(0);
   const [isSaving, setIsSaving] = useState(false);

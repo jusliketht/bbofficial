@@ -1,5 +1,4 @@
 // =====================================================
-// =====================================================
 // BANK STATEMENT UPLOAD COMPONENT
 // Auto-categorization and tax-relevant transaction detection
 // Another game-changing feature for competitive advantage

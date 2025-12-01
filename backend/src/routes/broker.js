@@ -14,7 +14,7 @@ const router = express.Router();
 // =====================================================
 
 // Process broker file upload
-router.post('/process-file', authenticateToken, BrokerController.upload.single('file'), async (req, res) => {
+router.post('/process', authenticateToken, BrokerController.upload.single('file'), async (req, res) => {
   await BrokerController.processBrokerFile(req, res);
 });
 

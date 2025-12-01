@@ -15,7 +15,7 @@ import {
   CheckCircle,
   Info,
   Calendar,
-  DollarSign,
+  IndianRupee,
   FileText,
   ArrowUpRight,
   ArrowDownRight,
@@ -203,7 +203,7 @@ const FinancialProfilePage = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading your financial profile...</p>
         </div>
       </div>
@@ -216,11 +216,11 @@ const FinancialProfilePage = () => {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-600 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Failed to Load Profile</h2>
-          <p className="text-gray-600 mb-4">{profileError.message}</p>
+          <h2 className="text-xl font-semibold text-black mb-2">Failed to Load Profile</h2>
+          <p className="text-gray-700 mb-4">{profileError.message}</p>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            className="px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600"
           >
             Retry
           </button>
@@ -247,7 +247,7 @@ const FinancialProfilePage = () => {
           <div className="space-x-4">
             <button
               onClick={() => navigate('/itr-selection')}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className="px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600"
             >
               Start Filing
             </button>
@@ -281,7 +281,7 @@ const FinancialProfilePage = () => {
               <button
                 onClick={handleRefresh}
                 disabled={isRefreshing}
-                className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                className="flex items-center px-3 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 disabled:opacity-50"
               >
                 <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
                 {isRefreshing ? 'Refreshing...' : 'Refresh'}
@@ -304,12 +304,12 @@ const FinancialProfilePage = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
               <div className="flex items-center">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <FileText className="w-6 h-6 text-blue-600" />
+                <div className="p-2 bg-royal-100 rounded-lg">
+                  <FileText className="w-6 h-6 text-royal-600" />
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Total Filings</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.totalFilings}</p>
+                  <p className="text-2xl font-bold text-black">{stats.totalFilings}</p>
                 </div>
               </div>
             </div>
@@ -341,7 +341,7 @@ const FinancialProfilePage = () => {
             <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
               <div className="flex items-center">
                 <div className="p-2 bg-orange-100 rounded-lg">
-                  <DollarSign className="w-6 h-6 text-orange-600" />
+                  <IndianRupee className="w-6 h-6 text-orange-600" />
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Total Refund</p>
@@ -376,10 +376,10 @@ const FinancialProfilePage = () => {
           {/* Deductions Breakdown */}
           <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold text-gray-900">Deductions Breakdown</h3>
+              <h3 className="text-lg font-semibold text-black">Deductions Breakdown</h3>
               <div className="flex items-center space-x-2">
-                <PieChart className="w-5 h-5 text-blue-600" />
-                <span className="text-sm text-blue-600">80C: 65%</span>
+                <PieChart className="w-5 h-5 text-royal-600" />
+                <span className="text-sm text-royal-600">80C: 65%</span>
               </div>
             </div>
 
@@ -412,11 +412,11 @@ const FinancialProfilePage = () => {
                 {insights.map((insight, index) => (
                   <div key={index} className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
                     <div className="flex items-start">
-                      <div className="p-2 bg-blue-100 rounded-lg mr-3">
-                        <Lightbulb className="w-5 h-5 text-blue-600" />
+                      <div className="p-2 bg-orange-100 rounded-lg mr-3">
+                        <Lightbulb className="w-5 h-5 text-orange-600" />
                       </div>
                       <div className="flex-1">
-                        <h4 className="font-medium text-gray-900 mb-2">{insight.title}</h4>
+                        <h4 className="font-medium text-black mb-2">{insight.title}</h4>
                         <p className="text-sm text-gray-600 mb-3">{insight.description}</p>
                         <div className="flex items-center text-sm text-gray-500">
                           <Calendar className="w-4 h-4 mr-1" />
@@ -514,7 +514,7 @@ const FinancialProfilePage = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                       <div className="flex items-center space-x-2">
-                        <button className="text-blue-600 hover:text-blue-800">
+                        <button className="text-orange-600 hover:text-orange-800">
                           <Eye className="w-4 h-4" />
                         </button>
                         <button className="text-gray-600 hover:text-gray-800">

@@ -108,8 +108,8 @@ Admin Panel ──────┘
    ```bash
    createdb burnblack_prod
    cd backend
-   npx sequelize-cli db:migrate --env production
-   npx sequelize-cli db:seed:all --env production
+   npm run db:migrate
+   npm run db:seed
    ```
 
 4. **Start Development**
@@ -239,10 +239,26 @@ chmod +x scripts/ssl-setup.sh
 
 ---
 
+## 📚 **Documentation**
+
+Comprehensive documentation is available in the [`docs/`](./docs/) directory:
+
+- **[Documentation Index](./docs/README.md)** - Complete documentation overview
+- **[Architecture](./docs/architecture/)** - System architecture and blueprints
+  - [CA-Grade Blueprint](./docs/architecture/ca-grade-blueprint.md) - Comprehensive ITR filing system blueprint
+  - [System Overview](./docs/architecture/system-overview.md) - High-level architecture
+- **[Guides](./docs/guides/)** - Step-by-step guides
+  - [Getting Started](./docs/guides/getting-started.md) - Development setup
+  - [Launch Checklist](./docs/guides/launch-checklist.md) - Production deployment checklist
+  - [Security Guide](./docs/guides/security.md) - Security best practices
+- **[Reference](./docs/reference/)** - Technical references and analysis
+  - [ITR Flow Analysis](./docs/reference/itr-flow-analysis.md) - Comprehensive ITR flow documentation
+  - [Business Logic](./docs/reference/business-logic.md) - Business logic sequence diagrams
+- **[Changelog](./docs/changelog/)** - Project history and changes
+
 ## 📞 **Support**
 
-- **Documentation**: [BURNBACK_LAUNCH_CHECKLIST.md](./BURNBACK_LAUNCH_CHECKLIST.md)
-- **Business Logic**: [BUSINESS_LOGIC_SEQUENCE_DIAGRAMS.md](./docs/BUSINESS_LOGIC_SEQUENCE_DIAGRAMS.md)
+- **Documentation**: [Documentation Index](./docs/README.md)
 - **Email**: support@burnblack.com
 - **Issues**: [GitHub Issues](https://github.com/your-username/burnblack/issues)
 

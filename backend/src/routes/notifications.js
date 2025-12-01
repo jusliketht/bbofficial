@@ -266,6 +266,243 @@ router.post('/send-to-role', (req, res) => {
   }
 });
 
+/**
+ * Get all notifications for the current user
+ * GET /api/notifications
+ */
+router.get('/', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { type, read, page = 1, limit = 20 } = req.query;
+
+    // TODO: Implement Notification model and fetch from database
+    // For now, return mock data
+    const mockNotifications = [
+      {
+        id: '1',
+        type: 'filing_update',
+        title: 'ITR Filing Status Updated',
+        message: 'Your ITR-1 filing for AY 2024-25 has been submitted successfully.',
+        read: false,
+        createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+        actionUrl: '/itr/filings/1',
+      },
+      {
+        id: '2',
+        type: 'document_request',
+        title: 'Document Request',
+        message: 'Please upload your Form 16 for verification.',
+        read: false,
+        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+        actionUrl: '/documents',
+      },
+      {
+        id: '3',
+        type: 'deadline_reminder',
+        title: 'Deadline Reminder',
+        message: 'ITR filing deadline is approaching. Complete your filing soon.',
+        read: true,
+        createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+        actionUrl: '/itr/start',
+      },
+    ];
+
+    // Apply filters
+    let filtered = mockNotifications;
+    if (type && type !== 'all') {
+      filtered = filtered.filter((n) => n.type === type);
+    }
+    if (read === 'read') {
+      filtered = filtered.filter((n) => n.read);
+    } else if (read === 'unread') {
+      filtered = filtered.filter((n) => !n.read);
+    }
+
+    // Pagination
+    const offset = (page - 1) * limit;
+    const paginated = filtered.slice(offset, offset + parseInt(limit));
+
+    res.json({
+      success: true,
+      data: {
+        notifications: paginated,
+        pagination: {
+          total: filtered.length,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: Math.ceil(filtered.length / limit),
+        },
+      },
+    });
+  } catch (error) {
+    enterpriseLogger.error('Get notifications failed', {
+      error: error.message,
+      userId: req.user?.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
+});
+
+/**
+ * Get unread notification count
+ * GET /api/notifications/unread-count
+ */
+router.get('/unread-count', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // TODO: Implement Notification model and count from database
+    // For now, return mock count
+    res.json({
+      success: true,
+      count: 2, // Mock unread count
+    });
+  } catch (error) {
+    enterpriseLogger.error('Get unread count failed', {
+      error: error.message,
+      userId: req.user?.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
+});
+
+/**
+ * Mark notification as read
+ * PUT /api/notifications/:notificationId/read
+ */
+router.put('/:notificationId/read', async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+    const userId = req.user.id;
+
+    // TODO: Implement Notification model and update in database
+    res.json({
+      success: true,
+      message: 'Notification marked as read',
+    });
+  } catch (error) {
+    enterpriseLogger.error('Mark as read failed', {
+      error: error.message,
+      notificationId: req.params.notificationId,
+      userId: req.user?.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
+});
+
+/**
+ * Mark notification as unread
+ * PUT /api/notifications/:notificationId/unread
+ */
+router.put('/:notificationId/unread', async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+    const userId = req.user.id;
+
+    // TODO: Implement Notification model and update in database
+    res.json({
+      success: true,
+      message: 'Notification marked as unread',
+    });
+  } catch (error) {
+    enterpriseLogger.error('Mark as unread failed', {
+      error: error.message,
+      notificationId: req.params.notificationId,
+      userId: req.user?.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
+});
+
+/**
+ * Mark all notifications as read
+ * PUT /api/notifications/read-all
+ */
+router.put('/read-all', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // TODO: Implement Notification model and update all in database
+    res.json({
+      success: true,
+      message: 'All notifications marked as read',
+    });
+  } catch (error) {
+    enterpriseLogger.error('Mark all as read failed', {
+      error: error.message,
+      userId: req.user?.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
+});
+
+/**
+ * Delete notification
+ * DELETE /api/notifications/:notificationId
+ */
+router.delete('/:notificationId', async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+    const userId = req.user.id;
+
+    // TODO: Implement Notification model and delete from database
+    res.json({
+      success: true,
+      message: 'Notification deleted',
+    });
+  } catch (error) {
+    enterpriseLogger.error('Delete notification failed', {
+      error: error.message,
+      notificationId: req.params.notificationId,
+      userId: req.user?.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
+});
+
+/**
+ * Delete all notifications
+ * DELETE /api/notifications/all
+ */
+router.delete('/all', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // TODO: Implement Notification model and delete all from database
+    res.json({
+      success: true,
+      message: 'All notifications deleted',
+    });
+  } catch (error) {
+    enterpriseLogger.error('Delete all notifications failed', {
+      error: error.message,
+      userId: req.user?.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
+});
+
 // Error handling middleware
 router.use((error, req, res, next) => {
   enterpriseLogger.error('SSE notification route error', {

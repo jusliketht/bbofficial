@@ -33,26 +33,26 @@ const InteractiveCard = ({
   const getStatusIcon = (status) => {
     switch (status) {
       case 'completed':
-        return <CheckCircle className="h-4 w-4 text-green-600" />;
+        return <CheckCircle className="h-4 w-4 text-success-500" />;
       case 'pending':
-        return <Clock className="h-4 w-4 text-yellow-600" />;
+        return <Clock className="h-4 w-4 text-warning-500" />;
       case 'error':
-        return <AlertCircle className="h-4 w-4 text-red-600" />;
+        return <AlertCircle className="h-4 w-4 text-error-500" />;
       default:
-        return <Info className="h-4 w-4 text-blue-600" />;
+        return <Info className="h-4 w-4 text-info-500" />;
     }
   };
 
   const getStatusColor = (status) => {
     switch (status) {
       case 'completed':
-        return 'bg-green-100 text-green-800 border-green-200';
+        return 'bg-success-50 text-success-600 border-success-100';
       case 'pending':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+        return 'bg-warning-50 text-warning-600 border-warning-100';
       case 'error':
-        return 'bg-red-100 text-red-800 border-red-200';
+        return 'bg-error-50 text-error-600 border-error-100';
       default:
-        return 'bg-blue-100 text-blue-800 border-blue-200';
+        return 'bg-info-50 text-info-600 border-info-100';
     }
   };
 
@@ -266,7 +266,7 @@ const InteractiveCard = ({
           animate={{ scale: 1 }}
           transition={{ duration: 0.2 }}
         >
-          <div className="w-3 h-3 bg-blue-500 rounded-full" />
+          <div className="w-3 h-3 bg-orange-500 rounded-full" />
         </motion.div>
       )}
     </motion.div>

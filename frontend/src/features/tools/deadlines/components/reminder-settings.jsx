@@ -1,0 +1,119 @@
+// =====================================================
+// REMINDER SETTINGS COMPONENT
+// Configure reminder preferences for a deadline
+// =====================================================
+
+import React, { useState } from 'react';
+import { Bell, X } from 'lucide-react';
+import { useCreateReminder, useUpdateReminder, useDeleteReminder } from '../hooks/use-deadlines';
+import Button from '../../../../components/common/Button';
+
+const ReminderSettings = ({ deadlineId, onClose }) => {
+  const [reminderDays, setReminderDays] = useState([7, 3, 1]);
+  const [enabled, setEnabled] = useState(true);
+
+  const createReminder = useCreateReminder();
+  const updateReminder = useUpdateReminder();
+  const deleteReminder = useDeleteReminder();
+
+  const handleSave = () => {
+    if (enabled) {
+      createReminder.mutate(
+        { deadlineId, reminderDays },
+        {
+          onSuccess: () => {
+                onClose();
+              },
+        },
+      );
+    } else {
+      // Disable reminder (would need reminder ID to delete)
+      // For now, just close
+      onClose();
+    }
+  };
+
+  const toggleDay = (day) => {
+    if (reminderDays.includes(day)) {
+      setReminderDays(reminderDays.filter((d) => d !== day));
+    } else {
+      setReminderDays([...reminderDays, day].sort((a, b) => b - a));
+    }
+  };
+
+  const presetOptions = [
+    { label: '7 days before', value: 7 },
+    { label: '3 days before', value: 3 },
+    { label: '1 day before', value: 1 },
+    { label: 'On deadline', value: 0 },
+  ];
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Bell className="w-5 h-5 text-orange-600" />
+          <h4 className="font-semibold text-gray-900">Reminder Settings</h4>
+        </div>
+        <button
+          onClick={onClose}
+          className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(e) => setEnabled(e.target.checked)}
+              className="w-4 h-4 text-orange-600 rounded focus:ring-2 focus:ring-orange-500"
+            />
+            <span className="text-sm font-medium text-gray-700">Enable reminders</span>
+          </label>
+        </div>
+
+        {enabled && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Remind me (days before deadline):
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {presetOptions.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => toggleDay(option.value)}
+                  className={`px-3 py-1 text-sm rounded-lg transition-colors ${
+                    reminderDays.includes(option.value)
+                      ? 'bg-orange-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            {reminderDays.length === 0 && (
+              <p className="text-xs text-red-600 mt-1">Select at least one reminder day</p>
+            )}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <Button onClick={handleSave} disabled={enabled && reminderDays.length === 0}>
+            Save Reminder
+          </Button>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ReminderSettings;
+

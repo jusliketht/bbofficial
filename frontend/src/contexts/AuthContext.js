@@ -3,7 +3,7 @@
 // User authentication & profile management
 // =====================================================
 
-import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services';
 
@@ -22,7 +22,9 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [justLoggedIn, setJustLoggedIn] = useState(false);
   const navigate = useNavigate();
+  const profileFetchInProgress = useRef(false); // Prevent multiple simultaneous profile fetches
 
   // Initialize authentication state
   useEffect(() => {
@@ -33,12 +35,21 @@ export const AuthProvider = ({ children }) => {
           setUser(currentUser);
           setIsAuthenticated(true);
 
-          // Load user profile
-          try {
-            const profileData = await authService.getProfile();
-            setProfile(profileData);
-          } catch (error) {
-            console.warn('Failed to load user profile:', error);
+          // Load user profile (only if not already fetching)
+          if (!profileFetchInProgress.current) {
+            try {
+              profileFetchInProgress.current = true;
+              const profileData = await authService.getProfile();
+              setProfile(profileData);
+              // Update user state with profile data including dateOfBirth, metadata, etc.
+              if (profileData?.user) {
+                setUser(prevUser => ({ ...prevUser, ...profileData.user }));
+              }
+            } catch (error) {
+              console.warn('Failed to load user profile:', error);
+            } finally {
+              profileFetchInProgress.current = false;
+            }
           }
         }
       } catch (error) {
@@ -59,13 +70,23 @@ export const AuthProvider = ({ children }) => {
       if (response.success) {
         setUser(response.user);
         setIsAuthenticated(true);
+        setJustLoggedIn(true); // Mark that user just logged in
 
-        // Load profile after successful login
-        try {
-          const profileData = await authService.getProfile();
-          setProfile(profileData);
-        } catch (error) {
-          console.warn('Failed to load user profile after login:', error);
+        // Load profile after successful login (only if not already fetching)
+        if (!profileFetchInProgress.current) {
+          try {
+            profileFetchInProgress.current = true;
+            const profileData = await authService.getProfile();
+            setProfile(profileData);
+            // Update user state with profile data including dateOfBirth, metadata, etc.
+            if (profileData?.user) {
+              setUser(prevUser => ({ ...prevUser, ...profileData.user }));
+            }
+          } catch (error) {
+            console.warn('Failed to load user profile after login:', error);
+          } finally {
+            profileFetchInProgress.current = false;
+          }
         }
 
         navigate('/home');
@@ -90,13 +111,23 @@ export const AuthProvider = ({ children }) => {
       if (response.success) {
         setUser(response.user);
         setIsAuthenticated(true);
+        setJustLoggedIn(true); // Mark that user just logged in
 
-        // Load profile after successful login
-        try {
-          const profileData = await authService.getProfile();
-          setProfile(profileData);
-        } catch (error) {
-          console.warn('Failed to load user profile after OAuth login:', error);
+        // Load profile after successful login (only if not already fetching)
+        if (!profileFetchInProgress.current) {
+          try {
+            profileFetchInProgress.current = true;
+            const profileData = await authService.getProfile();
+            setProfile(profileData);
+            // Update user state with profile data including dateOfBirth, metadata, etc.
+            if (profileData?.user) {
+              setUser(prevUser => ({ ...prevUser, ...profileData.user }));
+            }
+          } catch (error) {
+            console.warn('Failed to load user profile after OAuth login:', error);
+          } finally {
+            profileFetchInProgress.current = false;
+          }
         }
 
         navigate('/home');
@@ -121,6 +152,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       setProfile(null);
       setIsAuthenticated(false);
+      setJustLoggedIn(false);
       navigate('/login');
     }
   }, [navigate]);
@@ -130,7 +162,13 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await authService.updateProfile(profileData);
       if (response.success) {
-        setProfile(response.profile);
+        setProfile(response.profile || response);
+        // Update user state with updated profile data
+        if (response.user) {
+          setUser(prevUser => ({ ...prevUser, ...response.user }));
+        } else if (response.profile?.user) {
+          setUser(prevUser => ({ ...prevUser, ...response.profile.user }));
+        }
         return { success: true };
       }
       return { success: false, message: response.message };
@@ -156,12 +194,14 @@ export const AuthProvider = ({ children }) => {
     profile,
     isLoading,
     isAuthenticated,
+    justLoggedIn,
 
     // Actions
     login,
     loginWithOAuth,
     logout,
     updateProfile,
+    setJustLoggedIn, // Allow components to clear the flag
 
     // Utilities
     hasRole,

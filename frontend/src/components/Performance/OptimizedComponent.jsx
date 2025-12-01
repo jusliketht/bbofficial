@@ -11,7 +11,7 @@ const OptimizedComponent = memo(({
   description,
   items = [],
   onItemClick,
-  className = ''
+  className = '',
 }) => {
   usePerformanceMonitor('OptimizedComponent');
 
@@ -21,7 +21,7 @@ const OptimizedComponent = memo(({
       ...item,
       processed: true,
       label: item.name?.toUpperCase() || item.label,
-      value: parseFloat(item.value || '0').toFixed(2)
+      value: parseFloat(item.value || '0').toFixed(2),
     }));
   }, [items]);
 
@@ -70,7 +70,7 @@ const OptimizedComponent = memo(({
     prevProps.items.every((item, index) =>
       item.id === nextProps.items[index]?.id &&
       item.name === nextProps.items[index]?.name &&
-      item.value === nextProps.items[index]?.value
+      item.value === nextProps.items[index]?.value,
     )
   );
 });

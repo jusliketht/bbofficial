@@ -11,7 +11,7 @@ import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
 import {
   User,
-  DollarSign,
+  IndianRupee,
   Calculator,
   FileText,
   Save,
@@ -64,7 +64,7 @@ const ITRFiling = () => {
       id: 'income',
       title: 'Income Details',
       description: 'Salary, business, and other income sources',
-      icon: DollarSign,
+      icon: IndianRupee,
     },
     {
       id: 'deductions',
@@ -231,7 +231,7 @@ const ITRFiling = () => {
   };
 
   const handleBackToStart = () => {
-    navigate('/itr/start');
+    navigate('/itr/select-person');
   };
 
   return (

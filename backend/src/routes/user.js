@@ -48,11 +48,187 @@ router.put('/profile', userController.updateUserProfile);
 // =====================================================
 
 /**
+ * @route PUT /api/users/set-password
+ * @description Set password for OAuth users (first time)
+ * @access Private
+ */
+router.put('/set-password', sensitiveOperationLimit, userController.setPassword);
+
+/**
  * @route PUT /api/users/password
  * @description Change authenticated user's password
  * @access Private
  */
 router.put('/password', sensitiveOperationLimit, userController.changePassword);
+
+// =====================================================
+// PAN MANAGEMENT
+// =====================================================
+
+/**
+ * @route PATCH /api/user/pan
+ * @description Update authenticated user's PAN number
+ * @access Private
+ * @body {string} panNumber - PAN number to set
+ */
+router.patch('/pan', async (req, res, next) => {
+  try {
+    const userId = req.user.userId;
+    const { panNumber } = req.body;
+    const User = require('../models/User');
+    const enterpriseLogger = require('../utils/logger');
+
+    if (!panNumber) {
+      return res.status(400).json({
+        success: false,
+        error: 'PAN number is required',
+      });
+    }
+
+    // Validate PAN format
+    const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+    if (!panRegex.test(panNumber.toUpperCase())) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid PAN format',
+      });
+    }
+
+    // Verify PAN using SurePass service
+    const panVerificationService = require('../services/business/PANVerificationService');
+    const verificationResult = await panVerificationService.verifyPAN(panNumber.toUpperCase(), userId);
+
+    if (!verificationResult.isValid) {
+      return res.status(400).json({
+        success: false,
+        error: 'PAN verification failed. Please enter a valid PAN number.',
+      });
+    }
+
+    // Update user's PAN with verified status
+    await User.update(
+      {
+        panNumber: panNumber.toUpperCase(),
+        panVerified: true,
+        panVerifiedAt: new Date(),
+      },
+      {
+        where: {
+          id: userId,
+        },
+      }
+    );
+
+    enterpriseLogger.info('User PAN updated', {
+      userId,
+      panNumber: panNumber.toUpperCase(),
+    });
+
+    res.json({
+      success: true,
+      message: 'PAN number updated and verified successfully',
+      data: {
+        panNumber: panNumber.toUpperCase(),
+        panVerified: true,
+        panVerifiedAt: new Date(),
+      },
+    });
+  } catch (error) {
+    const enterpriseLogger = require('../utils/logger');
+    enterpriseLogger.error('Failed to update user PAN', {
+      error: error.message,
+      userId: req.user?.userId,
+      stack: error.stack,
+    });
+    next(error);
+  }
+});
+
+/**
+ * @route POST /api/user/verify-pan
+ * @description Verify authenticated user's PAN number
+ * @access Private
+ * @body {string} pan - PAN number to verify (optional, uses user's PAN if not provided)
+ */
+router.post('/verify-pan', async (req, res, next) => {
+  try {
+    const userId = req.user.userId;
+    const { pan } = req.body;
+    const User = require('../models/User');
+    const panVerificationService = require('../services/business/PANVerificationService');
+    const enterpriseLogger = require('../utils/logger');
+
+    // Get the user
+    const user = await User.findByPk(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Use provided PAN or user's PAN
+    const panToVerify = pan || user.panNumber;
+
+    if (!panToVerify) {
+      return res.status(400).json({
+        success: false,
+        error: 'PAN number is required',
+      });
+    }
+
+    // Verify PAN using SurePass service
+    const verificationResult = await panVerificationService.verifyPAN(panToVerify, userId);
+
+    if (!verificationResult.isValid) {
+      return res.status(400).json({
+        success: false,
+        error: 'PAN verification failed',
+        data: verificationResult,
+      });
+    }
+
+    // Update user's PAN verification status
+    await User.update(
+      {
+        panNumber: panToVerify.toUpperCase(),
+        panVerified: true,
+        panVerifiedAt: new Date(),
+      },
+      {
+        where: {
+          id: userId,
+        },
+      }
+    );
+
+    enterpriseLogger.info('User PAN verified successfully', {
+      userId,
+      pan: panToVerify,
+    });
+
+    res.json({
+      success: true,
+      message: 'PAN verified successfully',
+      data: {
+        pan: verificationResult.pan,
+        isValid: verificationResult.isValid,
+        name: verificationResult.name,
+        status: verificationResult.status,
+        verifiedAt: verificationResult.verifiedAt,
+      },
+    });
+  } catch (error) {
+    const enterpriseLogger = require('../utils/logger');
+    enterpriseLogger.error('User PAN verification failed', {
+      error: error.message,
+      userId: req.user?.userId,
+      stack: error.stack,
+    });
+    next(error);
+  }
+});
 
 // =====================================================
 // DASHBOARD & STATISTICS

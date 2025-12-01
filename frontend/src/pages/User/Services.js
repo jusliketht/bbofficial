@@ -22,7 +22,7 @@ import {
   MoreVertical,
   FileText,
   User,
-  DollarSign,
+  IndianRupee,
   Settings,
   ChevronRight,
   ChevronDown,
@@ -333,7 +333,7 @@ const Services = () => {
                   )}
                   {service.estimated_amount > 0 && (
                     <div className="flex items-center space-x-1">
-                      <DollarSign className="h-3 w-3 text-gray-400" />
+                      <IndianRupee className="h-3 w-3 text-gray-400" />
                       <span className="text-gray-600">₹{service.estimated_amount.toLocaleString()}</span>
                     </div>
                   )}

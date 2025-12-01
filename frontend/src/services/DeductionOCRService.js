@@ -57,27 +57,95 @@ export class DeductionOCRService {
 
   async detectDeductionType(file) {
     try {
-      // For now, use mock detection since client-side OCR is complex
-      // In production, this would call the backend OCR service
-      const mockResult = this.mockDetection(file);
+      // Call backend OCR service
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/ocr/deduction', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          // Don't set Content-Type, let browser set it with boundary for FormData
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: response.statusText }));
+        throw new Error(`OCR service returned ${response.status}: ${errorData.error || response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'OCR processing failed');
+      }
 
       enterpriseLogger.info('Deduction type detected', {
         fileName: file.name,
-        type: mockResult.type,
-        confidence: mockResult.confidence,
+        type: result.type || result.deductionType,
+        confidence: result.confidence,
       });
 
-      return mockResult;
+      // Transform backend response to match expected format
+      return {
+        type: result.type || result.deductionType || 'UNKNOWN',
+        confidence: result.confidence || 0.8,
+        extractedData: result.extractedData || {
+          amount: result.amount,
+          date: result.date,
+          reference: result.reference,
+          institution: result.institution,
+        },
+        rawText: result.rawText || result.text || result.extractedData?.text || '',
+      };
     } catch (error) {
       enterpriseLogger.error('Deduction type detection failed', {
         fileName: file.name,
         error: error.message,
       });
+
+      // Fallback to pattern-based detection if API fails and file is text
+      if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+        try {
+          const reader = new FileReader();
+          return new Promise((resolve, reject) => {
+            reader.onload = (e) => {
+              const text = e.target.result;
+              const detectedType = this.identifyDeductionType(text);
+              const amount = this.extractAmount(text);
+              const date = this.extractDate(text);
+              const reference = this.extractReference(text);
+
+              resolve({
+                type: detectedType,
+                confidence: detectedType !== 'UNKNOWN' ? 0.7 : 0.3,
+                extractedData: {
+                  amount: amount,
+                  date: date,
+                  reference: reference,
+                  institution: null,
+                },
+                rawText: text,
+              });
+            };
+            reader.onerror = () => reject(new Error('Failed to read file'));
+            reader.readAsText(file);
+          });
+        } catch (fallbackError) {
+          enterpriseLogger.error('Fallback detection also failed', {
+            fileName: file.name,
+            error: fallbackError.message,
+          });
+        }
+      }
+
       throw error;
     }
   }
 
-  mockDetection(file) {
+  mockDetection() {
     // Mock detection for development/testing
     const mockTypes = [
       'LIC_PREMIUM',

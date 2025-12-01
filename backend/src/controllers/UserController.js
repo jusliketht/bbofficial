@@ -43,7 +43,7 @@ class UserController {
         attributes: [
           'id', 'userId', 'fullName', 'email', 'phone', 'role', 'status',
           'emailVerified', 'phoneVerified', 'createdAt', 'updatedAt',
-          'lastLoginAt', 'loginCount', 'metadata',
+          'lastLoginAt', 'loginCount', 'metadata', 'authProvider', 'passwordHash', 'dateOfBirth',
         ],
       });
 
@@ -66,6 +66,8 @@ class UserController {
             role: user.role,
             roleLabel: this.getRoleLabel(user.role),
             status: user.status,
+            authProvider: user.authProvider,
+            hasPassword: !!user.passwordHash,
             statusLabel: this.getStatusLabel(user.status),
             emailVerified: user.emailVerified,
             phoneVerified: user.phoneVerified,
@@ -74,6 +76,7 @@ class UserController {
             lastLoginAt: user.lastLoginAt,
             loginCount: user.loginCount,
             metadata: user.metadata,
+            dateOfBirth: user.dateOfBirth,
           },
         },
       });
@@ -94,9 +97,9 @@ class UserController {
   async updateUserProfile(req, res, next) {
     try {
       const userId = req.user.userId;
-      const { fullName, phone, metadata } = req.body;
+      const { fullName, phone, metadata, dateOfBirth } = req.body;
 
-      if (!fullName && !phone && !metadata) {
+      if (!fullName && !phone && !metadata && dateOfBirth === undefined) {
         throw new AppError('No fields provided for update', 400);
       }
 
@@ -108,9 +111,13 @@ class UserController {
       const updateData = {};
       if (fullName) {updateData.fullName = fullName;}
       if (phone) {updateData.phone = phone;}
+      if (dateOfBirth !== undefined) {updateData.dateOfBirth = dateOfBirth;}
       if (metadata) {updateData.metadata = { ...user.metadata, ...metadata };}
 
       await user.update(updateData);
+
+      // Reload user to get updated data including passwordHash
+      await user.reload();
 
       // Log audit event
       await auditService.logDataAccess(
@@ -140,12 +147,80 @@ class UserController {
             phoneVerified: user.phoneVerified,
             updatedAt: user.updatedAt,
             metadata: user.metadata,
+            authProvider: user.authProvider,
+            hasPassword: !!user.passwordHash,
+            dateOfBirth: user.dateOfBirth,
           },
         },
       });
 
     } catch (error) {
       enterpriseLogger.error('Failed to update user profile', {
+        error: error.message,
+        userId: req.user?.userId,
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Set password for OAuth users (first time)
+   * PUT /api/users/set-password
+   */
+  async setPassword(req, res, next) {
+    try {
+      const userId = req.user.userId;
+      const { newPassword } = req.body;
+
+      if (!newPassword) {
+        throw new AppError('New password is required', 400);
+      }
+
+      // Validate password strength
+      if (newPassword.length < 8) {
+        throw new AppError('Password must be at least 8 characters long', 400);
+      }
+
+      const user = await User.findByPk(userId);
+      if (!user) {
+        throw new AppError('User not found', 404);
+      }
+
+      // Check if user already has a password
+      if (user.passwordHash) {
+        throw new AppError('Password already set. Use change password endpoint instead.', 400);
+      }
+
+      // Check if user is OAuth user
+      if (user.authProvider === 'LOCAL') {
+        throw new AppError('Local users must use change password endpoint', 400);
+      }
+
+      // Hash new password
+      const saltRounds = 12;
+      const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+
+      await user.update({ passwordHash: newPasswordHash });
+
+      // Log audit event
+      await auditService.logDataAccess(
+        userId,
+        'create',
+        'user_password',
+        userId,
+        { passwordSet: true, authProvider: user.authProvider },
+        req.ip,
+      );
+
+      enterpriseLogger.info('User password set', { userId, authProvider: user.authProvider });
+
+      res.status(200).json({
+        success: true,
+        message: 'Password set successfully',
+      });
+
+    } catch (error) {
+      enterpriseLogger.error('Failed to set password', {
         error: error.message,
         userId: req.user?.userId,
       });
@@ -166,9 +241,19 @@ class UserController {
         throw new AppError('Current password and new password are required', 400);
       }
 
+      // Validate password strength
+      if (newPassword.length < 8) {
+        throw new AppError('Password must be at least 8 characters long', 400);
+      }
+
       const user = await User.findByPk(userId);
       if (!user) {
         throw new AppError('User not found', 404);
+      }
+
+      // Check if user has a password
+      if (!user.passwordHash) {
+        throw new AppError('No password set. Use set password endpoint instead.', 400);
       }
 
       // Verify current password
@@ -221,7 +306,7 @@ class UserController {
     try {
       const userId = req.user.userId;
 
-      // Get user statistics
+      // Get user statistics with error handling for each helper method
       const [
         filingStats,
         draftStats,
@@ -229,29 +314,57 @@ class UserController {
         ticketStats,
         memberStats,
         recentActivity,
-      ] = await Promise.all([
-        this.getFilingStats(userId),
-        this.getDraftStats(userId),
-        this.getDocumentStats(userId),
-        this.getTicketStats(userId),
-        this.getMemberStats(userId),
-        this.getRecentActivity(userId),
+      ] = await Promise.allSettled([
+        this.getFilingStats(userId).catch(err => {
+          enterpriseLogger.warn('Failed to get filing stats', { userId, error: err.message });
+          return { totalFilings: 0, draftFilings: 0, submittedFilings: 0, acknowledgedFilings: 0, itr1Filings: 0, itr2Filings: 0, itr3Filings: 0, itr4Filings: 0 };
+        }),
+        this.getDraftStats(userId).catch(err => {
+          enterpriseLogger.warn('Failed to get draft stats', { userId, error: err.message });
+          return { totalDrafts: 0, activeDrafts: 0, submittedDrafts: 0 };
+        }),
+        this.getDocumentStats(userId).catch(err => {
+          enterpriseLogger.warn('Failed to get document stats', { userId, error: err.message });
+          return { totalDocuments: 0, totalStorage: 0, verifiedDocuments: 0 };
+        }),
+        this.getTicketStats(userId).catch(err => {
+          enterpriseLogger.warn('Failed to get ticket stats', { userId, error: err.message });
+          return { totalTickets: 0, openTickets: 0, resolvedTickets: 0 };
+        }),
+        this.getMemberStats(userId).catch(err => {
+          enterpriseLogger.warn('Failed to get member stats', { userId, error: err.message });
+          return { totalMembers: 0, activeMembers: 0 };
+        }),
+        this.getRecentActivity(userId).catch(err => {
+          enterpriseLogger.warn('Failed to get recent activity', { userId, error: err.message });
+          return [];
+        }),
       ]);
+
+      // Extract values from Promise.allSettled results
+      const stats = {
+        filingStats: filingStats.status === 'fulfilled' ? filingStats.value : { totalFilings: 0, draftFilings: 0, submittedFilings: 0, acknowledgedFilings: 0, itr1Filings: 0, itr2Filings: 0, itr3Filings: 0, itr4Filings: 0 },
+        draftStats: draftStats.status === 'fulfilled' ? draftStats.value : { totalDrafts: 0, activeDrafts: 0, submittedDrafts: 0 },
+        documentStats: documentStats.status === 'fulfilled' ? documentStats.value : { totalDocuments: 0, totalStorage: 0, verifiedDocuments: 0 },
+        ticketStats: ticketStats.status === 'fulfilled' ? ticketStats.value : { totalTickets: 0, openTickets: 0, resolvedTickets: 0 },
+        memberStats: memberStats.status === 'fulfilled' ? memberStats.value : { totalMembers: 0, activeMembers: 0 },
+        recentActivity: recentActivity.status === 'fulfilled' ? recentActivity.value : [],
+      };
 
       const dashboardData = {
         overview: {
-          totalFilings: filingStats.totalFilings,
-          draftFilings: draftStats.totalDrafts,
-          totalDocuments: documentStats.totalDocuments,
-          openTickets: ticketStats.openTickets,
-          familyMembers: memberStats.totalMembers,
+          totalFilings: stats.filingStats.totalFilings,
+          draftFilings: stats.draftStats.totalDrafts,
+          totalDocuments: stats.documentStats.totalDocuments,
+          openTickets: stats.ticketStats.openTickets,
+          familyMembers: stats.memberStats.totalMembers,
         },
-        filingStats,
-        draftStats,
-        documentStats,
-        ticketStats,
-        memberStats,
-        recentActivity,
+        filingStats: stats.filingStats,
+        draftStats: stats.draftStats,
+        documentStats: stats.documentStats,
+        ticketStats: stats.ticketStats,
+        memberStats: stats.memberStats,
+        recentActivity: stats.recentActivity,
         quickActions: this.getQuickActions(userId),
       };
 

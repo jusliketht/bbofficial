@@ -27,7 +27,7 @@ const User = sequelize.define('User', {
     field: 'password_hash',
   },
   role: {
-    type: DataTypes.ENUM('SUPER_ADMIN', 'PLATFORM_ADMIN', 'CA_FIRM_ADMIN', 'CA', 'END_USER'),
+    type: DataTypes.ENUM('SUPER_ADMIN', 'PLATFORM_ADMIN', 'CA_FIRM_ADMIN', 'CA', 'PREPARER', 'REVIEWER', 'END_USER'),
     defaultValue: 'END_USER',
     allowNull: false,
   },
@@ -40,7 +40,7 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: true,
     validate: {
-      len: [10, 15],
+      len: [10, 20], // Support international format
     },
   },
   googleId: {
@@ -85,6 +85,25 @@ const User = sequelize.define('User', {
     defaultValue: false,
     field: 'phone_verified',
   },
+  panNumber: {
+    type: DataTypes.STRING(10),
+    allowNull: true,
+    validate: {
+      len: [10, 10],
+      is: /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i,
+    },
+    field: 'pan_number',
+  },
+  panVerified: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    field: 'pan_verified',
+  },
+  panVerifiedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'pan_verified_at',
+  },
   lastLoginAt: {
     type: DataTypes.DATE,
     allowNull: true,
@@ -100,6 +119,18 @@ const User = sequelize.define('User', {
     defaultValue: false,
     allowNull: false,
     field: 'onboarding_completed',
+  },
+  dateOfBirth: {
+    type: DataTypes.DATEONLY,
+    allowNull: true,
+    field: 'date_of_birth',
+    comment: 'User date of birth for tax calculations',
+  },
+  metadata: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    defaultValue: {},
+    comment: 'Stores user preferences, notification settings, privacy settings, etc.',
   },
   createdAt: {
     type: DataTypes.DATE,
@@ -139,6 +170,12 @@ const User = sequelize.define('User', {
     {
       fields: ['ca_firm_id'],
     },
+    {
+      fields: ['metadata'],
+      using: 'gin',
+      name: 'idx_users_metadata_gin',
+      comment: 'GIN index for JSONB metadata queries',
+    },
   ],
 });
 
@@ -158,8 +195,17 @@ User.prototype.validatePassword = async function(password) {
 User.prototype.toJSON = function() {
   const values = Object.assign({}, this.get());
   delete values.passwordHash;
+  // Add computed hasPassword field
+  values.hasPassword = !!this.passwordHash;
   return values;
 };
+
+// Virtual getter for hasPassword
+Object.defineProperty(User.prototype, 'hasPassword', {
+  get: function() {
+    return !!this.passwordHash;
+  },
+});
 
 // Class methods
 User.hashPassword = async function(password) {
@@ -194,6 +240,89 @@ User.findActiveUsers = async function() {
     enterpriseLogger.error('Find active users error', { error: error.message });
     throw error;
   }
+};
+
+// Instance methods for assignments
+User.prototype.getAssignedClients = async function() {
+  try {
+    const { Assignment, FamilyMember } = require('./index');
+    const assignments = await Assignment.findAll({
+      where: {
+        userId: this.id,
+        status: 'active',
+        role: ['preparer', 'reviewer'],
+      },
+      include: [{
+        model: FamilyMember,
+        as: 'client',
+        where: { clientType: 'ca_client' },
+      }],
+    });
+    return assignments.map(a => a.client);
+  } catch (error) {
+    enterpriseLogger.error('Get assigned clients error', {
+      userId: this.id,
+      error: error.message,
+    });
+    throw error;
+  }
+};
+
+User.prototype.canAccessClient = async function(clientId) {
+  try {
+    // PlatformAdmin/SUPER_ADMIN can access (with audit)
+    if (['SUPER_ADMIN', 'PLATFORM_ADMIN'].includes(this.role)) {
+      return { allowed: true, reason: 'platform_admin' };
+    }
+
+    // FirmAdmin can access clients in their firm
+    if (this.role === 'CA_FIRM_ADMIN' && this.caFirmId) {
+      const { FamilyMember } = require('./index');
+      const client = await FamilyMember.findByPk(clientId);
+      if (client && client.firmId === this.caFirmId) {
+        return { allowed: true, reason: 'firm_admin' };
+      }
+    }
+
+    // Preparer/Reviewer can access assigned clients
+    if (['PREPARER', 'REVIEWER', 'CA'].includes(this.role)) {
+      const { Assignment } = require('./index');
+      const assignment = await Assignment.findOne({
+        where: {
+          userId: this.id,
+          clientId,
+          status: 'active',
+        },
+      });
+      if (assignment) {
+        return { allowed: true, reason: 'assigned', assignment };
+      }
+    }
+
+    // Client can access their own data
+    if (this.role === 'END_USER' && this.id === clientId) {
+      return { allowed: true, reason: 'self' };
+    }
+
+    return { allowed: false, reason: 'no_access' };
+  } catch (error) {
+    enterpriseLogger.error('Check client access error', {
+      userId: this.id,
+      clientId,
+      error: error.message,
+    });
+    return { allowed: false, reason: 'error' };
+  }
+};
+
+User.prototype.getFirmContext = function() {
+  return {
+    firmId: this.caFirmId,
+    role: this.role,
+    isPlatformAdmin: ['SUPER_ADMIN', 'PLATFORM_ADMIN'].includes(this.role),
+    isFirmAdmin: this.role === 'CA_FIRM_ADMIN',
+    isStaff: ['CA', 'PREPARER', 'REVIEWER'].includes(this.role),
+  };
 };
 
 // Hooks

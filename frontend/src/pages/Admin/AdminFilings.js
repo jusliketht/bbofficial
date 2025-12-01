@@ -4,9 +4,15 @@
 // =====================================================
 
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useMutation } from '@tanstack/react-query';
+import apiClient from '../../services/core/APIClient';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import {
+  useAdminFilings,
+  useAdminFilingStats,
+  useAdminFilingAnalytics,
+} from '../../features/admin/filings/hooks/use-filings';
 import {
   FileText,
   Users,
@@ -19,7 +25,7 @@ import {
   Search,
   Filter,
   TrendingUp,
-  DollarSign,
+  IndianRupee,
   Calendar,
   Building2,
   User,
@@ -27,7 +33,6 @@ import {
   PieChart,
   Activity,
 } from 'lucide-react';
-import api from '../../services/api';
 import toast from 'react-hot-toast';
 
 const AdminFilings = () => {
@@ -40,48 +45,27 @@ const AdminFilings = () => {
   const [dateRange, setDateRange] = useState('all');
   const [selectedTab, setSelectedTab] = useState('overview');
 
-  // Fetch all filings
-  const { data: filingsData, isLoading } = useQuery({
-    queryKey: ['adminFilings', searchTerm, statusFilter, itrTypeFilter, dateRange],
-    queryFn: async () => {
-      const response = await api.get(`/api/admin/filings?search=${searchTerm}&status=${statusFilter}&itr_type=${itrTypeFilter}&date_range=${dateRange}`);
-      return response.data;
-    },
-    enabled: !!user?.user_id,
-    staleTime: 1 * 60 * 1000, // 1 minute
-    refetchInterval: 30 * 1000, // 30 seconds
-  });
+  // Build query params
+  const queryParams = {
+    search: searchTerm || undefined,
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    itrType: itrTypeFilter !== 'all' ? itrTypeFilter : undefined,
+    dateRange: dateRange !== 'all' ? dateRange : undefined,
+  };
 
-  // Fetch filing statistics
-  const { data: statsData } = useQuery({
-    queryKey: ['adminFilingStats'],
-    queryFn: async () => {
-      const response = await api.get('/api/admin/filings/stats');
-      return response.data;
-    },
-    enabled: !!user?.user_id,
-    staleTime: 2 * 60 * 1000, // 2 minutes
-  });
+  // Fetch all filings using hooks
+  const { data: filingsData, isLoading } = useAdminFilings(queryParams);
+  const { data: statsData } = useAdminFilingStats();
+  const { data: analyticsData } = useAdminFilingAnalytics();
 
-  // Fetch filing analytics
-  const { data: analyticsData } = useQuery({
-    queryKey: ['adminFilingAnalytics'],
-    queryFn: async () => {
-      const response = await api.get('/api/admin/filings/analytics');
-      return response.data;
-    },
-    enabled: !!user?.user_id,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-
-  const filings = filingsData?.filings || [];
-  const stats = statsData?.stats || {};
-  const analytics = analyticsData?.analytics || {};
+  const filings = filingsData?.data?.filings || filingsData?.filings || [];
+  const stats = statsData?.data?.stats || statsData?.stats || {};
+  const analytics = analyticsData?.data?.analytics || analyticsData?.analytics || {};
 
   // Update filing status mutation
   const updateStatusMutation = useMutation({
     mutationFn: async ({ filingId, status, notes }) => {
-      const response = await api.put(`/api/admin/filings/${filingId}/status`, {
+      const response = await apiClient.put(`/api/admin/filings/${filingId}/status`, {
         status,
         notes,
       });
@@ -145,7 +129,7 @@ const AdminFilings = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
       </div>
     );
   }
@@ -187,9 +171,9 @@ const AdminFilings = () => {
               <button
                 key={tab.id}
                 onClick={() => setSelectedTab(tab.id)}
-                className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-label-lg transition-colors ${
                   selectedTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
+                    ? 'border-orange-500 text-orange-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
@@ -208,42 +192,42 @@ const AdminFilings = () => {
           <div className="space-y-6">
             {/* Statistics Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="bg-white rounded-lg shadow-card p-4">
                 <div className="flex items-center">
-                  <FileText className="h-8 w-8 text-blue-600" />
+                  <FileText className="h-8 w-8 text-info-600" />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-600">Total Filings</p>
-                    <p className="text-2xl font-semibold text-gray-900">{stats.total || 0}</p>
+                    <p className="text-label-lg font-medium text-gray-600">Total Filings</p>
+                    <p className="text-number-lg font-semibold text-gray-900">{stats.total || 0}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="bg-white rounded-lg shadow-card p-4">
                 <div className="flex items-center">
-                  <CheckCircle className="h-8 w-8 text-green-600" />
+                  <CheckCircle className="h-8 w-8 text-success-600" />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-600">Completed</p>
-                    <p className="text-2xl font-semibold text-gray-900">{stats.completed || 0}</p>
+                    <p className="text-label-lg font-medium text-gray-600">Completed</p>
+                    <p className="text-number-lg font-semibold text-gray-900">{stats.completed || 0}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="bg-white rounded-lg shadow-card p-4">
                 <div className="flex items-center">
                   <Clock className="h-8 w-8 text-orange-600" />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-600">In Progress</p>
-                    <p className="text-2xl font-semibold text-gray-900">{stats.in_progress || 0}</p>
+                    <p className="text-label-lg font-medium text-gray-600">In Progress</p>
+                    <p className="text-number-lg font-semibold text-gray-900">{stats.in_progress || 0}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="bg-white rounded-lg shadow-card p-4">
                 <div className="flex items-center">
-                  <AlertCircle className="h-8 w-8 text-red-600" />
+                  <AlertCircle className="h-8 w-8 text-error-600" />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-600">Pending</p>
-                    <p className="text-2xl font-semibold text-gray-900">{stats.pending || 0}</p>
+                    <p className="text-label-lg font-medium text-gray-600">Pending</p>
+                    <p className="text-number-lg font-semibold text-gray-900">{stats.pending || 0}</p>
                   </div>
                 </div>
               </div>
@@ -280,7 +264,7 @@ const AdminFilings = () => {
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">Revenue Generated</h3>
-                  <DollarSign className="h-5 w-5 text-green-500" />
+                  <IndianRupee className="h-5 w-5 text-green-500" />
                 </div>
                 <div className="text-3xl font-bold text-gray-900 mb-2">
                   ₹{stats.revenue_generated || 0}
@@ -311,7 +295,7 @@ const AdminFilings = () => {
                         {filing.status.replace('_', ' ')}
                       </span>
                       <button
-                        onClick={() => navigate(`/admin/filings/${filing.filing_id}`)}
+                        onClick={() => navigate(`/admin/filings/${filing.id || filing.filing_id}`)}
                         className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
                       >
                         <Eye className="h-4 w-4" />
@@ -432,7 +416,7 @@ const AdminFilings = () => {
 
                           <div className="flex items-center space-x-2">
                             <button
-                              onClick={() => navigate(`/admin/filings/${filing.filing_id}`)}
+                              onClick={() => navigate(`/admin/filings/${filing.id || filing.filing_id}`)}
                               className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
                               title="View Details"
                             >
@@ -566,7 +550,7 @@ const AdminFilings = () => {
 
                 <button className="p-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-left">
                   <div className="flex items-center space-x-3">
-                    <DollarSign className="h-6 w-6 text-purple-600" />
+                    <IndianRupee className="h-6 w-6 text-purple-600" />
                     <div>
                       <h4 className="font-medium text-gray-900">Revenue Report</h4>
                       <p className="text-sm text-gray-500">Financial performance analysis</p>

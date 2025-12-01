@@ -27,7 +27,7 @@ import {
   TrendingDown,
   Activity,
   Calendar,
-  DollarSign,
+  IndianRupee,
   Globe,
   Lock,
   Unlock,
@@ -107,13 +107,13 @@ const PlatformCompliance = () => {
   const getSeverityIcon = (severity) => {
     switch (severity) {
       case 'critical':
-        return <AlertTriangle className="h-4 w-4 text-red-500" />;
+        return <AlertTriangle className="h-4 w-4 text-error-500" />;
       case 'high':
         return <AlertTriangle className="h-4 w-4 text-orange-500" />;
       case 'medium':
-        return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
+        return <AlertTriangle className="h-4 w-4 text-warning-500" />;
       case 'low':
-        return <AlertTriangle className="h-4 w-4 text-blue-500" />;
+        return <AlertTriangle className="h-4 w-4 text-info-500" />;
       default:
         return <Shield className="h-4 w-4 text-gray-500" />;
     }
@@ -122,13 +122,13 @@ const PlatformCompliance = () => {
   const getSeverityColor = (severity) => {
     switch (severity) {
       case 'critical':
-        return 'bg-red-100 text-red-800';
+        return 'bg-error-50 text-error-600';
       case 'high':
-        return 'bg-orange-100 text-orange-800';
+        return 'bg-warning-50 text-warning-600';
       case 'medium':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-warning-50 text-warning-600';
       case 'low':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-info-50 text-info-600';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -137,13 +137,13 @@ const PlatformCompliance = () => {
   const getStatusIcon = (status) => {
     switch (status) {
       case 'compliant':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
+        return <CheckCircle className="h-4 w-4 text-success-500" />;
       case 'non_compliant':
-        return <AlertTriangle className="h-4 w-4 text-red-500" />;
+        return <AlertTriangle className="h-4 w-4 text-error-500" />;
       case 'under_review':
         return <Clock className="h-4 w-4 text-orange-500" />;
       case 'pending':
-        return <Clock className="h-4 w-4 text-blue-500" />;
+        return <Clock className="h-4 w-4 text-info-500" />;
       default:
         return <Shield className="h-4 w-4 text-gray-500" />;
     }
@@ -152,13 +152,13 @@ const PlatformCompliance = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'compliant':
-        return 'bg-green-100 text-green-800';
+        return 'bg-success-50 text-success-600';
       case 'non_compliant':
-        return 'bg-red-100 text-red-800';
+        return 'bg-error-50 text-error-600';
       case 'under_review':
-        return 'bg-orange-100 text-orange-800';
+        return 'bg-warning-50 text-warning-600';
       case 'pending':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-info-50 text-info-600';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -174,7 +174,7 @@ const PlatformCompliance = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
       </div>
     );
   }
@@ -182,23 +182,23 @@ const PlatformCompliance = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header className="bg-white shadow-card border-b">
+        <div className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => navigate('/dashboard')}
-                className="text-gray-600 hover:text-gray-900"
+                className="text-body-md text-gray-600 hover:text-gray-900"
               >
                 ← Back to Dashboard
               </button>
-              <h1 className="text-xl font-semibold text-gray-900">Platform Compliance</h1>
+              <h1 className="text-heading-lg font-semibold text-gray-900">Platform Compliance</h1>
             </div>
 
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => navigate('/platform-admin/compliance/export')}
-                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+                className="bg-success-500 text-white px-4 py-2 rounded-lg hover:bg-success-600 transition-colors flex items-center space-x-2"
               >
                 <Download className="h-4 w-4" />
                 <span>Export Report</span>
@@ -206,7 +206,7 @@ const PlatformCompliance = () => {
 
               <button
                 onClick={() => navigate('/platform-admin/compliance/settings')}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors flex items-center space-x-2"
               >
                 <Settings className="h-4 w-4" />
                 <span>Settings</span>
@@ -218,15 +218,15 @@ const PlatformCompliance = () => {
 
       {/* Navigation Tabs */}
       <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12">
           <nav className="flex space-x-8">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setSelectedTab(tab.id)}
-                className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-label-lg transition-colors ${
                   selectedTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
+                    ? 'border-orange-500 text-orange-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
@@ -239,48 +239,48 @@ const PlatformCompliance = () => {
       </div>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12 py-6">
         {/* Overview Tab */}
         {selectedTab === 'overview' && (
           <div className="space-y-6">
             {/* Statistics Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="bg-white rounded-lg shadow-card p-4">
                 <div className="flex items-center">
-                  <CheckCircle className="h-8 w-8 text-green-600" />
+                  <CheckCircle className="h-8 w-8 text-success-600" />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-600">Compliant</p>
-                    <p className="text-2xl font-semibold text-gray-900">{stats.compliant || 0}</p>
+                    <p className="text-label-lg font-medium text-gray-600">Compliant</p>
+                    <p className="text-number-lg font-semibold text-gray-900">{stats.compliant || 0}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="bg-white rounded-lg shadow-card p-4">
                 <div className="flex items-center">
-                  <AlertTriangle className="h-8 w-8 text-red-600" />
+                  <AlertTriangle className="h-8 w-8 text-error-600" />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-600">Non-Compliant</p>
-                    <p className="text-2xl font-semibold text-gray-900">{stats.non_compliant || 0}</p>
+                    <p className="text-label-lg font-medium text-gray-600">Non-Compliant</p>
+                    <p className="text-number-lg font-semibold text-gray-900">{stats.non_compliant || 0}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="bg-white rounded-lg shadow-card p-4">
                 <div className="flex items-center">
                   <Clock className="h-8 w-8 text-orange-600" />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-600">Under Review</p>
-                    <p className="text-2xl font-semibold text-gray-900">{stats.under_review || 0}</p>
+                    <p className="text-label-lg font-medium text-gray-600">Under Review</p>
+                    <p className="text-number-lg font-semibold text-gray-900">{stats.under_review || 0}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="bg-white rounded-lg shadow-card p-4">
                 <div className="flex items-center">
-                  <Shield className="h-8 w-8 text-blue-600" />
+                  <Shield className="h-8 w-8 text-info-600" />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-600">Compliance Score</p>
-                    <p className="text-2xl font-semibold text-gray-900">{stats.compliance_score || 0}%</p>
+                    <p className="text-label-lg font-medium text-gray-600">Compliance Score</p>
+                    <p className="text-number-lg font-semibold text-gray-900">{stats.compliance_score || 0}%</p>
                   </div>
                 </div>
               </div>
@@ -288,31 +288,31 @@ const PlatformCompliance = () => {
 
             {/* Compliance Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Compliance by Category</h3>
+              <div className="bg-white rounded-lg shadow-card p-6">
+                <h3 className="text-heading-lg font-semibold text-gray-900 mb-4">Compliance by Category</h3>
                 <div className="space-y-3">
                   {stats.compliance_by_category?.map((category) => (
                     <div key={category.name} className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
                         <Shield className="h-4 w-4 text-gray-400" />
-                        <span className="text-sm font-medium text-gray-700">{category.name}</span>
+                        <span className="text-label-lg font-medium text-gray-700">{category.name}</span>
                       </div>
                       <div className="flex items-center space-x-2">
                         <div className="w-20 bg-gray-200 rounded-full h-2">
                           <div
-                            className="bg-blue-600 h-2 rounded-full"
+                            className="bg-orange-500 h-2 rounded-full"
                             style={{ width: `${category.compliance_rate}%` }}
                           ></div>
                         </div>
-                        <span className="text-sm font-medium text-gray-900">{category.compliance_rate}%</span>
+                        <span className="text-label-lg font-medium text-gray-900">{category.compliance_rate}%</span>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Compliance Activity</h3>
+              <div className="bg-white rounded-lg shadow-card p-6">
+                <h3 className="text-heading-lg font-semibold text-gray-900 mb-4">Recent Compliance Activity</h3>
                 <div className="space-y-3">
                   {stats.recent_activity?.slice(0, 5).map((activity) => (
                     <div key={activity.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
@@ -330,30 +330,30 @@ const PlatformCompliance = () => {
             </div>
 
             {/* Critical Alerts */}
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Critical Compliance Alerts</h3>
+            <div className="bg-white rounded-lg shadow-card p-6">
+              <h3 className="text-heading-lg font-semibold text-gray-900 mb-4">Critical Compliance Alerts</h3>
               {alerts.filter(alert => alert.severity === 'critical').length === 0 ? (
                 <div className="text-center py-8">
-                  <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-                  <h4 className="text-lg font-medium text-gray-900 mb-2">No Critical Alerts</h4>
-                  <p className="text-gray-500">All compliance requirements are being met.</p>
+                  <CheckCircle className="h-12 w-12 text-success-500 mx-auto mb-4" />
+                  <h4 className="text-heading-lg font-medium text-gray-900 mb-2">No Critical Alerts</h4>
+                  <p className="text-body-md text-gray-500">All compliance requirements are being met.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {alerts.filter(alert => alert.severity === 'critical').slice(0, 5).map((alert) => (
-                    <div key={alert.id} className="p-4 border border-red-200 bg-red-50 rounded-lg">
+                    <div key={alert.id} className="p-4 border border-error-200 bg-error-50 rounded-lg">
                       <div className="flex items-start space-x-3">
-                        <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
+                        <AlertTriangle className="h-5 w-5 text-error-500 mt-0.5" />
                         <div className="flex-1">
                           <h4 className="font-medium text-gray-900">{alert.title}</h4>
-                          <p className="text-sm text-gray-600 mt-1">{alert.description}</p>
-                          <p className="text-xs text-gray-500 mt-2">
+                          <p className="text-body-md text-gray-600 mt-1">{alert.description}</p>
+                          <p className="text-body-sm text-gray-500 mt-2">
                             {new Date(alert.timestamp).toLocaleString()}
                           </p>
                         </div>
                         <button
                           onClick={() => handleStatusUpdate(alert.id, 'under_review')}
-                          className="px-3 py-1 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
+                          className="px-3 py-1 bg-error-500 text-white text-label-lg rounded-lg hover:bg-error-600 transition-colors"
                         >
                           Review
                         </button>
@@ -370,7 +370,7 @@ const PlatformCompliance = () => {
         {selectedTab === 'compliance' && (
           <div className="space-y-6">
             {/* Filters */}
-            <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="bg-white rounded-lg shadow-card p-6">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0 md:space-x-4">
                 {/* Search */}
                 <div className="relative flex-1">
@@ -380,7 +380,7 @@ const PlatformCompliance = () => {
                     placeholder="Search compliance issues..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                   />
                 </div>
 
@@ -390,7 +390,7 @@ const PlatformCompliance = () => {
                   <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                   >
                     <option value="all">All Status</option>
                     <option value="compliant">Compliant</option>
@@ -404,7 +404,7 @@ const PlatformCompliance = () => {
                 <select
                   value={severityFilter}
                   onChange={(e) => setSeverityFilter(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 >
                   <option value="all">All Severity</option>
                   <option value="critical">Critical</option>
@@ -417,10 +417,10 @@ const PlatformCompliance = () => {
 
             {/* Compliance Issues List */}
             {compliance.length === 0 ? (
-              <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+              <div className="bg-white rounded-lg shadow-card p-12 text-center">
                 <Shield className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No compliance issues found</h3>
-                <p className="text-gray-500 mb-6">
+                <h3 className="text-heading-lg font-medium text-gray-900 mb-2">No compliance issues found</h3>
+                <p className="text-body-md text-gray-500 mb-6">
                   {searchTerm || statusFilter !== 'all' || severityFilter !== 'all'
                     ? 'Try adjusting your search or filter criteria'
                     : 'All compliance requirements are being met'
@@ -483,7 +483,7 @@ const PlatformCompliance = () => {
                         <div className="flex items-center space-x-2">
                           <button
                             onClick={() => navigate(`/platform-admin/compliance/${issue.id}`)}
-                            className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                            className="p-2 text-info-600 hover:text-info-800 hover:bg-info-50 rounded-lg transition-colors"
                             title="View Details"
                           >
                             <Eye className="h-4 w-4" />
@@ -502,7 +502,7 @@ const PlatformCompliance = () => {
                           {issue.status === 'under_review' && (
                             <button
                               onClick={() => handleStatusUpdate(issue.id, 'compliant')}
-                              className="p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors"
+                              className="p-2 text-success-600 hover:text-success-800 hover:bg-success-50 rounded-lg transition-colors"
                               title="Mark Compliant"
                             >
                               <CheckCircle className="h-4 w-4" />
@@ -521,23 +521,23 @@ const PlatformCompliance = () => {
         {/* Alerts Tab */}
         {selectedTab === 'alerts' && (
           <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Compliance Alerts</h3>
+            <div className="bg-white rounded-lg shadow-card p-6">
+              <h3 className="text-heading-lg font-semibold text-gray-900 mb-4">Compliance Alerts</h3>
 
               {alerts.length === 0 ? (
                 <div className="text-center py-8">
-                  <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-                  <h4 className="text-lg font-medium text-gray-900 mb-2">No Active Alerts</h4>
-                  <p className="text-gray-500">All compliance requirements are being met.</p>
+                  <CheckCircle className="h-12 w-12 text-success-500 mx-auto mb-4" />
+                  <h4 className="text-heading-lg font-medium text-gray-900 mb-2">No Active Alerts</h4>
+                  <p className="text-body-md text-gray-500">All compliance requirements are being met.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {alerts.map((alert) => (
                     <div key={alert.id} className={`p-4 border rounded-lg ${
-                      alert.severity === 'critical' ? 'bg-red-50 border-red-200' :
+                      alert.severity === 'critical' ? 'bg-error-50 border-error-200' :
                       alert.severity === 'high' ? 'bg-orange-50 border-orange-200' :
-                      alert.severity === 'medium' ? 'bg-yellow-50 border-yellow-200' :
-                      'bg-blue-50 border-blue-200'
+                      alert.severity === 'medium' ? 'bg-warning-50 border-warning-200' :
+                      'bg-info-50 border-info-200'
                     }`}>
                       <div className="flex items-start space-x-3">
                         {getSeverityIcon(alert.severity)}

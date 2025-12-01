@@ -76,8 +76,8 @@ cp .env.production .env
 
 # Database setup
 createdb burnblack_prod
-npx sequelize-cli db:migrate --env production
-npx sequelize-cli db:seed:all --env production
+npm run db:migrate
+npm run db:seed
 
 # Start development
 npm run dev

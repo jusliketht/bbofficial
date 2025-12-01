@@ -81,6 +81,9 @@ const createTablesInOrder = async () => {
           throw error;
         }
       }
+      
+      // Manually add missing columns that might not be synced properly
+      await addMissingUserColumns(queryInterface);
     }
     
     // Step 3: Create CAFirm table (now users exists, so created_by FK can be added)
@@ -281,6 +284,103 @@ const createTablesInOrder = async () => {
   } catch (error) {
     enterpriseLogger.error('Failed to create tables in order', { error: error.message, stack: error.stack });
     throw error;
+  }
+};
+
+const addMissingUserColumns = async (queryInterface) => {
+  try {
+    const { DataTypes } = require('sequelize');
+    const tableDescription = await queryInterface.describeTable('users');
+    
+    // Add pan_number column if it doesn't exist
+    if (!tableDescription.pan_number) {
+      enterpriseLogger.info('Adding pan_number column to users table...');
+      await queryInterface.addColumn('users', 'pan_number', {
+        type: DataTypes.STRING(10),
+        allowNull: true,
+      });
+    }
+    
+    // Add pan_verified column if it doesn't exist
+    if (!tableDescription.pan_verified) {
+      enterpriseLogger.info('Adding pan_verified column to users table...');
+      await queryInterface.addColumn('users', 'pan_verified', {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      });
+    }
+    
+    // Add pan_verified_at column if it doesn't exist
+    if (!tableDescription.pan_verified_at) {
+      enterpriseLogger.info('Adding pan_verified_at column to users table...');
+      await queryInterface.addColumn('users', 'pan_verified_at', {
+        type: DataTypes.DATE,
+        allowNull: true,
+      });
+    }
+    
+    // Add last_login_at column if it doesn't exist
+    if (!tableDescription.last_login_at) {
+      enterpriseLogger.info('Adding last_login_at column to users table...');
+      await queryInterface.addColumn('users', 'last_login_at', {
+        type: DataTypes.DATE,
+        allowNull: true,
+      });
+    }
+    
+    // Add onboarding_completed column if it doesn't exist
+    if (!tableDescription.onboarding_completed) {
+      enterpriseLogger.info('Adding onboarding_completed column to users table...');
+      await queryInterface.addColumn('users', 'onboarding_completed', {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      });
+    }
+
+    // Add date_of_birth column if it doesn't exist
+    if (!tableDescription.date_of_birth) {
+      enterpriseLogger.info('Adding date_of_birth column to users table...');
+      await queryInterface.addColumn('users', 'date_of_birth', {
+        type: DataTypes.DATEONLY,
+        allowNull: true,
+      });
+    }
+
+    // Add metadata column if it doesn't exist
+    if (!tableDescription.metadata) {
+      enterpriseLogger.info('Adding metadata column to users table...');
+      await queryInterface.addColumn('users', 'metadata', {
+        type: DataTypes.JSONB,
+        allowNull: true,
+        defaultValue: {},
+      });
+      // Add GIN index for metadata column
+      try {
+        enterpriseLogger.info('Adding GIN index for metadata column...');
+        await queryInterface.addIndex('users', ['metadata'], {
+          using: 'gin',
+          name: 'idx_users_metadata_gin',
+          concurrently: false,
+        });
+      } catch (indexError) {
+        // Index might already exist, ignore
+        if (!indexError.message.includes('already exists')) {
+          enterpriseLogger.warn('Could not add metadata index:', indexError.message);
+        }
+      }
+    }
+    
+    enterpriseLogger.info('Missing user columns added successfully');
+  } catch (error) {
+    // Ignore errors if columns already exist
+    if (error.message.includes('already exists') || error.message.includes('duplicate')) {
+      enterpriseLogger.info('User columns already exist, skipping...');
+    } else {
+      enterpriseLogger.error('Failed to add missing user columns', { error: error.message });
+      throw error;
+    }
   }
 };
 

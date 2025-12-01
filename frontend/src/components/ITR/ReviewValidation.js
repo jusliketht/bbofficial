@@ -14,7 +14,7 @@ import {
   ChevronDown,
   ChevronUp,
   Eye,
-  DollarSign,
+  IndianRupee,
   Shield,
   Home,
   TrendingUp,
@@ -191,7 +191,7 @@ const ReviewValidation = ({
 
       {/* Income Summary */}
       <div className="dashboard-card-burnblack">
-        {renderSectionHeader('Income Summary', DollarSign, 'income',
+        {renderSectionHeader('Income Summary', IndianRupee, 'income',
           Object.keys(filingData.income || {}).length)}
 
         {expandedSections.income && (

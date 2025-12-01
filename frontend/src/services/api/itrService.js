@@ -65,7 +65,29 @@ class ITRService {
   // Get user's ITR filings
   async getUserITRs(params = {}) {
     try {
-      const response = await apiClient.get('/itr', { params });
+      const response = await apiClient.get('/itr/filings', { params });
+      return response.data;
+    } catch (error) {
+      errorHandler.handle(error);
+      throw error;
+    }
+  }
+
+  // Pause a filing
+  async pauseFiling(filingId, reason = null) {
+    try {
+      const response = await apiClient.post(`/itr/filings/${filingId}/pause`, { reason });
+      return response.data;
+    } catch (error) {
+      errorHandler.handle(error);
+      throw error;
+    }
+  }
+
+  // Resume a paused filing
+  async resumeFiling(filingId) {
+    try {
+      const response = await apiClient.post(`/itr/filings/${filingId}/resume`);
       return response.data;
     } catch (error) {
       errorHandler.handle(error);
@@ -129,10 +151,58 @@ class ITRService {
     }
   }
 
-  // Compute tax for ITR
-  async computeTax(id, assessmentYear) {
+  // Get draft by draftId (new route)
+  async getDraftById(draftId) {
     try {
-      const response = await apiClient.post(`/itr/${id}/compute-tax`, { assessmentYear });
+      const response = await apiClient.get(`/itr/drafts/${draftId}`);
+      return response.data;
+    } catch (error) {
+      errorHandler.handle(error);
+      throw error;
+    }
+  }
+
+  // Get filing by filingId
+  async getFilingById(filingId) {
+    try {
+      const response = await apiClient.get(`/itr/filings/${filingId}`);
+      return response.data;
+    } catch (error) {
+      errorHandler.handle(error);
+      throw error;
+    }
+  }
+
+  // Update draft
+  async updateDraft(draftId, formData) {
+    try {
+      const response = await apiClient.put(`/itr/drafts/${draftId}`, { formData });
+      return response.data;
+    } catch (error) {
+      errorHandler.handleValidationError(error);
+      throw error;
+    }
+  }
+
+  // Compute tax for draft
+  async computeTaxForDraft(draftId) {
+    try {
+      const response = await apiClient.post(`/itr/drafts/${draftId}/compute`);
+      return response.data;
+    } catch (error) {
+      errorHandler.handleBusinessError(error);
+      throw error;
+    }
+  }
+
+  // Compute tax with formData
+  async computeTax(formData, regime = 'old', assessmentYear = '2024-25') {
+    try {
+      const response = await apiClient.post('/itr/compute-tax', {
+        formData,
+        regime,
+        assessmentYear,
+      });
       return response.data;
     } catch (error) {
       errorHandler.handleBusinessError(error);
@@ -158,6 +228,56 @@ class ITRService {
     try {
       const response = await apiClient.get(`/itr/${id}/status`);
       return response.data;
+    } catch (error) {
+      errorHandler.handle(error);
+      throw error;
+    }
+  }
+
+  // Download ITR-V/Acknowledgment PDF
+  async downloadAcknowledgment(filingId) {
+    try {
+      const response = await apiClient.get(`/itr/filings/${filingId}/acknowledgment/pdf`, {
+        responseType: 'blob',
+      });
+
+      // Create blob URL and trigger download
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `ITR-V-${filingId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      return { success: true };
+    } catch (error) {
+      errorHandler.handle(error);
+      throw error;
+    }
+  }
+
+  // Download ITR PDF
+  async downloadITR(filingId) {
+    try {
+      const response = await apiClient.get(`/itr/filings/${filingId}/tax-computation/pdf`, {
+        responseType: 'blob',
+      });
+
+      // Create blob URL and trigger download
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `ITR-${filingId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      return { success: true };
     } catch (error) {
       errorHandler.handle(error);
       throw error;

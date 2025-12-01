@@ -3,8 +3,8 @@
 // =====================================================
 
 const crypto = require('crypto');
-const enterpriseLogger = require('../utils/logger');
-const { AppError } = require('../middleware/errorHandler');
+const enterpriseLogger = require('../../utils/logger');
+const { AppError } = require('../../middleware/errorHandler');
 
 class MFAService {
   constructor() {

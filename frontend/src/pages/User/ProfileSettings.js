@@ -3,12 +3,18 @@
 // Clean, secure, and easy-to-navigate profile page
 // =====================================================
 
-import React, { useState } from 'react';
-import { User, Shield, CreditCard, FileText, Settings, Save } from 'lucide-react';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { User, Shield, CreditCard, FileText, Settings, Save, ExternalLink } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import authService from '../../services/api/authService';
+import toast from 'react-hot-toast';
+import PANVerificationInline from '../../components/ITR/PANVerificationInline';
+import apiClient from '../../services/core/APIClient';
 
 const ProfileSettings = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('profile');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -19,15 +25,62 @@ const ProfileSettings = () => {
     { id: 'filings', label: 'My Filings', icon: FileText },
   ];
 
-  const handleSave = async (tabId, data) => {
+  const handleSave = async (tabId, data, onSuccess) => {
     setIsLoading(true);
     try {
-      // TODO: Implement API call to save data
-      console.log(`Saving ${tabId}:`, data);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (tabId === 'security') {
+        // Handle password set/change
+        const hasPassword = user?.hasPassword || user?.passwordHash;
+        if (hasPassword) {
+          // User has password - change password
+          await authService.changePassword(data.currentPassword, data.newPassword);
+          toast.success('Password changed successfully');
+          if (onSuccess) onSuccess();
+        } else {
+          // OAuth user without password - set password
+          await authService.setPassword(data.newPassword);
+          toast.success('Password set successfully');
+          if (onSuccess) onSuccess();
+          // Reload user profile to get updated hasPassword status
+          try {
+            const profileData = await authService.getProfile();
+            if (profileData?.data?.user) {
+              // Update localStorage user object
+              const updatedUser = { ...user, ...profileData.data.user, hasPassword: true };
+              localStorage.setItem('user', JSON.stringify(updatedUser));
+            }
+          } catch (error) {
+            console.warn('Failed to reload user profile after setting password:', error);
+          }
+        }
+      } else if (tabId === 'profile') {
+        // If PAN changed, update it separately (backend will verify via SurePass)
+        if (data.panNumber && data.panNumber !== user?.panNumber && data.panNumber.length === 10) {
+          try {
+            await apiClient.patch('/users/pan', { panNumber: data.panNumber });
+          } catch (error) {
+            throw new Error(error.response?.data?.error || 'Failed to update PAN');
+          }
+        }
+        // Update other profile fields
+        const updateData = {
+          fullName: data.fullName,
+          phone: data.phone,
+          dateOfBirth: data.dateOfBirth,
+        };
+                // Only update if there are changes
+        if (updateData.fullName || updateData.phone || updateData.dateOfBirth) {
+          const response = await apiClient.put('/users/profile', updateData);
+          if (!response.data.success) {
+            throw new Error(response.data.error || 'Failed to update profile');
+          }
+        }
+        toast.success('Profile updated successfully');
+        if (onSuccess) onSuccess();
+      }
     } catch (error) {
       console.error('Error saving:', error);
+      toast.error(error.response?.data?.error || error.message || 'Failed to save changes');
     } finally {
       setIsLoading(false);
     }
@@ -38,7 +91,7 @@ const ProfileSettings = () => {
       case 'profile':
         return <ProfileTab user={user} onSave={handleSave} isLoading={isLoading} />;
       case 'security':
-        return <SecurityTab onSave={handleSave} isLoading={isLoading} />;
+        return <SecurityTab user={user} onSave={handleSave} isLoading={isLoading} />;
       case 'bank-accounts':
         return <BankAccountsTab onSave={handleSave} isLoading={isLoading} />;
       case 'filings':
@@ -53,8 +106,20 @@ const ProfileSettings = () => {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Profile Settings</h1>
-          <p className="text-gray-600 mt-2">Manage your account information and preferences</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-black">Profile Settings</h1>
+              <p className="text-gray-700 mt-2">Manage your account information and preferences</p>
+            </div>
+            <button
+              onClick={() => navigate('/preferences')}
+              className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 flex items-center gap-2 text-body-sm font-medium"
+            >
+              <Settings className="h-4 w-4" />
+              Preferences
+              <ExternalLink className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -69,7 +134,7 @@ const ProfileSettings = () => {
                     onClick={() => setActiveTab(tab.id)}
                     className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center transition-colors ${
                       activeTab === tab.id
-                        ? 'border-blue-500 text-blue-600'
+                        ? 'border-orange-500 text-orange-600'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
@@ -100,15 +165,46 @@ const ProfileTab = ({ user, onSave, isLoading }) => {
     panNumber: user?.panNumber || '',
     dateOfBirth: user?.dateOfBirth || '',
   });
+  const [showPANVerification, setShowPANVerification] = useState(false);
+  const [panVerified, setPanVerified] = useState(user?.panVerified || false);
+  const [originalPAN, setOriginalPAN] = useState(user?.panNumber || '');
+
+  const handlePANChange = (e) => {
+    const newPAN = e.target.value.toUpperCase();
+    setFormData(prev => ({ ...prev, panNumber: newPAN }));
+    // If PAN changed and is 10 characters, show verification
+    if (newPAN.length === 10 && newPAN !== originalPAN) {
+      setPanVerified(false);
+      setShowPANVerification(true);
+    } else if (newPAN.length !== 10) {
+      setPanVerified(false);
+      setShowPANVerification(false);
+    }
+  };
+
+  const handlePANVerified = (verificationResult) => {
+    setPanVerified(true);
+    setShowPANVerification(false);
+    setOriginalPAN(formData.panNumber);
+    toast.success('PAN verified successfully!');
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    // If PAN is provided and changed, require verification
+    if (formData.panNumber && formData.panNumber.length === 10) {
+      if (formData.panNumber !== originalPAN && !panVerified) {
+        toast.error('Please verify your PAN number before saving');
+        setShowPANVerification(true);
+        return;
+      }
+    }
     onSave('profile', formData);
   };
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-gray-900 mb-6">Personal Information</h2>
+      <h2 className="text-xl font-semibold text-black mb-6">Personal Information</h2>
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
@@ -119,7 +215,7 @@ const ProfileTab = ({ user, onSave, isLoading }) => {
               type="text"
               value={formData.fullName}
               onChange={(e) => setFormData(prev => ({ ...prev, fullName: e.target.value }))}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
               required
             />
           </div>
@@ -143,21 +239,57 @@ const ProfileTab = ({ user, onSave, isLoading }) => {
               type="tel"
               value={formData.phone}
               onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               PAN Number
             </label>
-            <input
-              type="text"
-              value={formData.panNumber}
-              onChange={(e) => setFormData(prev => ({ ...prev, panNumber: e.target.value.toUpperCase() }))}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              style={{ textTransform: 'uppercase' }}
-            />
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={formData.panNumber}
+                  onChange={handlePANChange}
+                  maxLength={10}
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 font-mono uppercase"
+                  placeholder="ABCDE1234F"
+                />
+                {formData.panNumber && formData.panNumber.length === 10 && !panVerified && formData.panNumber !== originalPAN && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPANVerification(true)}
+                    className="px-4 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-sm font-medium"
+                  >
+                    Verify PAN
+                  </button>
+                )}
+              </div>
+              {panVerified && formData.panNumber && (
+                <p className="text-xs text-success-600 flex items-center">
+                  <span className="mr-1">✓</span> PAN Verified
+                </p>
+              )}
+              {formData.panNumber && formData.panNumber.length === 10 && formData.panNumber !== originalPAN && !panVerified && (
+                <p className="text-xs text-warning-600">
+                  Please verify your PAN number before saving
+                </p>
+              )}
+            </div>
           </div>
+          {/* PAN Verification Inline */}
+          {showPANVerification && formData.panNumber && formData.panNumber.length === 10 && (
+            <div className="md:col-span-2 mt-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+              <PANVerificationInline
+                panNumber={formData.panNumber}
+                onVerified={handlePANVerified}
+                onCancel={() => setShowPANVerification(false)}
+                memberType="self"
+                compact={true}
+              />
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Date of Birth
@@ -166,7 +298,7 @@ const ProfileTab = ({ user, onSave, isLoading }) => {
               type="date"
               value={formData.dateOfBirth}
               onChange={(e) => setFormData(prev => ({ ...prev, dateOfBirth: e.target.value }))}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
             />
           </div>
         </div>
@@ -175,7 +307,7 @@ const ProfileTab = ({ user, onSave, isLoading }) => {
           <button
             type="submit"
             disabled={isLoading}
-            className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="inline-flex items-center px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isLoading ? (
               <>
@@ -196,7 +328,9 @@ const ProfileTab = ({ user, onSave, isLoading }) => {
 };
 
 // Security Tab Component
-const SecurityTab = ({ onSave, isLoading }) => {
+const SecurityTab = ({ user, onSave, isLoading }) => {
+  const hasPassword = user?.hasPassword || user?.passwordHash;
+  const isOAuthUser = user?.authProvider === 'GOOGLE' || user?.authProvider === 'OTHER';
   const [formData, setFormData] = useState({
     currentPassword: '',
     newPassword: '',
@@ -205,52 +339,78 @@ const SecurityTab = ({ onSave, isLoading }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    // Validate password match
     if (formData.newPassword !== formData.confirmPassword) {
-      // eslint-disable-next-line no-alert
-      alert('Passwords do not match');
+      toast.error('Passwords do not match');
       return;
     }
+
+    // Validate password strength
+    if (formData.newPassword.length < 8) {
+      toast.error('Password must be at least 8 characters long');
+      return;
+    }
+
+    // If user has password, require current password
+    if (hasPassword && !formData.currentPassword) {
+      toast.error('Current password is required');
+      return;
+    }
+
     onSave('security', formData);
   };
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-gray-900 mb-6">Security Settings</h2>
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Current Password *
-          </label>
-          <input
-            type="password"
-            value={formData.currentPassword}
-            onChange={(e) => setFormData(prev => ({ ...prev, currentPassword: e.target.value }))}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            required
-          />
+      <h2 className="text-xl font-semibold text-black mb-6">Security Settings</h2>
+      {!hasPassword && isOAuthUser && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-body-sm text-blue-800">
+            You signed up with Google OAuth. Set a password to enable email/password login.
+          </p>
         </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {hasPassword && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Current Password *
+            </label>
+            <input
+              type="password"
+              value={formData.currentPassword}
+              onChange={(e) => setFormData(prev => ({ ...prev, currentPassword: e.target.value }))}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+              required={hasPassword}
+            />
+          </div>
+        )}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            New Password *
+            {hasPassword ? 'New Password *' : 'Password *'}
           </label>
           <input
             type="password"
             value={formData.newPassword}
             onChange={(e) => setFormData(prev => ({ ...prev, newPassword: e.target.value }))}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
             required
+            minLength={8}
           />
+          <p className="text-xs text-gray-500 mt-1">Password must be at least 8 characters long</p>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Confirm New Password *
+            {hasPassword ? 'Confirm New Password *' : 'Confirm Password *'}
           </label>
           <input
             type="password"
             value={formData.confirmPassword}
             onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
             required
+            minLength={8}
           />
         </div>
 
@@ -258,17 +418,17 @@ const SecurityTab = ({ onSave, isLoading }) => {
           <button
             type="submit"
             disabled={isLoading}
-            className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="inline-flex items-center px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isLoading ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Updating...
+                {hasPassword ? 'Updating...' : 'Setting...'}
               </>
             ) : (
               <>
                 <Shield className="w-4 h-4 mr-2" />
-                Update Password
+                {hasPassword ? 'Update Password' : 'Set Password'}
               </>
             )}
           </button>
@@ -279,14 +439,14 @@ const SecurityTab = ({ onSave, isLoading }) => {
 };
 
 // Bank Accounts Tab Component
-const BankAccountsTab = ({ onSave, isLoading }) => {
-  const [bankAccounts, setBankAccounts] = useState([
+const BankAccountsTab = () => {
+  const [bankAccounts] = useState([
     { id: 1, bankName: 'HDFC Bank', accountNumber: '****1234', ifsc: 'HDFC0001234', isPrimary: true },
   ]);
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-gray-900 mb-6">Bank Accounts</h2>
+      <h2 className="text-xl font-semibold text-black mb-6">Bank Accounts</h2>
       <div className="space-y-4">
         {bankAccounts.map((account) => (
           <div key={account.id} className="border border-gray-200 rounded-lg p-4">
@@ -324,10 +484,10 @@ const FilingsTab = () => {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-gray-900 mb-6">My Filings</h2>
+      <h2 className="text-xl font-semibold text-black mb-6">My Filings</h2>
       <div className="space-y-4">
-        {filings.map((filing, index) => (
-          <div key={index} className="border border-gray-200 rounded-lg p-4">
+        {filings.map((filing) => (
+          <div key={filing.year} className="border border-gray-200 rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-medium text-gray-900">Assessment Year {filing.year}</h3>

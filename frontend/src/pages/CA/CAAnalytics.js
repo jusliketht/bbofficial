@@ -15,7 +15,7 @@ import {
   TrendingDown,
   Users,
   FileText,
-  DollarSign,
+  IndianRupee,
   Calendar,
   Download,
   RefreshCw,
@@ -224,7 +224,7 @@ const CAAnalytics = () => {
 
               <div className="stat-card-burnblack">
                 <div className="stat-icon-burnblack">
-                  <DollarSign className="h-6 w-6" />
+                  <IndianRupee className="h-6 w-6" />
                 </div>
                 <div>
                   <p className="text-xs font-medium text-neutral-600">Total Revenue</p>
@@ -371,7 +371,7 @@ const CAAnalytics = () => {
             <div className="grid grid-cols-2 gap-3">
               <div className="stat-card-burnblack">
                 <div className="stat-icon-burnblack">
-                  <DollarSign className="h-6 w-6" />
+                  <IndianRupee className="h-6 w-6" />
                 </div>
                 <div>
                   <p className="text-xs font-medium text-neutral-600">Total Revenue</p>

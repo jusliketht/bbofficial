@@ -71,6 +71,101 @@ router.put('/:id', memberController.updateMember);
  */
 router.delete('/:id', memberController.deleteMember);
 
+/**
+ * @route POST /api/members/:id/verify-pan
+ * @description Verify PAN for an existing family member
+ * @access Private (User)
+ * @param {string} id - Member ID
+ * @body {string} pan - PAN number to verify (optional, uses member's PAN if not provided)
+ */
+router.post('/:id/verify-pan', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.userId;
+    const { pan } = req.body;
+    const panVerificationService = require('../services/business/PANVerificationService');
+    const enterpriseLogger = require('../utils/logger');
+
+    // Get the member
+    const member = await FamilyMember.findOne({
+      where: {
+        id,
+        userId,
+      },
+    });
+
+    if (!member) {
+      return res.status(404).json({
+        success: false,
+        error: 'Family member not found',
+      });
+    }
+
+    // Use provided PAN or member's PAN
+    const panToVerify = pan || member.panNumber;
+
+    if (!panToVerify) {
+      return res.status(400).json({
+        success: false,
+        error: 'PAN number is required',
+      });
+    }
+
+    // Verify PAN using SurePass service
+    const verificationResult = await panVerificationService.verifyPAN(panToVerify, userId);
+
+    if (!verificationResult.isValid) {
+      return res.status(400).json({
+        success: false,
+        error: 'PAN verification failed',
+        data: verificationResult,
+      });
+    }
+
+    // Update member's PAN verification status
+    await FamilyMember.update(
+      {
+        panNumber: panToVerify.toUpperCase(),
+        panVerified: true,
+        panVerifiedAt: new Date(),
+      },
+      {
+        where: {
+          id,
+          userId,
+        },
+      }
+    );
+
+    enterpriseLogger.info('Member PAN verified successfully', {
+      userId,
+      memberId: id,
+      pan: panToVerify,
+    });
+
+    res.json({
+      success: true,
+      message: 'PAN verified successfully',
+      data: {
+        pan: verificationResult.pan,
+        isValid: verificationResult.isValid,
+        name: verificationResult.name,
+        status: verificationResult.status,
+        verifiedAt: verificationResult.verifiedAt,
+      },
+    });
+  } catch (error) {
+    const enterpriseLogger = require('../utils/logger');
+    enterpriseLogger.error('Member PAN verification failed', {
+      error: error.message,
+      userId: req.user?.userId,
+      memberId: req.params.id,
+      stack: error.stack,
+    });
+    next(error);
+  }
+});
+
 // =====================================================
 // MEMBER FILING ROUTES
 // =====================================================

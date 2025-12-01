@@ -289,7 +289,7 @@ const DocumentUpload = () => {
         </Button>
         <Button
           variant="primary"
-          onClick={() => window.location.href = '/itr/filing'}
+          onClick={() => window.location.href = '/itr/select-person'}
           disabled={uploadedFiles.length === 0}
         >
           Continue to Filing

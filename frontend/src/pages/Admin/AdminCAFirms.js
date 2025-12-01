@@ -21,7 +21,7 @@ import {
   CheckCircle,
   AlertCircle,
   Clock,
-  DollarSign,
+  IndianRupee,
   Filter,
   Download,
   Upload,
@@ -128,13 +128,13 @@ const AdminCAFirms = () => {
   const getStatusIcon = (status) => {
     switch (status) {
       case 'active':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
+        return <CheckCircle className="h-4 w-4 text-success-500" />;
       case 'inactive':
-        return <AlertCircle className="h-4 w-4 text-red-500" />;
+        return <AlertCircle className="h-4 w-4 text-error-500" />;
       case 'pending':
         return <Clock className="h-4 w-4 text-orange-500" />;
       case 'suspended':
-        return <AlertCircle className="h-4 w-4 text-red-500" />;
+        return <AlertCircle className="h-4 w-4 text-error-500" />;
       default:
         return <Building2 className="h-4 w-4 text-gray-500" />;
     }
@@ -143,13 +143,13 @@ const AdminCAFirms = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'active':
-        return 'bg-green-100 text-green-800';
+        return 'bg-success-100 text-success-800';
       case 'inactive':
-        return 'bg-red-100 text-red-800';
+        return 'bg-error-100 text-error-800';
       case 'pending':
         return 'bg-orange-100 text-orange-800';
       case 'suspended':
-        return 'bg-red-100 text-red-800';
+        return 'bg-error-100 text-error-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -158,7 +158,7 @@ const AdminCAFirms = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
       </div>
     );
   }
@@ -166,22 +166,22 @@ const AdminCAFirms = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header className="bg-white shadow-card border-b">
+        <div className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => navigate('/dashboard')}
-                className="text-gray-600 hover:text-gray-900"
+                className="text-body-md text-gray-600 hover:text-gray-900"
               >
                 ← Back to Dashboard
               </button>
-              <h1 className="text-xl font-semibold text-gray-900">CA Firm Management</h1>
+              <h1 className="text-heading-lg font-semibold text-gray-900">CA Firm Management</h1>
             </div>
 
             <button
               onClick={() => setShowAddForm(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+              className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors flex items-center space-x-2"
             >
               <Plus className="h-4 w-4" />
               <span>Add CA Firm</span>
@@ -194,49 +194,49 @@ const AdminCAFirms = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg shadow-sm p-4">
+          <div className="bg-white rounded-lg shadow-card p-4">
             <div className="flex items-center">
-              <Building2 className="h-8 w-8 text-blue-600" />
+              <Building2 className="h-8 w-8 text-info-600" />
               <div className="ml-3">
-                <p className="text-sm font-medium text-gray-600">Total Firms</p>
-                <p className="text-2xl font-semibold text-gray-900">{stats.total || 0}</p>
+                <p className="text-label-lg font-medium text-gray-600">Total Firms</p>
+                <p className="text-number-lg font-semibold text-gray-900">{stats.total || 0}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm p-4">
+          <div className="bg-white rounded-lg shadow-card p-4">
             <div className="flex items-center">
-              <CheckCircle className="h-8 w-8 text-green-600" />
+              <CheckCircle className="h-8 w-8 text-success-600" />
               <div className="ml-3">
-                <p className="text-sm font-medium text-gray-600">Active</p>
-                <p className="text-2xl font-semibold text-gray-900">{stats.active || 0}</p>
+                <p className="text-label-lg font-medium text-gray-600">Active</p>
+                <p className="text-number-lg font-semibold text-gray-900">{stats.active || 0}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm p-4">
+          <div className="bg-white rounded-lg shadow-card p-4">
             <div className="flex items-center">
               <Clock className="h-8 w-8 text-orange-600" />
               <div className="ml-3">
-                <p className="text-sm font-medium text-gray-600">Pending</p>
-                <p className="text-2xl font-semibold text-gray-900">{stats.pending || 0}</p>
+                <p className="text-label-lg font-medium text-gray-600">Pending</p>
+                <p className="text-number-lg font-semibold text-gray-900">{stats.pending || 0}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm p-4">
+          <div className="bg-white rounded-lg shadow-card p-4">
             <div className="flex items-center">
-              <Users className="h-8 w-8 text-purple-600" />
+              <Users className="h-8 w-8 text-regime-new-600" />
               <div className="ml-3">
-                <p className="text-sm font-medium text-gray-600">Total CAs</p>
-                <p className="text-2xl font-semibold text-gray-900">{stats.total_cas || 0}</p>
+                <p className="text-label-lg font-medium text-gray-600">Total CAs</p>
+                <p className="text-number-lg font-semibold text-gray-900">{stats.total_cas || 0}</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <div className="bg-white rounded-lg shadow-card p-6 mb-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0 md:space-x-4">
             {/* Search */}
             <div className="relative flex-1">
@@ -281,7 +281,7 @@ const AdminCAFirms = () => {
             </p>
             <button
               onClick={() => setShowAddForm(true)}
-              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+              className="bg-orange-500 text-white px-6 py-3 rounded-lg hover:bg-orange-600 transition-colors"
             >
               Add First CA Firm
             </button>
@@ -340,7 +340,7 @@ const AdminCAFirms = () => {
                               <span>{firm.total_clients || 0} clients</span>
                             </div>
                             <div className="flex items-center space-x-2">
-                              <DollarSign className="h-4 w-4" />
+                              <IndianRupee className="h-4 w-4" />
                               <span>₹{firm.monthly_revenue || 0}</span>
                             </div>
                           </div>

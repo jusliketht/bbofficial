@@ -97,19 +97,31 @@ class Form16ExtractionService {
         },
       });
 
-      if (!response.success) {
-        throw new Error(`OCR extraction failed: ${response.message}`);
+      // Handle axios response structure (response.data contains the actual response)
+      const responseData = response.data || response;
+
+      if (!responseData.success) {
+        throw new Error(`OCR extraction failed: ${responseData.message || responseData.error || 'Unknown error'}`);
       }
 
-      // Process extracted data
-      const processedData = this.processExtractedData(response.extractedText);
+      // Use processed data from backend if available, otherwise process on frontend
+      let processedData;
+      if (responseData.data || responseData.extractedData) {
+        // Backend already processed the data
+        processedData = responseData.data || responseData.extractedData;
+      } else if (responseData.extractedText) {
+        // Process extracted text on frontend
+        processedData = this.processExtractedData(responseData.extractedText);
+      } else {
+        throw new Error('No extracted data received from server');
+      }
 
       return {
         success: true,
         data: processedData,
-        confidence: response.confidence || 85,
-        extractedText: response.extractedText,
-        warnings: response.warnings || [],
+        confidence: responseData.confidence || 85,
+        extractedText: responseData.extractedText || '',
+        warnings: responseData.warnings || [],
       };
 
     } catch (error) {
@@ -326,7 +338,7 @@ class Form16ExtractionService {
   /**
    * Simulate PDF text extraction (placeholder)
    */
-  simulatePDFTextExtraction(rawText) {
+  simulatePDFTextExtraction() {
     // This is a placeholder - in production, implement actual PDF parsing
     // For demonstration, we'll create sample Form 16 content
     return `

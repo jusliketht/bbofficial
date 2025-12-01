@@ -8,7 +8,7 @@ import {
   BarChart3,
   Users,
   TrendingUp,
-  DollarSign,
+  IndianRupee,
   Activity,
   Calendar,
   RefreshCw,
@@ -79,7 +79,7 @@ const AdminPlatformOverview = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-500 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading platform overview...</p>
         </div>
       </div>
@@ -93,7 +93,7 @@ const AdminPlatformOverview = () => {
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Platform Overview</h1>
+              <h1 className="text-display-md font-bold text-gray-900">Platform Overview</h1>
               <p className="text-gray-600 mt-1">
                 Comprehensive platform analytics and business metrics
               </p>
@@ -102,7 +102,7 @@ const AdminPlatformOverview = () => {
               <select
                 value={timeRange}
                 onChange={(e) => setTimeRange(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-2 border border-gray-300 rounded-md text-label-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
               >
                 {timeRanges.map((range) => (
                   <option key={range.value} value={range.value}>
@@ -136,7 +136,7 @@ const AdminPlatformOverview = () => {
             value={`₹${(platformStats.revenue?.total || 0).toLocaleString()}`}
             change={`+${platformStats.revenue?.growth || 0}%`}
             changeType="positive"
-            icon={DollarSign}
+            icon={IndianRupee}
           />
           <EnterpriseStatCard
             title="Total Filings"
@@ -158,7 +158,7 @@ const AdminPlatformOverview = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <EnterpriseCard>
             <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">User Growth Trend</h3>
+              <h3 className="text-heading-lg font-semibold text-gray-900 mb-4">User Growth Trend</h3>
               <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg">
                 <div className="text-center">
                   <BarChart3 className="w-12 h-12 text-gray-400 mx-auto mb-2" />
@@ -170,7 +170,7 @@ const AdminPlatformOverview = () => {
 
           <EnterpriseCard>
             <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue Analytics</h3>
+              <h3 className="text-heading-lg font-semibold text-gray-900 mb-4">Revenue Analytics</h3>
               <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg">
                 <div className="text-center">
                   <TrendingUp className="w-12 h-12 text-gray-400 mx-auto mb-2" />
@@ -184,25 +184,25 @@ const AdminPlatformOverview = () => {
         {/* System Health */}
         <EnterpriseCard>
           <div className="p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">System Health</h3>
+            <h3 className="text-heading-lg font-semibold text-gray-900 mb-4">System Health</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="text-center">
-                <div className="text-2xl font-bold text-gray-900 mb-1">
+                <div className="text-number-lg font-bold text-gray-900 mb-1">
                   {platformStats.system?.responseTime || 0}ms
                 </div>
-                <div className="text-sm text-gray-600">Avg Response Time</div>
+                <div className="text-label-lg text-gray-600">Avg Response Time</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-gray-900 mb-1">
+                <div className="text-number-lg font-bold text-gray-900 mb-1">
                   {platformStats.system?.cpuUsage || 0}%
                 </div>
-                <div className="text-sm text-gray-600">CPU Usage</div>
+                <div className="text-label-lg text-gray-600">CPU Usage</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-gray-900 mb-1">
+                <div className="text-number-lg font-bold text-gray-900 mb-1">
                   {platformStats.system?.memoryUsage || 0}%
                 </div>
-                <div className="text-sm text-gray-600">Memory Usage</div>
+                <div className="text-label-lg text-gray-600">Memory Usage</div>
               </div>
             </div>
           </div>

@@ -50,7 +50,7 @@ const Layout = ({ children }) => {
             ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'}
           `}
         >
-          <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-6 lg:py-8 xl:py-10">
+          <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8 py-3 sm:py-4 lg:py-5">
             {children}
           </div>
         </main>

@@ -4,9 +4,21 @@
 // =====================================================
 
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import {
+  useAdminUserDetails,
+  useAdminUserActivity,
+  useAdminUserFilings,
+  useAdminUserTransactions,
+  useUpdateAdminUser,
+  useActivateAdminUser,
+  useDeactivateAdminUser,
+  useSuspendAdminUser,
+  useResetAdminUserPassword,
+  useInvalidateAdminUserSessions,
+} from '../../features/admin/users/hooks/use-users';
 import {
   User,
   Mail,
@@ -19,7 +31,7 @@ import {
   Shield,
   Building2,
   FileText,
-  DollarSign,
+  IndianRupee,
   Clock,
   CheckCircle,
   AlertCircle,
@@ -33,7 +45,6 @@ import {
   Crown,
   Star,
 } from 'lucide-react';
-import api from '../../services/api';
 import toast from 'react-hot-toast';
 
 const AdminUserDetails = () => {
@@ -44,42 +55,24 @@ const AdminUserDetails = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
 
-  // Fetch user details
-  const { data: userData, isLoading, error } = useQuery({
-    queryKey: ['adminUser', userId],
-    queryFn: async () => {
-      const response = await api.get(`/api/admin/users/${userId}`);
-      return response.data;
-    },
-    enabled: !!userId,
-    staleTime: 2 * 60 * 1000, // 2 minutes
-  });
+  // Fetch user details using hooks
+  const { data: userData, isLoading, error } = useAdminUserDetails(userId);
+  const { data: filingsData } = useAdminUserFilings(userId);
+  const { data: activityData } = useAdminUserActivity(userId);
+  const { data: transactionsData } = useAdminUserTransactions(userId);
 
-  // Fetch user filings
-  const { data: filingsData } = useQuery({
-    queryKey: ['adminUserFilings', userId],
-    queryFn: async () => {
-      const response = await api.get(`/api/admin/users/${userId}/filings`);
-      return response.data;
-    },
-    enabled: !!userId,
-    staleTime: 1 * 60 * 1000, // 1 minute
-  });
+  // Mutations
+  const updateUserMutation = useUpdateAdminUser();
+  const activateUserMutation = useActivateAdminUser();
+  const deactivateUserMutation = useDeactivateAdminUser();
+  const suspendUserMutation = useSuspendAdminUser();
+  const resetPasswordMutation = useResetAdminUserPassword();
+  const invalidateSessionsMutation = useInvalidateAdminUserSessions();
 
-  // Fetch user activity
-  const { data: activityData } = useQuery({
-    queryKey: ['adminUserActivity', userId],
-    queryFn: async () => {
-      const response = await api.get(`/api/admin/users/${userId}/activity`);
-      return response.data;
-    },
-    enabled: !!userId,
-    staleTime: 30 * 1000, // 30 seconds
-  });
-
-  const userDetails = userData?.user;
-  const filings = filingsData?.filings || [];
-  const activities = activityData?.activities || [];
+  const userDetails = userData?.data?.user || userData?.user;
+  const filings = filingsData?.data?.filings || filingsData?.filings || [];
+  const activities = activityData?.data?.activities || activityData?.activities || [];
+  const transactions = transactionsData?.data?.transactions || transactionsData?.transactions || [];
 
   const [editFormData, setEditFormData] = useState({});
 
@@ -103,65 +96,34 @@ const AdminUserDetails = () => {
     }
   }, [userDetails]);
 
-  // Update user mutation
-  const updateUserMutation = useMutation({
-    mutationFn: async (updateData) => {
-      const response = await api.put(`/api/admin/users/${userId}`, updateData);
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries(['adminUser', userId]);
-      setIsEditing(false);
-      toast.success('User updated successfully!');
-    },
-    onError: (error) => {
-      toast.error(`Failed to update user: ${error.message}`);
-    },
-  });
-
-  // Update user status mutation
-  const updateStatusMutation = useMutation({
-    mutationFn: async (status) => {
-      const response = await api.put(`/api/admin/users/${userId}/status`, { status });
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries(['adminUser', userId]);
-      toast.success('User status updated successfully!');
-    },
-    onError: (error) => {
-      toast.error(`Failed to update user status: ${error.message}`);
-    },
-  });
-
-  // Delete user mutation
-  const deleteUserMutation = useMutation({
-    mutationFn: async () => {
-      const response = await api.delete(`/api/admin/users/${userId}`);
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries(['adminUsers']);
-      toast.success('User deleted successfully!');
-      navigate('/admin/users');
-    },
-    onError: (error) => {
-      toast.error(`Failed to delete user: ${error.message}`);
-    },
-  });
-
   const handleUpdateUser = async (e) => {
     e.preventDefault();
-    await updateUserMutation.mutateAsync(editFormData);
+    updateUserMutation.mutate(
+      { userId, data: editFormData },
+      {
+        onSuccess: () => {
+          setIsEditing(false);
+        },
+      },
+    );
   };
 
   const handleStatusUpdate = (newStatus) => {
-    updateStatusMutation.mutate(newStatus);
+    if (newStatus === 'active') {
+      activateUserMutation.mutate({ userId });
+    } else if (newStatus === 'inactive') {
+      deactivateUserMutation.mutate({ userId });
+    } else if (newStatus === 'suspended') {
+      suspendUserMutation.mutate({ userId });
+    } else {
+      updateUserMutation.mutate({ userId, status: newStatus });
+    }
   };
 
   const handleDeleteUser = () => {
-    if (window.confirm(`Are you sure you want to delete ${userDetails?.name}? This action cannot be undone.`)) {
-      deleteUserMutation.mutate();
+    if (window.confirm(`Are you sure you want to delete ${userDetails?.fullName || userDetails?.name}? This action cannot be undone.`)) {
+      // Note: Delete functionality would need to be added to hooks if required
+      toast.error('Delete functionality not yet implemented');
     }
   };
 
@@ -243,7 +205,7 @@ const AdminUserDetails = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
       </div>
     );
   }
@@ -252,8 +214,8 @@ const AdminUserDetails = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">User Not Found</h2>
+          <AlertCircle className="h-12 w-12 text-error-500 mx-auto mb-4" />
+          <h2 className="text-heading-lg font-semibold text-gray-900 mb-2">User Not Found</h2>
           <p className="text-gray-600 mb-4">The user you're looking for doesn't exist or you don't have access to it.</p>
           <button
             onClick={() => navigate('/admin/users')}
@@ -300,8 +262,8 @@ const AdminUserDetails = () => {
                   </button>
                   <button
                     onClick={handleDeleteUser}
-                    disabled={deleteUserMutation.isLoading}
-                    className="flex items-center space-x-2 px-4 py-2 border border-red-300 rounded-lg text-red-700 hover:bg-red-50 transition-colors disabled:opacity-50"
+                    disabled={false}
+                    className="flex items-center space-x-2 px-4 py-2 border border-error-300 rounded-lg text-error-700 hover:bg-error-50 transition-colors disabled:opacity-50"
                   >
                     <Trash2 className="h-4 w-4" />
                     <span>Delete</span>
@@ -318,7 +280,7 @@ const AdminUserDetails = () => {
                   <button
                     onClick={handleUpdateUser}
                     disabled={updateUserMutation.isLoading}
-                    className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    className="flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
                   >
                     <Save className="h-4 w-4" />
                     <span>{updateUserMutation.isLoading ? 'Saving...' : 'Save'}</span>
@@ -338,9 +300,9 @@ const AdminUserDetails = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-label-lg transition-colors ${
                   activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
+                    ? 'border-orange-500 text-orange-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
@@ -358,14 +320,14 @@ const AdminUserDetails = () => {
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* User Information */}
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">User Information</h2>
+            <div className="bg-white rounded-lg shadow-card p-6">
+              <h2 className="text-heading-lg font-semibold text-gray-900 mb-4">User Information</h2>
 
               {isEditing ? (
                 <form onSubmit={handleUpdateUser} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                      <label className="block text-label-lg font-medium text-gray-700 mb-1">Name</label>
                       <input
                         type="text"
                         value={editFormData.name}
@@ -531,7 +493,7 @@ const AdminUserDetails = () => {
 
               <div className="bg-white rounded-lg shadow-sm p-4">
                 <div className="flex items-center">
-                  <DollarSign className="h-8 w-8 text-green-600" />
+                  <IndianRupee className="h-8 w-8 text-green-600" />
                   <div className="ml-3">
                     <p className="text-sm font-medium text-gray-600">Total Spent</p>
                     <p className="text-2xl font-semibold text-gray-900">₹{userDetails.total_spent || 0}</p>

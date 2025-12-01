@@ -207,13 +207,21 @@ class MemberController {
         throw new AppError('Invalid PAN format', 400);
       }
 
+      // Verify PAN using SurePass service
+      const panVerificationService = require('../services/business/PANVerificationService');
+      const verificationResult = await panVerificationService.verifyPAN(pan.toUpperCase(), userId);
+
+      if (!verificationResult.isValid) {
+        throw new AppError('PAN verification failed. Please enter a valid PAN number.', 400);
+      }
+
       // Validate relationship
       const validRelationships = ['spouse', 'child', 'parent', 'sibling', 'other'];
       if (!validRelationships.includes(relationship)) {
         throw new AppError(`Invalid relationship. Must be one of: ${validRelationships.join(', ')}`, 400);
       }
 
-      // Create member
+      // Create member with verified PAN
       const member = await FamilyMember.create({
         userId,
         fullName,
@@ -223,6 +231,8 @@ class MemberController {
         gender,
         status: 'active',
         metadata,
+        panVerified: true,
+        panVerifiedAt: new Date(),
       });
 
       // Log audit event
@@ -314,6 +324,21 @@ class MemberController {
         if (!this.isValidPAN(pan)) {
           throw new AppError('Invalid PAN format', 400);
         }
+        
+        // If PAN is being changed, verify it via SurePass
+        if (pan.toUpperCase() !== member.pan) {
+          const panVerificationService = require('../services/business/PANVerificationService');
+          const verificationResult = await panVerificationService.verifyPAN(pan.toUpperCase(), userId);
+          
+          if (!verificationResult.isValid) {
+            throw new AppError('PAN verification failed. Please enter a valid PAN number.', 400);
+          }
+          
+          // Set verified status for new PAN
+          updateData.panVerified = true;
+          updateData.panVerifiedAt = new Date();
+        }
+        
         oldValues.pan = member.pan;
         updateData.pan = pan.toUpperCase();
       }

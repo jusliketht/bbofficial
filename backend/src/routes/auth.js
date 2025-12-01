@@ -9,6 +9,7 @@ const jwt = require('jsonwebtoken');
 const passport = require('../config/passport');
 const { v4: uuidv4 } = require('uuid');
 const { User, UserSession, AuditLog, PasswordResetToken, CAFirm } = require('../models');
+const { sequelize } = require('../config/database');
 const enterpriseLogger = require('../utils/logger');
 const emailService = require('../services/integration/EmailService');
 const { authenticateToken, authRateLimit } = require('../middleware/auth');
@@ -16,8 +17,44 @@ const { setRefreshTokenCookie, clearRefreshTokenCookie, handleTokenRefresh } = r
 const { auditAuthEvents, auditFailedAuth } = require('../middleware/auditLogger');
 const { progressiveRateLimit, recordFailedAttempt, clearFailedAttempts, strictRateLimit } = require('../middleware/progressiveRateLimit');
 const { requireRole, requirePermission } = require('../middleware/rbac');
+const rateLimit = require('express-rate-limit');
 
 const router = express.Router();
+
+// Google OAuth specific rate limiter (stricter to avoid hitting Google's limits)
+// Rate limit for initiation route only (callback comes from Google, not user)
+const googleOAuthInitLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // Limit to 20 initiation attempts per IP per 15 minutes (accounts for ~10 login attempts)
+  message: {
+    error: 'Too many Google OAuth requests from this IP. Please wait a few minutes before trying again.',
+    retryAfter: 15 * 60, // seconds
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true, // Only count failed attempts to avoid blocking legitimate users
+  handler: (req, res) => {
+    enterpriseLogger.warn('Google OAuth rate limit exceeded', {
+      ip: req.ip,
+      path: req.path,
+      userAgent: req.headers['user-agent'],
+    });
+    res.status(429).json({
+      success: false,
+      error: 'Too many Google OAuth requests from this IP. Please wait 15 minutes before trying again.',
+      retryAfter: 15 * 60,
+    });
+  },
+});
+
+// Lighter rate limiter for callback route (only to prevent abuse, not strict)
+const googleOAuthCallbackLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 50, // Higher limit since callbacks come from Google, not direct user action
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true, // Only count failed callbacks
+});
 
 // =====================================================
 // REGISTRATION ROUTES
@@ -133,6 +170,14 @@ router.post('/login',
     try {
       const { email, password } = req.body;
 
+      // Debug logging (remove in production)
+      enterpriseLogger.info('Login attempt', {
+        email: email ? email.toLowerCase() : null,
+        passwordLength: password ? password.length : 0,
+        hasPassword: !!password,
+        ip: req.ip,
+      });
+
       // Validate required fields
       if (!email || !password) {
         return res.status(400).json({
@@ -141,24 +186,78 @@ router.post('/login',
         });
       }
 
-      // Find user
-      const user = await User.findOne({
-        where: {
-          email: email.toLowerCase(),
-          authProvider: 'LOCAL',
-        },
+      // Find user by email (regardless of authProvider)
+      // Use raw query to avoid schema mismatch issues
+      // Note: sequelize.query returns [results, metadata] when not using QueryTypes
+      const [queryResult] = await sequelize.query(
+        `SELECT id, email, password_hash, role, status, auth_provider, full_name, 
+         email_verified, phone_verified, token_version, last_login_at, onboarding_completed
+         FROM users WHERE email = :email LIMIT 1`,
+        {
+          replacements: { email: email.toLowerCase() },
+        }
+      );
+
+      // queryResult is the results array from the destructured return value
+      const user = Array.isArray(queryResult) && queryResult.length > 0 ? queryResult[0] : null;
+
+      // Debug logging
+      enterpriseLogger.info('User lookup result', {
+        email: email.toLowerCase(),
+        searchEmail: email,
+        found: !!user,
+        resultLength: queryResult ? queryResult.length : 0,
+        userId: user ? user.id : null,
+        ip: req.ip,
       });
 
+      // Convert to User model instance format
+      if (user) {
+        user.passwordHash = user.password_hash;
+        user.authProvider = user.auth_provider;
+        user.fullName = user.full_name;
+        user.emailVerified = user.email_verified;
+        user.phoneVerified = user.phone_verified;
+        user.tokenVersion = user.token_version;
+        user.lastLoginAt = user.last_login_at;
+        user.onboardingCompleted = user.onboarding_completed;
+      }
+
       if (!user) {
+        enterpriseLogger.warn('Login failed: User not found', {
+          email: email.toLowerCase(),
+          searchEmail: email,
+          ip: req.ip,
+        });
         return res.status(401).json({
           success: false,
           error: 'Invalid email or password',
         });
       }
 
+      // Check if user has a password set
+      if (!user.passwordHash) {
+        enterpriseLogger.warn('Login failed: No password set', {
+          userId: user.id,
+          email: user.email,
+          authProvider: user.authProvider,
+          ip: req.ip,
+        });
+        return res.status(401).json({
+          success: false,
+          error: 'Password not set. Please use OAuth login or set a password first.',
+        });
+      }
+
       // Verify password
       const isValidPassword = await bcrypt.compare(password, user.passwordHash);
       if (!isValidPassword) {
+        enterpriseLogger.warn('Login failed: Invalid password', {
+          userId: user.id,
+          email: user.email,
+          passwordLength: password ? password.length : 0,
+          ip: req.ip,
+        });
         return res.status(401).json({
           success: false,
           error: 'Invalid email or password',
@@ -195,8 +294,13 @@ router.post('/login',
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       });
 
-      // Update last login
-      await user.update({ lastLoginAt: new Date() });
+      // Update last login using raw query to avoid schema issues
+      await sequelize.query(
+        `UPDATE users SET last_login_at = NOW(), updated_at = NOW() WHERE id = :userId`,
+        {
+          replacements: { userId: user.id },
+        }
+      );
 
       // Log audit event
       await AuditLog.logAuthEvent({
@@ -222,10 +326,12 @@ router.post('/login',
         user: {
           id: user.id,
           email: user.email,
-          fullName: user.fullName,
+          fullName: user.fullName || user.full_name,
           role: user.role,
           status: user.status,
-          onboardingCompleted: user.onboardingCompleted,
+          onboardingCompleted: user.onboardingCompleted || user.onboarding_completed || false,
+          authProvider: user.authProvider || user.auth_provider,
+          hasPassword: !!user.passwordHash,
         },
       });
     } catch (error) {
@@ -312,7 +418,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
     const userId = req.user.userId;
 
     const user = await User.findByPk(userId, {
-      attributes: ['id', 'email', 'fullName', 'phone', 'role', 'status', 'createdAt'],
+      attributes: ['id', 'email', 'fullName', 'phone', 'role', 'status', 'createdAt', 'dateOfBirth', 'metadata', 'authProvider', 'passwordHash'],
     });
 
     if (!user) {
@@ -331,6 +437,10 @@ router.get('/profile', authenticateToken, async (req, res) => {
         role: user.role,
         status: user.status,
         createdAt: user.createdAt,
+        dateOfBirth: user.dateOfBirth,
+        metadata: user.metadata || {},
+        authProvider: user.authProvider,
+        hasPassword: !!user.passwordHash,
       },
     });
   } catch (error) {
@@ -349,7 +459,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
 router.put('/profile', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
-    const { fullName, phone } = req.body;
+    const { fullName, phone, dateOfBirth, metadata } = req.body;
 
     const user = await User.findByPk(userId);
     if (!user) {
@@ -362,6 +472,11 @@ router.put('/profile', authenticateToken, async (req, res) => {
     // Update user fields
     if (fullName) {user.fullName = fullName;}
     if (phone) {user.phone = phone;}
+    if (dateOfBirth !== undefined) {user.dateOfBirth = dateOfBirth;}
+    if (metadata) {
+      // Merge metadata with existing metadata
+      user.metadata = { ...(user.metadata || {}), ...metadata };
+    }
 
     await user.save();
 
@@ -379,6 +494,10 @@ router.put('/profile', authenticateToken, async (req, res) => {
         phone: user.phone,
         role: user.role,
         status: user.status,
+        dateOfBirth: user.dateOfBirth,
+        metadata: user.metadata || {},
+        authProvider: user.authProvider,
+        hasPassword: !!user.passwordHash,
       },
     });
   } catch (error) {
@@ -519,7 +638,7 @@ const checkGoogleOAuthConfig = (req, res, next) => {
 
 // Google OAuth login
 // Google OAuth initiation with CSRF protection
-router.get('/google', checkGoogleOAuthConfig, (req, res, next) => {
+router.get('/google', googleOAuthInitLimiter, checkGoogleOAuthConfig, (req, res, next) => {
   // Generate and store state parameter for CSRF protection
   const state = require('crypto').randomBytes(32).toString('hex');
   req.session.oauthState = state;
@@ -539,6 +658,7 @@ router.get('/google', checkGoogleOAuthConfig, (req, res, next) => {
 
 // Google OAuth callback
 router.get('/google/callback',
+  googleOAuthCallbackLimiter,
   checkGoogleOAuthConfig,
   (req, res, next) => {
     passport.authenticate('google', { session: false }, (err, user, info) => {
@@ -555,6 +675,21 @@ router.get('/google/callback',
         // Handle specific error types
         if (err.message === 'ACCOUNT_LINKING_REQUIRED') {
           return res.redirect(`${frontendUrl}/auth/google/link-required?email=${encodeURIComponent(info?.email || '')}`);
+        }
+        
+        // Handle Google rate limit errors
+        if (err.message && (
+          err.message.includes('too many requests') ||
+          err.message.includes('rate limit') ||
+          err.message.includes('quota') ||
+          err.code === 429 ||
+          err.status === 429
+        )) {
+          enterpriseLogger.warn('Google OAuth rate limit hit', {
+            ip: req.ip,
+            error: err.message,
+          });
+          return res.redirect(`${frontendUrl}/login?error=oauth_rate_limit&message=${encodeURIComponent('Too many requests to Google. Please wait 15-30 minutes before trying again.')}`);
         }
         
         // Redirect to error page with error message
@@ -649,6 +784,8 @@ router.get('/google/callback',
         fullName: user.fullName,
         role: user.role,
         status: user.status,
+        authProvider: user.authProvider,
+        hasPassword: !!user.passwordHash,
       };
       const redirectUrl = `${frontendUrl}/auth/google/success?token=${token}&refreshToken=${refreshToken}&user=${encodeURIComponent(JSON.stringify(userData))}`;
 
@@ -898,104 +1035,9 @@ router.post('/reset-password',
     }
   });
 
-// =====================================================
-// TOKEN REFRESH ROUTES
-// =====================================================
-
-// Refresh token
-router.post('/refresh', auditAuthEvents('refresh_token'), async (req, res) => {
-  try {
-    const { refreshToken } = req.body;
-
-    if (!refreshToken) {
-      return res.status(400).json({
-        success: false,
-        error: 'Refresh token is required',
-      });
-    }
-
-    // Find session
-    const sessions = await UserSession.findAll({
-      where: {
-        revoked: false,
-        expiresAt: {
-          [require('sequelize').Op.gt]: new Date(),
-        },
-      },
-    });
-
-    let validSession = null;
-    for (const session of sessions) {
-      const isValid = await bcrypt.compare(refreshToken, session.refreshTokenHash);
-      if (isValid) {
-        validSession = session;
-        break;
-      }
-    }
-
-    if (!validSession) {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid refresh token',
-      });
-    }
-
-    // Get user
-    const user = await User.findByPk(validSession.userId);
-    if (!user || user.status !== 'active') {
-      return res.status(401).json({
-        success: false,
-        error: 'User not found or inactive',
-      });
-    }
-
-    // Generate new access token
-    const newAccessToken = jwt.sign(
-      {
-        userId: user.id,
-        email: user.email,
-        role: user.role,
-        tokenVersion: user.tokenVersion,
-      },
-      process.env.JWT_SECRET || 'fallback-secret',
-      { expiresIn: '1h' },
-    );
-
-    // Update session last active
-    await validSession.update({ lastActive: new Date() });
-
-    // Log audit event
-    await AuditLog.logAuthEvent({
-      userId: user.id,
-      action: 'token_refreshed',
-      ipAddress: req.ip || req.connection.remoteAddress,
-      userAgent: req.headers['user-agent'],
-      success: true,
-    });
-
-    res.json({
-      success: true,
-      accessToken: newAccessToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        full_name: user.fullName,
-        role: user.role,
-        status: user.status,
-      },
-    });
-
-  } catch (error) {
-    enterpriseLogger.error('Token refresh failed', {
-      error: error.message,
-    });
-
-    res.status(500).json({
-      success: false,
-      error: 'Internal server error',
-    });
-  }
-});
+// Note: The /refresh endpoint is already registered above at line 284 using handleTokenRefresh middleware
+// This handles cookie-based refresh tokens. For body-based refresh tokens, use the same endpoint
+// but the handleTokenRefresh middleware will check cookies first, then fall back to body if needed.
 
 // Logout
 router.post('/logout', authenticateToken, auditAuthEvents('logout'), async (req, res) => {

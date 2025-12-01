@@ -83,7 +83,7 @@ router.use('/itr', generalLimiter, require('./itr'));
 // =====================================================
 
 // User routes with general rate limiting
-router.use('/user', generalLimiter, require('./user'));
+router.use('/users', generalLimiter, require('./user'));
 
 // =====================================================
 // ADMIN ROUTES
@@ -100,11 +100,46 @@ router.use('/admin', strictLimiter, require('./admin'));
 router.use('/documents', generalLimiter, require('./documents'));
 
 // =====================================================
+// OCR ROUTES
+// =====================================================
+
+// OCR routes for document processing
+router.use('/ocr', generalLimiter, require('./ocr'));
+
+// =====================================================
+// HELP ROUTES
+// =====================================================
+
+// Help content routes (public)
+router.use('/help', generalLimiter, require('./help'));
+
+// =====================================================
+// SUPPORT ROUTES
+// =====================================================
+
+// Support ticket routes (authenticated)
+router.use('/support', generalLimiter, require('./support'));
+
+// =====================================================
+// BROKER ROUTES
+// =====================================================
+
+// Broker file processing routes
+router.use('/broker', generalLimiter, require('./broker'));
+
+// =====================================================
 // NOTIFICATION ROUTES
 // =====================================================
 
 // Notification routes
 router.use('/notifications', generalLimiter, require('./notifications'));
+
+// =====================================================
+// CA MARKETPLACE ROUTES
+// =====================================================
+
+// CA marketplace routes (public browsing, authenticated actions)
+router.use('/ca-marketplace', generalLimiter, require('./ca-marketplace'));
 
 // =====================================================
 // ERROR HANDLING

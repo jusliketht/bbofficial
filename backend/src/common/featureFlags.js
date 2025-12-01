@@ -94,6 +94,14 @@ class FeatureFlagsService {
         category: 'notifications',
       },
 
+      'feature_sse_notifications_enabled': {
+        name: 'SSE Notifications Enabled',
+        description: 'Enable Server-Sent Events for notifications (alias)',
+        defaultValue: true,
+        type: 'boolean',
+        category: 'notifications',
+      },
+
       'feature_notifications_email': {
         name: 'Email Notifications',
         description: 'Enable email notifications',
@@ -149,6 +157,14 @@ class FeatureFlagsService {
         name: 'Auto Service Tickets',
         description: 'Automatically create service tickets',
         defaultValue: true,
+        type: 'boolean',
+        category: 'support',
+      },
+
+      'feature_service_ticket_auto_assignment': {
+        name: 'Service Ticket Auto Assignment',
+        description: 'Automatically assign service tickets to available agents',
+        defaultValue: false,
         type: 'boolean',
         category: 'support',
       },

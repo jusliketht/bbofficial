@@ -32,7 +32,7 @@ import {
   Crown,
   Star,
   Activity,
-  DollarSign,
+  IndianRupee,
   FileText,
   MapPin,
   Plus,
@@ -304,7 +304,7 @@ const CAFirmClientPortfolio = () => {
 
           <div className="bg-white rounded-lg shadow-sm p-4">
             <div className="flex items-center">
-              <DollarSign className="h-8 w-8 text-green-600" />
+              <IndianRupee className="h-8 w-8 text-green-600" />
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-600">Monthly Revenue</p>
                 <p className="text-2xl font-semibold text-gray-900">₹{stats.monthly_revenue || 0}</p>
@@ -460,7 +460,7 @@ const CAFirmClientPortfolio = () => {
                               <span>Activity Score: {client.activity_score || 0}</span>
                             </div>
                             <div className="flex items-center space-x-2">
-                              <DollarSign className="h-4 w-4" />
+                              <IndianRupee className="h-4 w-4" />
                               <span>Revenue: ₹{client.monthly_revenue || 0}</span>
                             </div>
                           </div>

@@ -106,6 +106,10 @@ class RouteDiscovery {
    * Convert filename to route path
    */
   getRoutePath(routeName) {
+    // Special case: user.js -> users (plural) to match frontend expectations
+    if (routeName === 'user') {
+      return 'users';
+    }
     // Convert kebab-case to route path
     // Return without leading slash - will be added when mounting
     return routeName.replace(/-/g, '');

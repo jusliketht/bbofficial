@@ -4,6 +4,8 @@
 
 const enterpriseLogger = require('../../utils/logger');
 const { AppError } = require('../../middleware/errorHandler');
+const BusinessIncomeCalculator = require('../business/BusinessIncomeCalculator');
+const ProfessionalIncomeCalculator = require('../business/ProfessionalIncomeCalculator');
 
 class TaxComputationEngine {
   constructor() {
@@ -100,11 +102,37 @@ class TaxComputationEngine {
 
       computation.totalTax = computation.taxComputation.totalTax;
       computation.cess = computation.taxComputation.cess;
-      computation.finalTax = computation.totalTax + computation.cess;
+
+      // Calculate rebate u/s 87A
+      computation.rebate87A = this.calculateRebate87A(
+        computation.taxComputation.totalTax,
+        computation.taxableIncome
+      );
+
+      // Calculate relief u/s 89 (if applicable)
+      computation.relief89 = this.calculateRelief89(
+        filingData,
+        computation.taxableIncome,
+        assessmentYear
+      );
+
+      // Final tax after rebate and relief
+      computation.finalTax = Math.max(
+        0,
+        computation.totalTax + computation.cess - computation.rebate87A.amount - computation.relief89.amount
+      );
+
+      // Calculate interest (234A/234B/234C)
+      computation.interest = this.calculateInterest(
+        computation.finalTax,
+        filingData.taxesPaid,
+        filingData.submissionDate || new Date(),
+        assessmentYear
+      );
 
       // Calculate refund/payable
       computation.taxPaid = filingData.taxPaid || 0;
-      computation.refundAmount = Math.max(0, computation.taxPaid - computation.finalTax);
+      computation.refundAmount = Math.max(0, computation.taxPaid - computation.finalTax - computation.interest.total);
 
       enterpriseLogger.info('Tax computation completed', {
         grossTotalIncome: computation.grossTotalIncome,
@@ -150,9 +178,38 @@ class TaxComputationEngine {
       totalIncome += parseFloat(filingData.income.capitalGains.longTerm) || 0;
     }
 
-    // Business income
-    if (filingData.income?.businessIncome?.netProfit) {
-      totalIncome += parseFloat(filingData.income.businessIncome.netProfit) || 0;
+    // Business income - Handle ITR-3, ITR-4, and simple structures
+    if (filingData.businessIncome?.businesses && Array.isArray(filingData.businessIncome.businesses)) {
+      // ITR-3: Multiple businesses with P&L
+      totalIncome += BusinessIncomeCalculator.calculateTotalBusinessIncome(filingData.businessIncome.businesses);
+    } else if (filingData.income?.businessIncome || filingData.income?.presumptiveBusiness) {
+      // ITR-4: Presumptive business income (8% of gross receipts)
+      if (filingData.itrType === 'ITR-4' || filingData.itrType === 'ITR4') {
+        const grossReceipts = parseFloat(filingData.income.presumptiveBusiness || filingData.income.businessIncome || 0);
+        const presumptiveRate = 0.08; // 8% for business
+        totalIncome += grossReceipts * presumptiveRate;
+      } else if (typeof filingData.income.businessIncome === 'object' && filingData.income.businessIncome.netProfit) {
+        totalIncome += parseFloat(filingData.income.businessIncome.netProfit) || 0;
+      } else {
+        totalIncome += parseFloat(filingData.income.businessIncome) || 0;
+      }
+    }
+
+    // Professional income - Handle ITR-3, ITR-4, and simple structures
+    if (filingData.professionalIncome?.professions && Array.isArray(filingData.professionalIncome.professions)) {
+      // ITR-3: Multiple professions with P&L
+      totalIncome += ProfessionalIncomeCalculator.calculateTotalProfessionalIncome(filingData.professionalIncome.professions);
+    } else if (filingData.income?.professionalIncome || filingData.income?.presumptiveProfessional) {
+      // ITR-4: Presumptive professional income (50% of gross receipts)
+      if (filingData.itrType === 'ITR-4' || filingData.itrType === 'ITR4') {
+        const grossReceipts = parseFloat(filingData.income.presumptiveProfessional || filingData.income.professionalIncome || 0);
+        const presumptiveRate = 0.50; // 50% for profession
+        totalIncome += grossReceipts * presumptiveRate;
+      } else if (typeof filingData.income.professionalIncome === 'object' && filingData.income.professionalIncome.netIncome) {
+        totalIncome += parseFloat(filingData.income.professionalIncome.netIncome) || 0;
+      } else {
+        totalIncome += parseFloat(filingData.income.professionalIncome) || 0;
+      }
     }
 
     // Other income
@@ -303,6 +360,130 @@ class TaxComputationEngine {
   }
 
   /**
+   * Calculate rebate u/s 87A
+   * @param {number} tax - Tax amount before rebate
+   * @param {number} taxableIncome - Taxable income
+   * @returns {object} - Rebate details
+   */
+  calculateRebate87A(tax, taxableIncome) {
+    // Rebate u/s 87A: Maximum ₹12,500 if taxable income ≤ ₹5,00,000
+    if (taxableIncome <= 500000) {
+      return {
+        applicable: true,
+        amount: Math.min(tax, 12500),
+        maxAmount: 12500,
+        section: '87A',
+      };
+    }
+    return {
+      applicable: false,
+      amount: 0,
+      maxAmount: 12500,
+      section: '87A',
+    };
+  }
+
+  /**
+   * Calculate relief u/s 89
+   * @param {object} filingData - Filing data
+   * @param {number} taxableIncome - Taxable income
+   * @param {string} assessmentYear - Assessment year
+   * @returns {object} - Relief details
+   */
+  calculateRelief89(filingData, taxableIncome, assessmentYear) {
+    // Relief u/s 89 is applicable when salary is received in arrears or advance
+    // This is a simplified calculation - actual calculation is more complex
+    const salaryArrears = filingData.income?.salary?.arrears || 0;
+    const salaryAdvance = filingData.income?.salary?.advance || 0;
+
+    if (salaryArrears === 0 && salaryAdvance === 0) {
+      return {
+        applicable: false,
+        amount: 0,
+        section: '89',
+        details: null,
+      };
+    }
+
+    // Simplified relief calculation
+    // In practice, this requires comparing tax liability with and without arrears/advance
+    const reliefAmount = Math.min((salaryArrears + salaryAdvance) * 0.1, 50000);
+
+    return {
+      applicable: true,
+      amount: reliefAmount,
+      section: '89',
+      details: {
+        arrears: salaryArrears,
+        advance: salaryAdvance,
+        calculatedRelief: reliefAmount,
+      },
+    };
+  }
+
+  /**
+   * Calculate interest u/s 234A, 234B, 234C
+   * @param {number} taxLiability - Total tax liability
+   * @param {object} taxesPaid - Taxes paid details
+   * @param {Date} submissionDate - ITR submission date
+   * @param {string} assessmentYear - Assessment year
+   * @returns {object} - Interest details
+   */
+  calculateInterest(taxLiability, taxesPaid, submissionDate, assessmentYear) {
+    const interest = {
+      section234A: { amount: 0, rate: 1, description: 'Interest for delay in filing return' },
+      section234B: { amount: 0, rate: 1, description: 'Interest for default in payment of advance tax' },
+      section234C: { amount: 0, rate: 1, description: 'Interest for deferment of advance tax' },
+      total: 0,
+    };
+
+    if (!taxesPaid) {
+      return interest;
+    }
+
+    const dueDate = this.getDueDate(assessmentYear);
+    const submission = new Date(submissionDate);
+    const daysLate = Math.max(0, Math.floor((submission - dueDate) / (1000 * 60 * 60 * 24)));
+
+    // Section 234A: Interest for delay in filing (1% per month)
+    if (daysLate > 0) {
+      const monthsLate = Math.ceil(daysLate / 30);
+      interest.section234A.amount = (taxLiability * interest.section234A.rate * monthsLate) / 100;
+    }
+
+    // Section 234B: Interest for default in advance tax payment
+    const advanceTaxPaid = taxesPaid.advanceTax || 0;
+    const requiredAdvanceTax = taxLiability * 0.9; // 90% of tax liability should be paid as advance tax
+
+    if (advanceTaxPaid < requiredAdvanceTax) {
+      const shortfall = requiredAdvanceTax - advanceTaxPaid;
+      const monthsDefault = Math.ceil(daysLate / 30);
+      interest.section234B.amount = (shortfall * interest.section234B.rate * monthsDefault) / 100;
+    }
+
+    // Section 234C: Interest for deferment of advance tax (simplified)
+    // This requires quarterly advance tax payment details which we don't have here
+    // For now, we'll set it to 0 and it can be calculated separately if needed
+    interest.section234C.amount = 0;
+
+    interest.total = interest.section234A.amount + interest.section234B.amount + interest.section234C.amount;
+
+    return interest;
+  }
+
+  /**
+   * Get due date for ITR filing
+   * @param {string} assessmentYear - Assessment year (e.g., '2024-25')
+   * @returns {Date} - Due date
+   */
+  getDueDate(assessmentYear) {
+    // For AY 2024-25, due date is typically July 31, 2024
+    // This is a simplified version - actual logic should consider ITR type and other factors
+    const year = parseInt(assessmentYear.split('-')[0]);
+    return new Date(year, 6, 31); // July 31
+  }
+
+  /**
    * Validate tax computation
    * @param {object} computation - Tax computation result
    * @returns {object} - Validation result
@@ -342,6 +523,144 @@ class TaxComputationEngine {
       errors,
       warnings,
     };
+  }
+
+  /**
+   * Compute tax with simulation changes
+   * @param {object} baseFormData - Base form data
+   * @param {object} simulationChanges - Changes to apply for simulation
+   * @returns {Promise<object>} - Tax computation with simulation
+   */
+  async computeWithSimulation(baseFormData, simulationChanges) {
+    try {
+      enterpriseLogger.info('Computing tax with simulation changes');
+
+      // Merge simulation changes into base form data
+      const simulatedFormData = this.mergeSimulationChanges(baseFormData, simulationChanges);
+
+      // Compute tax with simulated data
+      const simulatedComputation = await this.computeTax(
+        simulatedFormData,
+        simulatedFormData.assessmentYear || baseFormData.assessmentYear || '2024-25'
+      );
+
+      return simulatedComputation;
+    } catch (error) {
+      enterpriseLogger.error('Failed to compute tax with simulation', {
+        error: error.message,
+      });
+      throw new AppError(`Failed to compute simulation: ${error.message}`, 500);
+    }
+  }
+
+  /**
+   * Calculate savings from simulation
+   * @param {object} baseTax - Base tax computation
+   * @param {object} simulatedTax - Simulated tax computation
+   * @returns {object} - Savings breakdown
+   */
+  calculateSavings(baseTax, simulatedTax) {
+    const baseTaxLiability = parseFloat(baseTax.totalTaxLiability || baseTax.finalTax || 0);
+    const simulatedTaxLiability = parseFloat(simulatedTax.totalTaxLiability || simulatedTax.finalTax || 0);
+
+    const totalSavings = baseTaxLiability - simulatedTaxLiability;
+    const savingsPercentage = baseTaxLiability > 0
+      ? (totalSavings / baseTaxLiability) * 100
+      : 0;
+
+    return {
+      totalSavings: Math.max(0, totalSavings),
+      savingsPercentage: Math.max(0, savingsPercentage),
+      baseTaxLiability,
+      simulatedTaxLiability,
+      breakdown: {
+        incomeTax: (parseFloat(baseTax.taxComputation?.totalTax || baseTax.totalTax || 0) - 
+                   parseFloat(simulatedTax.taxComputation?.totalTax || simulatedTax.totalTax || 0)),
+        cess: (parseFloat(baseTax.cess || 0) - parseFloat(simulatedTax.cess || 0)),
+        surcharge: (parseFloat(baseTax.taxComputation?.surcharge || 0) - 
+                   parseFloat(simulatedTax.taxComputation?.surcharge || 0)),
+      },
+    };
+  }
+
+  /**
+   * Validate simulation scenario
+   * @param {object} scenario - Simulation scenario
+   * @returns {object} - Validation result
+   */
+  validateSimulationScenario(scenario) {
+    const errors = [];
+
+    if (!scenario.type) {
+      errors.push('Scenario type is required');
+    }
+
+    if (!scenario.changes) {
+      errors.push('Scenario changes are required');
+    }
+
+    // Validate scenario type-specific requirements
+    if (scenario.type === 'section80C' && (!scenario.changes.amount || scenario.changes.amount <= 0)) {
+      errors.push('Investment amount is required for Section 80C scenario');
+    }
+
+    if (scenario.type === 'section80CCD' && (!scenario.changes.amount || scenario.changes.amount <= 0)) {
+      errors.push('NPS contribution amount is required for Section 80CCD scenario');
+    }
+
+    if (scenario.type === 'section80D' && (!scenario.changes.amount || scenario.changes.amount <= 0)) {
+      errors.push('Health insurance premium amount is required for Section 80D scenario');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+    };
+  }
+
+  /**
+   * Merge simulation changes into form data
+   * @param {object} baseFormData - Base form data
+   * @param {object} simulationChanges - Changes to apply
+   * @returns {object} - Merged form data
+   */
+  mergeSimulationChanges(baseFormData, simulationChanges) {
+    const merged = JSON.parse(JSON.stringify(baseFormData)); // Deep clone
+
+    // Apply changes based on scenario type
+    if (simulationChanges.type === 'section80C') {
+      if (!merged.deductions) merged.deductions = {};
+      merged.deductions.section80C = (parseFloat(merged.deductions.section80C || 0) + 
+                                       parseFloat(simulationChanges.changes.amount || 0));
+      merged.deductions.section80C = Math.min(150000, merged.deductions.section80C);
+    } else if (simulationChanges.type === 'section80CCD') {
+      if (!merged.deductions) merged.deductions = {};
+      merged.deductions.section80CCD = (parseFloat(merged.deductions.section80CCD || 0) + 
+                                        parseFloat(simulationChanges.changes.amount || 0));
+      merged.deductions.section80CCD = Math.min(50000, merged.deductions.section80CCD);
+    } else if (simulationChanges.type === 'section80D') {
+      if (!merged.deductions) merged.deductions = {};
+      merged.deductions.section80D = (parseFloat(merged.deductions.section80D || 0) + 
+                                      parseFloat(simulationChanges.changes.amount || 0));
+      merged.deductions.section80D = Math.min(25000, merged.deductions.section80D);
+    } else if (simulationChanges.type === 'hraOptimization') {
+      if (!merged.income) merged.income = {};
+      if (!merged.income.salary) merged.income.salary = {};
+      if (simulationChanges.changes.rentPaid !== undefined) {
+        merged.income.salary.rentPaid = parseFloat(simulationChanges.changes.rentPaid);
+      }
+      if (simulationChanges.changes.hra !== undefined) {
+        merged.income.salary.hra = parseFloat(simulationChanges.changes.hra);
+      }
+    } else if (simulationChanges.type === 'section24') {
+      if (!merged.income) merged.income = {};
+      if (!merged.income.houseProperty) merged.income.houseProperty = {};
+      merged.income.houseProperty.interestOnLoan = (parseFloat(merged.income.houseProperty.interestOnLoan || 0) + 
+                                                    parseFloat(simulationChanges.changes.interestAmount || 0));
+      merged.income.houseProperty.interestOnLoan = Math.min(200000, merged.income.houseProperty.interestOnLoan);
+    }
+
+    return merged;
   }
 }
 

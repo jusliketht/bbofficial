@@ -26,7 +26,7 @@ import {
   Globe,
   Users,
   FileText,
-  DollarSign,
+  IndianRupee,
   BarChart3,
   PieChart,
   LineChart,
@@ -111,11 +111,11 @@ const PlatformSystemHealth = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'healthy':
-        return 'bg-green-100 text-green-800';
+        return 'bg-success-50 text-success-600';
       case 'warning':
-        return 'bg-orange-100 text-orange-800';
+        return 'bg-warning-50 text-warning-600';
       case 'critical':
-        return 'bg-red-100 text-red-800';
+        return 'bg-error-50 text-error-600';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -141,9 +141,9 @@ const PlatformSystemHealth = () => {
   const getServiceColor = (status) => {
     switch (status) {
       case 'running':
-        return 'text-green-600';
+        return 'text-success-500';
       case 'stopped':
-        return 'text-red-600';
+        return 'text-error-600';
       case 'starting':
         return 'text-orange-600';
       case 'stopping':
@@ -163,7 +163,7 @@ const PlatformSystemHealth = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
       </div>
     );
   }
@@ -171,26 +171,26 @@ const PlatformSystemHealth = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header className="bg-white shadow-card border-b">
+        <div className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => navigate('/dashboard')}
-                className="text-gray-600 hover:text-gray-900"
+                className="text-body-md text-gray-600 hover:text-gray-900"
               >
                 ← Back to Dashboard
               </button>
-              <h1 className="text-xl font-semibold text-gray-900">Platform System Health</h1>
+              <h1 className="text-heading-lg font-semibold text-gray-900">Platform System Health</h1>
             </div>
 
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
-                <label className="text-sm text-gray-600">Auto Refresh</label>
+                <label className="text-label-lg text-gray-600">Auto Refresh</label>
                 <button
                   onClick={() => setAutoRefresh(!autoRefresh)}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    autoRefresh ? 'bg-blue-600' : 'bg-gray-200'
+                    autoRefresh ? 'bg-orange-500' : 'bg-gray-200'
                   }`}
                 >
                   <span
@@ -204,7 +204,7 @@ const PlatformSystemHealth = () => {
               <select
                 value={selectedTimeRange}
                 onChange={(e) => setSelectedTimeRange(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
               >
                 <option value="1h">Last Hour</option>
                 <option value="24h">Last 24 Hours</option>
@@ -222,7 +222,7 @@ const PlatformSystemHealth = () => {
 
               <button
                 onClick={() => navigate('/platform-admin/system/settings')}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors flex items-center space-x-2"
               >
                 <Settings className="h-4 w-4" />
                 <span>Settings</span>
@@ -234,15 +234,15 @@ const PlatformSystemHealth = () => {
 
       {/* Navigation Tabs */}
       <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12">
           <nav className="flex space-x-8">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setSelectedTab(tab.id)}
-                className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-label-lg transition-colors ${
                   selectedTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
+                    ? 'border-orange-500 text-orange-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
@@ -255,22 +255,22 @@ const PlatformSystemHealth = () => {
       </div>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12 py-6">
         {/* Overview Tab */}
         {selectedTab === 'overview' && (
           <div className="space-y-6">
             {/* System Status Overview */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="bg-white rounded-lg shadow-card p-4">
                 <div className="flex items-center">
-                  <Server className="h-8 w-8 text-blue-600" />
+                  <Server className="h-8 w-8 text-info-500" />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-600">Platform Status</p>
+                    <p className="text-label-lg font-medium text-gray-600">Platform Status</p>
                     <div className="flex items-center space-x-2">
-                      <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(health.platform?.status || 'healthy')}`}>
+                      <span className={`px-2 py-1 text-label-sm rounded-full ${getStatusColor(health.platform?.status || 'healthy')}`}>
                         {health.platform?.status || 'healthy'}
                       </span>
-                      <span className="text-sm text-gray-500">
+                      <span className="text-body-md text-gray-500">
                         Uptime: {health.platform?.uptime || '99.9%'}
                       </span>
                     </div>
@@ -278,16 +278,16 @@ const PlatformSystemHealth = () => {
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="bg-white rounded-lg shadow-card p-4">
                 <div className="flex items-center">
-                  <Database className="h-8 w-8 text-green-600" />
+                  <Database className="h-8 w-8 text-success-500" />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-600">Database</p>
+                    <p className="text-label-lg font-medium text-gray-600">Database</p>
                     <div className="flex items-center space-x-2">
-                      <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(health.database?.status || 'healthy')}`}>
+                      <span className={`px-2 py-1 text-label-sm rounded-full ${getStatusColor(health.database?.status || 'healthy')}`}>
                         {health.database?.status || 'healthy'}
                       </span>
-                      <span className="text-sm text-gray-500">
+                      <span className="text-body-md text-gray-500">
                         {health.database?.connections || 0} connections
                       </span>
                     </div>
@@ -295,16 +295,16 @@ const PlatformSystemHealth = () => {
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="bg-white rounded-lg shadow-card p-4">
                 <div className="flex items-center">
-                  <Wifi className="h-8 w-8 text-purple-600" />
+                  <Wifi className="h-8 w-8 text-info-600" />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-600">API Response</p>
+                    <p className="text-label-lg font-medium text-gray-600">API Response</p>
                     <div className="flex items-center space-x-2">
-                      <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(health.api?.status || 'healthy')}`}>
+                      <span className={`px-2 py-1 text-label-sm rounded-full ${getStatusColor(health.api?.status || 'healthy')}`}>
                         {health.api?.status || 'healthy'}
                       </span>
-                      <span className="text-sm text-gray-500">
+                      <span className="text-body-md text-gray-500">
                         {health.api?.avg_response_time || 0}ms avg
                       </span>
                     </div>
@@ -312,16 +312,16 @@ const PlatformSystemHealth = () => {
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="bg-white rounded-lg shadow-card p-4">
                 <div className="flex items-center">
-                  <Shield className="h-8 w-8 text-red-600" />
+                  <Shield className="h-8 w-8 text-error-600" />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-600">Security</p>
+                    <p className="text-label-lg font-medium text-gray-600">Security</p>
                     <div className="flex items-center space-x-2">
-                      <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(health.security?.status || 'healthy')}`}>
+                      <span className={`px-2 py-1 text-label-sm rounded-full ${getStatusColor(health.security?.status || 'healthy')}`}>
                         {health.security?.status || 'healthy'}
                       </span>
-                      <span className="text-sm text-gray-500">
+                      <span className="text-body-md text-gray-500">
                         {alerts.filter(alert => alert.severity === 'critical').length} critical
                       </span>
                     </div>
@@ -332,63 +332,63 @@ const PlatformSystemHealth = () => {
 
             {/* Performance Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="bg-white rounded-lg shadow-card p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-medium text-gray-600">CPU Usage</h3>
+                  <h3 className="text-label-lg font-medium text-gray-600">CPU Usage</h3>
                   <Cpu className="h-4 w-4 text-gray-400" />
                 </div>
-                <div className="text-2xl font-semibold text-gray-900 mb-1">
+                <div className="text-number-lg font-semibold text-gray-900 mb-1">
                   {metrics.cpu?.usage || 0}%
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div
-                    className="bg-blue-600 h-2 rounded-full"
+                    className="bg-info-500 h-2 rounded-full"
                     style={{ width: `${metrics.cpu?.usage || 0}%` }}
                   ></div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="bg-white rounded-lg shadow-card p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-medium text-gray-600">Memory Usage</h3>
+                  <h3 className="text-label-lg font-medium text-gray-600">Memory Usage</h3>
                   <HardDrive className="h-4 w-4 text-gray-400" />
                 </div>
-                <div className="text-2xl font-semibold text-gray-900 mb-1">
+                <div className="text-number-lg font-semibold text-gray-900 mb-1">
                   {metrics.memory?.usage || 0}%
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div
-                    className="bg-green-600 h-2 rounded-full"
+                    className="bg-success-500 h-2 rounded-full"
                     style={{ width: `${metrics.memory?.usage || 0}%` }}
                   ></div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="bg-white rounded-lg shadow-card p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-medium text-gray-600">Disk Usage</h3>
+                  <h3 className="text-label-lg font-medium text-gray-600">Disk Usage</h3>
                   <HardDrive className="h-4 w-4 text-gray-400" />
                 </div>
-                <div className="text-2xl font-semibold text-gray-900 mb-1">
+                <div className="text-number-lg font-semibold text-gray-900 mb-1">
                   {metrics.disk?.usage || 0}%
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div
-                    className="bg-purple-600 h-2 rounded-full"
+                    className="bg-info-500 h-2 rounded-full"
                     style={{ width: `${metrics.disk?.usage || 0}%` }}
                   ></div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="bg-white rounded-lg shadow-card p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-medium text-gray-600">Network I/O</h3>
+                  <h3 className="text-label-lg font-medium text-gray-600">Network I/O</h3>
                   <Globe className="h-4 w-4 text-gray-400" />
                 </div>
-                <div className="text-2xl font-semibold text-gray-900 mb-1">
+                <div className="text-number-lg font-semibold text-gray-900 mb-1">
                   {metrics.network?.io_rate || 0} MB/s
                 </div>
-                <div className="flex items-center space-x-1 text-sm text-gray-500">
+                <div className="flex items-center space-x-1 text-body-md text-gray-500">
                   <TrendingUp className="h-3 w-3" />
                   <span>+{metrics.network?.io_growth || 0}%</span>
                 </div>
@@ -397,42 +397,42 @@ const PlatformSystemHealth = () => {
 
             {/* Platform Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="bg-white rounded-lg shadow-card p-4">
                 <div className="flex items-center">
-                  <Users className="h-8 w-8 text-blue-600" />
+                  <Users className="h-8 w-8 text-info-500" />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-600">Active Users</p>
-                    <p className="text-2xl font-semibold text-gray-900">{metrics.users?.active || 0}</p>
+                    <p className="text-label-lg font-medium text-gray-600">Active Users</p>
+                    <p className="text-number-lg font-semibold text-gray-900">{metrics.users?.active || 0}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="bg-white rounded-lg shadow-card p-4">
                 <div className="flex items-center">
-                  <FileText className="h-8 w-8 text-green-600" />
+                  <FileText className="h-8 w-8 text-success-500" />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-600">Filings Today</p>
-                    <p className="text-2xl font-semibold text-gray-900">{metrics.filings?.today || 0}</p>
+                    <p className="text-label-lg font-medium text-gray-600">Filings Today</p>
+                    <p className="text-number-lg font-semibold text-gray-900">{metrics.filings?.today || 0}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="bg-white rounded-lg shadow-card p-4">
                 <div className="flex items-center">
-                  <DollarSign className="h-8 w-8 text-purple-600" />
+                  <IndianRupee className="h-8 w-8 text-info-600" />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-600">Revenue Today</p>
-                    <p className="text-2xl font-semibold text-gray-900">₹{metrics.revenue?.today || 0}</p>
+                    <p className="text-label-lg font-medium text-gray-600">Revenue Today</p>
+                    <p className="text-number-lg font-semibold text-gray-900">₹{metrics.revenue?.today || 0}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="bg-white rounded-lg shadow-card p-4">
                 <div className="flex items-center">
                   <Activity className="h-8 w-8 text-orange-600" />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-600">API Calls/min</p>
-                    <p className="text-2xl font-semibold text-gray-900">{metrics.api?.calls_per_minute || 0}</p>
+                    <p className="text-label-lg font-medium text-gray-600">API Calls/min</p>
+                    <p className="text-number-lg font-semibold text-gray-900">{metrics.api?.calls_per_minute || 0}</p>
                   </div>
                 </div>
               </div>
@@ -448,7 +448,7 @@ const PlatformSystemHealth = () => {
                   </span>
                   <button
                     onClick={() => navigate('/platform-admin/system/alerts')}
-                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    className="text-orange-600 hover:text-orange-700 text-label-lg font-medium"
                   >
                     View All
                   </button>
@@ -457,20 +457,20 @@ const PlatformSystemHealth = () => {
 
               {alerts.length === 0 ? (
                 <div className="text-center py-8">
-                  <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-                  <h4 className="text-lg font-medium text-gray-900 mb-2">All Systems Healthy</h4>
+                  <CheckCircle className="h-12 w-12 text-success-500 mx-auto mb-4" />
+                  <h4 className="text-heading-lg font-medium text-gray-900 mb-2">All Systems Healthy</h4>
                   <p className="text-gray-500">No active alerts at this time.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {alerts.slice(0, 5).map((alert) => (
                     <div key={alert.id} className={`p-4 border rounded-lg ${
-                      alert.severity === 'critical' ? 'bg-red-50 border-red-200' :
+                      alert.severity === 'critical' ? 'bg-error-50 border-error-200' :
                       alert.severity === 'warning' ? 'bg-orange-50 border-orange-200' :
-                      'bg-blue-50 border-blue-200'
+                      'bg-info-50 border-info-100'
                     }`}>
                       <div className="flex items-start space-x-3">
-                        <AlertTriangle className="h-4 w-4 text-red-500" />
+                        <AlertTriangle className="h-4 w-4 text-error-500" />
                         <div className="flex-1">
                           <div className="flex items-center justify-between">
                             <h4 className="font-medium text-gray-900">{alert.title}</h4>
@@ -510,9 +510,9 @@ const PlatformSystemHealth = () => {
                     <div key={service.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
                       <div className="flex items-center space-x-3 mb-3">
                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                          service.status === 'running' ? 'bg-green-100' :
-                          service.status === 'stopped' ? 'bg-red-100' :
-                          'bg-orange-100'
+                          service.status === 'running' ? 'bg-success-50' :
+                          service.status === 'stopped' ? 'bg-error-50' :
+                          'bg-warning-50'
                         }`}>
                           <div className={getServiceColor(service.status)}>
                             {getServiceIcon(service)}
@@ -528,9 +528,9 @@ const PlatformSystemHealth = () => {
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-600">Status</span>
                           <span className={`px-2 py-1 text-xs rounded-full ${
-                            service.status === 'running' ? 'bg-green-100 text-green-800' :
-                            service.status === 'stopped' ? 'bg-red-100 text-red-800' :
-                            'bg-orange-100 text-orange-800'
+                            service.status === 'running' ? 'bg-success-50 text-success-600' :
+                            service.status === 'stopped' ? 'bg-error-50 text-error-600' :
+                            'bg-warning-50 text-warning-600'
                           }`}>
                             {service.status}
                           </span>
@@ -602,7 +602,7 @@ const PlatformSystemHealth = () => {
 
               {alerts.length === 0 ? (
                 <div className="text-center py-8">
-                  <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                  <CheckCircle className="h-12 w-12 text-success-500 mx-auto mb-4" />
                   <h4 className="text-lg font-medium text-gray-900 mb-2">No Active Alerts</h4>
                   <p className="text-gray-500">All systems are operating normally.</p>
                 </div>
@@ -610,12 +610,12 @@ const PlatformSystemHealth = () => {
                 <div className="space-y-3">
                   {alerts.map((alert) => (
                     <div key={alert.id} className={`p-4 border rounded-lg ${
-                      alert.severity === 'critical' ? 'bg-red-50 border-red-200' :
+                      alert.severity === 'critical' ? 'bg-error-50 border-error-200' :
                       alert.severity === 'warning' ? 'bg-orange-50 border-orange-200' :
-                      'bg-blue-50 border-blue-200'
+                      'bg-info-50 border-info-100'
                     }`}>
                       <div className="flex items-start space-x-3">
-                        <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
+                        <AlertTriangle className="h-5 w-5 text-error-500 mt-0.5" />
                         <div className="flex-1">
                           <div className="flex items-center justify-between">
                             <h4 className="font-medium text-gray-900">{alert.title}</h4>

@@ -17,6 +17,21 @@ const CAFirm = require('./CAFirm');
 const Invite = require('./Invite');
 const AccountLinkingToken = require('./AccountLinkingToken');
 const UserProfile = require('./UserProfile');
+const Assignment = require('./Assignment');
+const ReturnVersion = require('./ReturnVersion');
+const Consent = require('./Consent');
+const DataSource = require('./DataSource');
+const TaxPayment = require('./TaxPayment');
+const ForeignAsset = require('./ForeignAsset');
+const RefundTracking = require('./RefundTracking');
+const Notification = require('./Notification');
+const HelpArticle = require('./HelpArticle');
+const CAMarketplaceInquiry = require('./CAMarketplaceInquiry');
+const CABooking = require('./CABooking');
+const CAFirmReview = require('./CAFirmReview');
+
+// Define associations after all models are loaded
+require('./associations');
 
 module.exports = {
   User,
@@ -34,4 +49,16 @@ module.exports = {
   Invite,
   AccountLinkingToken,
   UserProfile,
+  Assignment,
+  ReturnVersion,
+  Consent,
+  DataSource,
+  TaxPayment,
+  ForeignAsset,
+  RefundTracking,
+  Notification,
+  HelpArticle,
+  CAMarketplaceInquiry,
+  CABooking,
+  CAFirmReview,
 };

@@ -31,7 +31,7 @@ const EnhancedDashboard = () => {
       ]);
 
       setQuickActions([
-        { id: 1, title: 'New ITR Filing', description: 'Start filing for AY 2024-25', icon: FileText, color: 'blue', route: '/itr/start' },
+        { id: 1, title: 'New ITR Filing', description: 'Start filing for AY 2024-25', icon: FileText, color: 'blue', route: '/itr/select-person' },
         { id: 2, title: 'CA Bot Assistant', description: 'Get AI-powered help', icon: Sparkles, color: 'purple', route: '/ca-bot' },
         { id: 3, title: 'Add Family Member', description: 'Manage family members', icon: Users, color: 'green', route: '/add-members' },
         { id: 4, title: 'Upload Documents', description: 'Upload tax documents', icon: FileText, color: 'orange', route: '/documents' },

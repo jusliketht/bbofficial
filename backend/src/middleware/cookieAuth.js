@@ -129,7 +129,12 @@ const clearRefreshTokenCookie = (res) => {
  */
 const handleTokenRefresh = async (req, res) => {
   try {
-    const refreshToken = req.cookies.refreshToken;
+    // Try to get refresh token from cookie first, then from body
+    let refreshToken = req.cookies.refreshToken;
+    
+    if (!refreshToken && req.body && req.body.refreshToken) {
+      refreshToken = req.body.refreshToken;
+    }
 
     if (!refreshToken) {
       return res.status(401).json({

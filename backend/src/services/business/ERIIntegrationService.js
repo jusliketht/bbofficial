@@ -3,8 +3,8 @@
 // =====================================================
 
 const axios = require('axios');
-const enterpriseLogger = require('../utils/logger');
-const { AppError } = require('../middleware/errorHandler');
+const enterpriseLogger = require('../../utils/logger');
+const { AppError } = require('../../middleware/errorHandler');
 
 class ERIIntegrationService {
   constructor() {
@@ -121,9 +121,10 @@ class ERIIntegrationService {
 
   /**
    * Fetch previous ITR data for prefill
+   * Returns full ITR structure, not just summary
    * @param {string} pan - PAN number
    * @param {string} assessmentYear - Assessment year
-   * @returns {Promise<object>} - Previous ITR data
+   * @returns {Promise<object>} - Previous ITR data with full structure
    */
   async fetchPreviousItrData(pan, assessmentYear) {
     try {
@@ -137,18 +138,66 @@ class ERIIntegrationService {
       });
 
       enterpriseLogger.info('Previous ITR data fetched successfully', { pan, assessmentYear });
-      return response.data;
+      
+      // Return full ITR structure
+      return {
+        pan,
+        assessmentYear,
+        itrType: response.data.itrType || response.data.itr_type,
+        status: response.data.status || 'submitted',
+        data: response.data.data || response.data.jsonPayload || response.data,
+        previousFiling: response.data.previousFiling || response.data.summary,
+        source: 'ERI',
+      };
     } catch (error) {
       enterpriseLogger.error('Failed to fetch previous ITR data', {
         pan, assessmentYear, error: error.message,
       });
 
+      // Don't fallback to mock in live mode - throw error instead
       if (this.isLiveMode) {
-        enterpriseLogger.warn('Falling back to mock previous ITR data', { pan, assessmentYear });
-        return this.mockPreviousItrData(pan, assessmentYear);
+        throw new AppError(`Previous ITR data fetch failed: ${error.message}`, 500);
       }
 
-      throw new AppError(`Previous ITR data fetch failed: ${error.message}`, 500);
+      // Only use mock in development mode
+      return this.mockPreviousItrData(pan, assessmentYear);
+    }
+  }
+
+  /**
+   * Get list of available previous year filings from ERI
+   * @param {string} pan - PAN number
+   * @returns {Promise<Array>} - List of available assessment years with filing metadata
+   */
+  async getPreviousYearFilings(pan) {
+    try {
+      if (!this.isLiveMode) {
+        return this.mockPreviousYearFilings(pan);
+      }
+
+      enterpriseLogger.info('Fetching previous year filings list from ERI', { pan });
+      const response = await this.axiosInstance.get('/itr/previous-years', {
+        params: { pan },
+      });
+
+      enterpriseLogger.info('Previous year filings fetched successfully', { 
+        pan, 
+        count: response.data?.length || 0 
+      });
+      
+      return response.data || [];
+    } catch (error) {
+      enterpriseLogger.error('Failed to fetch previous year filings', {
+        pan, error: error.message,
+      });
+
+      // Don't fallback to mock in live mode - throw error instead
+      if (this.isLiveMode) {
+        throw new AppError(`Failed to fetch previous year filings: ${error.message}`, 500);
+      }
+
+      // Only use mock in development mode
+      return this.mockPreviousYearFilings(pan);
     }
   }
 
@@ -197,6 +246,31 @@ class ERIIntegrationService {
     const mockResponse = {
       pan,
       assessmentYear,
+      itrType: 'ITR-1',
+      status: 'submitted',
+      data: {
+        personal_info: {
+          pan: pan,
+          name: 'MOCK USER',
+          dateOfBirth: '1990-01-01',
+        },
+        income: {
+          salary: {
+            totalSalary: 500000,
+          },
+        },
+        deductions: {
+          section80C: 150000,
+        },
+        taxes_paid: {
+          tds: [{ amount: 25000, deductor: 'EMPLOYER' }],
+        },
+        bank_details: {
+          accountNumber: '1234567890',
+          ifsc: 'HDFC0001234',
+          bankName: 'HDFC Bank',
+        },
+      },
       previousFiling: {
         totalIncome: 500000,
         taxPaid: 25000,
@@ -206,6 +280,29 @@ class ERIIntegrationService {
     };
 
     enterpriseLogger.info('Mock previous ITR data', { pan, assessmentYear });
+    return Promise.resolve(mockResponse);
+  }
+
+  mockPreviousYearFilings(pan) {
+    const currentYear = new Date().getFullYear();
+    const mockResponse = [
+      {
+        assessmentYear: `${currentYear - 1}-${String(currentYear).slice(-2)}`,
+        itrType: 'ITR-1',
+        status: 'processed',
+        submittedAt: new Date(currentYear - 1, 6, 15).toISOString(),
+        acknowledgedAt: new Date(currentYear - 1, 7, 1).toISOString(),
+      },
+      {
+        assessmentYear: `${currentYear - 2}-${String(currentYear - 1).slice(-2)}`,
+        itrType: 'ITR-1',
+        status: 'processed',
+        submittedAt: new Date(currentYear - 2, 6, 20).toISOString(),
+        acknowledgedAt: new Date(currentYear - 2, 7, 5).toISOString(),
+      },
+    ];
+
+    enterpriseLogger.info('Mock previous year filings', { pan, count: mockResponse.length });
     return Promise.resolve(mockResponse);
   }
 }

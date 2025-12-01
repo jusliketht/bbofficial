@@ -7,7 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import {
   Settings,
   Users,
-  DollarSign,
+  IndianRupee,
   Shield,
   BarChart3,
   Save,
@@ -120,7 +120,7 @@ const AdminControlPanel = () => {
   }, []);
 
   const tabs = [
-    { id: 'billing', name: 'Billing & Rates', icon: DollarSign },
+    { id: 'billing', name: 'Billing & Rates', icon: IndianRupee },
     { id: 'limits', name: 'User Limits', icon: Users },
     { id: 'ca-firms', name: 'CA Firms', icon: Shield },
     { id: 'platform', name: 'Platform Settings', icon: Settings },
@@ -156,11 +156,11 @@ const AdminControlPanel = () => {
 
   const renderBillingTab = () => (
     <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Default ITR Rates</h3>
+      <div className="bg-white rounded-lg shadow-card border border-gray-200 p-6">
+        <h3 className="text-heading-lg font-semibold text-gray-900 mb-4">Default ITR Rates</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ITR-1 Rate (₹)</label>
+            <label className="block text-label-lg font-medium text-gray-700 mb-1">ITR-1 Rate (₹)</label>
             <input
               type="number"
               value={settings.defaultItrRates?.itr_1 || 0}
@@ -168,11 +168,11 @@ const AdminControlPanel = () => {
                 ...settings,
                 defaultItrRates: { ...settings.defaultItrRates, itr_1: parseInt(e.target.value) },
               })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ITR-2 Rate (₹)</label>
+            <label className="block text-label-lg font-medium text-gray-700 mb-1">ITR-2 Rate (₹)</label>
             <input
               type="number"
               value={settings.defaultItrRates?.itr_2 || 0}
@@ -180,11 +180,11 @@ const AdminControlPanel = () => {
                 ...settings,
                 defaultItrRates: { ...settings.defaultItrRates, itr_2: parseInt(e.target.value) },
               })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ITR-3 Rate (₹)</label>
+            <label className="block text-label-lg font-medium text-gray-700 mb-1">ITR-3 Rate (₹)</label>
             <input
               type="number"
               value={settings.defaultItrRates?.itr_3 || 0}
@@ -192,11 +192,11 @@ const AdminControlPanel = () => {
                 ...settings,
                 defaultItrRates: { ...settings.defaultItrRates, itr_3: parseInt(e.target.value) },
               })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ITR-4 Rate (₹)</label>
+            <label className="block text-label-lg font-medium text-gray-700 mb-1">ITR-4 Rate (₹)</label>
             <input
               type="number"
               value={settings.defaultItrRates?.itr_4 || 0}
@@ -204,22 +204,22 @@ const AdminControlPanel = () => {
                 ...settings,
                 defaultItrRates: { ...settings.defaultItrRates, itr_4: parseInt(e.target.value) },
               })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
             />
           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Platform Commission</h3>
+      <div className="bg-white rounded-lg shadow-card border border-gray-200 p-6">
+        <h3 className="text-heading-lg font-semibold text-gray-900 mb-4">Platform Commission</h3>
         <div className="max-w-md">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Commission Percentage (%)</label>
+          <label className="block text-label-lg font-medium text-gray-700 mb-1">Commission Percentage (%)</label>
           <input
             type="number"
             step="0.1"
             value={settings.platformCommission || 0}
             onChange={(e) => setSettings({ ...settings, platformCommission: parseFloat(e.target.value) })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
           />
         </div>
       </div>
@@ -228,71 +228,71 @@ const AdminControlPanel = () => {
 
   const renderLimitsTab = () => (
     <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Default User Limits</h3>
+      <div className="bg-white rounded-lg shadow-card border border-gray-200 p-6">
+        <h3 className="text-heading-lg font-semibold text-gray-900 mb-4">Default User Limits</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Max Filings Per Month</label>
+            <label className="block text-label-lg font-medium text-gray-700 mb-1">Max Filings Per Month</label>
             <input
               type="number"
               value={settings.maxFilingsPerUserMonth || 0}
               onChange={(e) => setSettings({ ...settings, maxFilingsPerUserMonth: parseInt(e.target.value) })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Max Filings Per Year</label>
+            <label className="block text-label-lg font-medium text-gray-700 mb-1">Max Filings Per Year</label>
             <input
               type="number"
               value={settings.maxFilingsPerUserYear || 0}
               onChange={(e) => setSettings({ ...settings, maxFilingsPerUserYear: parseInt(e.target.value) })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
             />
           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg shadow-card border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Individual User Limits</h3>
+          <h3 className="text-heading-lg font-semibold text-gray-900">Individual User Limits</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CA Firm</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Monthly Limit</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Yearly Limit</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Usage</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th className="px-6 py-3 text-left text-label-sm font-medium text-gray-500 uppercase tracking-wider">User</th>
+                <th className="px-6 py-3 text-left text-label-sm font-medium text-gray-500 uppercase tracking-wider">CA Firm</th>
+                <th className="px-6 py-3 text-left text-label-sm font-medium text-gray-500 uppercase tracking-wider">Monthly Limit</th>
+                <th className="px-6 py-3 text-left text-label-sm font-medium text-gray-500 uppercase tracking-wider">Yearly Limit</th>
+                <th className="px-6 py-3 text-left text-label-sm font-medium text-gray-500 uppercase tracking-wider">Current Usage</th>
+                <th className="px-6 py-3 text-left text-label-sm font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {userLimits.map((limit) => (
                 <tr key={limit.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{limit.userName}</div>
-                    <div className="text-sm text-gray-500">ID: {limit.userId}</div>
+                    <div className="text-body-md font-medium text-gray-900">{limit.userName}</div>
+                    <div className="text-body-md text-gray-500">ID: {limit.userId}</div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-body-md text-gray-900">
                     {limit.tenantName}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-body-md text-gray-900">
                     {limit.maxFilingsPerMonth}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-body-md text-gray-900">
                     {limit.maxFilingsPerYear}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    <div className="text-sm">{limit.currentMonthFilings}/{limit.maxFilingsPerMonth} (month)</div>
-                    <div className="text-sm text-gray-500">{limit.currentYearFilings}/{limit.maxFilingsPerYear} (year)</div>
+                  <td className="px-6 py-4 whitespace-nowrap text-body-md text-gray-900">
+                    <div className="text-body-md">{limit.currentMonthFilings}/{limit.maxFilingsPerMonth} (month)</div>
+                    <div className="text-body-md text-gray-500">{limit.currentYearFilings}/{limit.maxFilingsPerYear} (year)</div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button className="text-blue-600 hover:text-blue-900 mr-3">
+                  <td className="px-6 py-4 whitespace-nowrap text-body-md font-medium">
+                    <button className="text-orange-600 hover:text-orange-700 mr-3">
                       <Edit className="h-4 w-4" />
                     </button>
-                    <button className="text-green-600 hover:text-green-900">
+                    <button className="text-info-600 hover:text-info-700">
                       <Eye className="h-4 w-4" />
                     </button>
                   </td>
@@ -307,53 +307,53 @@ const AdminControlPanel = () => {
 
   const renderCaFirmsTab = () => (
     <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg shadow-card border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">CA Firms Management</h3>
+          <h3 className="text-heading-lg font-semibold text-gray-900">CA Firms Management</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Firm Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Billing Mode</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Commission</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Activity</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th className="px-6 py-3 text-left text-label-sm font-medium text-gray-500 uppercase tracking-wider">Firm Name</th>
+                <th className="px-6 py-3 text-left text-label-sm font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-label-sm font-medium text-gray-500 uppercase tracking-wider">Billing Mode</th>
+                <th className="px-6 py-3 text-left text-label-sm font-medium text-gray-500 uppercase tracking-wider">Commission</th>
+                <th className="px-6 py-3 text-left text-label-sm font-medium text-gray-500 uppercase tracking-wider">Last Activity</th>
+                <th className="px-6 py-3 text-left text-label-sm font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {caFirms.map((firm) => (
                 <tr key={firm.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{firm.name}</div>
-                    <div className="text-sm text-gray-500">{firm.email}</div>
+                    <div className="text-body-md font-medium text-gray-900">{firm.name}</div>
+                    <div className="text-body-md text-gray-500">{firm.email}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      firm.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-label-sm font-medium ${
+                      firm.status === 'active' ? 'bg-success-50 text-success-600' : 'bg-error-50 text-error-600'
                     }`}>
                       {firm.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-body-md text-gray-900">
                     {firm.billingMode.replace('_', ' ')}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-body-md text-gray-900">
                     {firm.commissionPercentage}%
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-body-md text-gray-900">
                     {new Date(firm.lastActivity).toLocaleDateString()}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button className="text-blue-600 hover:text-blue-900 mr-3">
+                  <td className="px-6 py-4 whitespace-nowrap text-body-md font-medium">
+                    <button className="text-orange-600 hover:text-orange-700 mr-3">
                       <Edit className="h-4 w-4" />
                     </button>
-                    <button className="text-green-600 hover:text-green-900 mr-3">
+                    <button className="text-info-600 hover:text-info-900 mr-3">
                       <Eye className="h-4 w-4" />
                     </button>
-                    <button className="text-red-600 hover:text-red-900">
+                    <button className="text-error-600 hover:text-error-900">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </td>
@@ -368,13 +368,13 @@ const AdminControlPanel = () => {
 
   const renderPlatformTab = () => (
     <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Platform Features</h3>
+      <div className="bg-white rounded-lg shadow-card border border-gray-200 p-6">
+        <h3 className="text-heading-lg font-semibold text-gray-900 mb-4">Platform Features</h3>
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <label className="text-sm font-medium text-gray-700">Auto-create Service Tickets</label>
-              <p className="text-sm text-gray-500">Automatically create service tickets when users start filing</p>
+              <label className="text-label-lg font-medium text-gray-700">Auto-create Service Tickets</label>
+              <p className="text-body-md text-gray-500">Automatically create service tickets when users start filing</p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
@@ -383,14 +383,14 @@ const AdminControlPanel = () => {
                 onChange={(e) => setSettings({ ...settings, serviceTicketAutoCreate: e.target.checked })}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
             </label>
           </div>
 
           <div className="flex items-center justify-between">
             <div>
-              <label className="text-sm font-medium text-gray-700">CA-Assisted Filing Visibility</label>
-              <p className="text-sm text-gray-500">Make CA-assisted filings visible to users</p>
+              <label className="text-label-lg font-medium text-gray-700">CA-Assisted Filing Visibility</label>
+              <p className="text-body-md text-gray-500">Make CA-assisted filings visible to users</p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
@@ -399,7 +399,7 @@ const AdminControlPanel = () => {
                 onChange={(e) => setSettings({ ...settings, caAssistedFilingVisible: e.target.checked })}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
             </label>
           </div>
         </div>
@@ -424,17 +424,17 @@ const AdminControlPanel = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Admin Control Panel</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-display-md font-bold text-gray-900">Admin Control Panel</h1>
+          <p className="text-body-md text-gray-600 mt-1">
             Manage platform settings, billing, and user limits
           </p>
         </div>
 
         {/* Tabs */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+        <div className="bg-white rounded-lg shadow-card border border-gray-200 mb-6">
           <div className="border-b border-gray-200">
             <nav className="-mb-px flex space-x-8 px-6">
               {tabs.map((tab) => {
@@ -443,9 +443,9 @@ const AdminControlPanel = () => {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center ${
+                    className={`py-4 px-1 border-b-2 font-medium text-label-lg flex items-center ${
                       activeTab === tab.id
-                        ? 'border-blue-500 text-blue-600'
+                        ? 'border-orange-500 text-orange-600'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
@@ -471,7 +471,7 @@ const AdminControlPanel = () => {
             className={`flex items-center px-6 py-2 rounded-lg ${
               loading
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-orange-500 text-white hover:bg-orange-600'
             }`}
           >
             {loading ? (

@@ -1,451 +1,275 @@
 // =====================================================
-// TAX CALCULATOR COMPONENT - REAL-TIME TAX COMPUTATION
-// Enterprise-grade tax calculation with FY 2024-25 slabs
+// TAX CALCULATOR COMPONENT
+// Real-time tax computation for ITR
 // =====================================================
 
-import React, { useState, useEffect } from 'react';
-import {
-  Calculator,
-  AlertCircle,
-  CheckCircle,
-  RefreshCw,
-} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Calculator, TrendingUp, TrendingDown, IndianRupee } from 'lucide-react';
+import apiClient from '../../services/core/APIClient';
 
-const TaxCalculator = ({
-  filingData,
-  updateFilingData,
-  validationResults,
-  aiSuggestions,
-  onValidate,
-  isValidating,
-}) => {
+const TaxCalculator = ({ formData, selectedITR, onComputed, regime = 'old', assessmentYear = '2024-25' }) => {
   const [taxBreakdown, setTaxBreakdown] = useState(null);
+  const [isCalculating, setIsCalculating] = useState(false);
 
-  // Tax slabs for FY 2024-25
-  const taxSlabs = [
-    { min: 0, max: 250000, rate: 0, label: '0 - ₹2.5L' },
-    { min: 250000, max: 500000, rate: 0.05, label: '₹2.5L - ₹5L' },
-    { min: 500000, max: 1000000, rate: 0.20, label: '₹5L - ₹10L' },
-    { min: 1000000, max: Infinity, rate: 0.30, label: 'Above ₹10L' },
-  ];
+  useEffect(() => {
+    calculateTax();
+  }, [formData, selectedITR, regime, assessmentYear]);
 
-  // Calculate total income
-  const calculateTotalIncome = () => {
-    let totalIncome = 0;
+  const calculateTax = async () => {
+    setIsCalculating(true);
 
-    // Salary income
-    if (filingData.income.salary) {
-      const { basicSalary = 0, hra = 0, allowances = 0 } = filingData.income.salary;
-      totalIncome += basicSalary + hra + allowances;
-    }
-
-    // House property income
-    if (filingData.income.houseProperty) {
-      const { annualValue = 0, municipalTaxes = 0, interestOnLoan = 0, isSelfOccupied = false } = filingData.income.houseProperty;
-      const netAnnualValue = annualValue - municipalTaxes;
-
-      if (isSelfOccupied) {
-        totalIncome += Math.max(-200000, -interestOnLoan);
-      } else {
-        totalIncome += netAnnualValue - interestOnLoan;
-      }
-    }
-
-    // Other income
-    if (filingData.income.otherIncome) {
-      const { bankInterest = 0, fdInterest = 0, dividendIncome = 0, otherSources = 0 } = filingData.income.otherIncome;
-      totalIncome += bankInterest + fdInterest + dividendIncome + otherSources;
-    }
-
-    return Math.max(0, totalIncome);
-  };
-
-  // Calculate total deductions
-  const calculateTotalDeductions = () => {
-    let totalDeductions = 0;
-
-    // Section 80C
-    if (filingData.deductions.section80C) {
-      const section80C = filingData.deductions.section80C;
-      const total80C = (section80C.licPremium || 0) +
-                       (section80C.ppfContribution || 0) +
-                       (section80C.pfContribution || 0) +
-                       (section80C.elssInvestment || 0) +
-                       (section80C.tuitionFees || 0) +
-                       (section80C.homeLoanPrincipal || 0);
-      totalDeductions += Math.min(150000, total80C);
-    }
-
-    // Section 80D
-    if (filingData.deductions.section80D) {
-      const section80D = filingData.deductions.section80D;
-      const total80D = (section80D.medicalInsurance || 0) + (section80D.preventiveHealth || 0);
-      totalDeductions += Math.min(25000, total80D);
-    }
-
-    // HRA
-    if (filingData.deductions.hra) {
-      totalDeductions += filingData.deductions.hra.claimedExemption || 0;
-    }
-
-    // Section 80G
-    if (filingData.deductions.section80G) {
-      totalDeductions += filingData.deductions.section80G.donations || 0;
-    }
-
-    return totalDeductions;
-  };
-
-  // Calculate taxable income
-  const calculateTaxableIncome = () => {
-    const totalIncome = calculateTotalIncome();
-    const totalDeductions = calculateTotalDeductions();
-    return Math.max(0, totalIncome - totalDeductions);
-  };
-
-  // Calculate tax computation
-  const calculateTaxComputation = () => {
-    const taxableIncome = calculateTaxableIncome();
-    const slabCalculations = [];
-
-    let remainingIncome = taxableIncome;
-    let totalTax = 0;
-
-    taxSlabs.forEach((slab, index) => {
-      const slabIncome = Math.min(remainingIncome, slab.max - slab.min);
-      const slabTax = slabIncome * slab.rate;
-
-      slabCalculations.push({
-        ...slab,
-        income: slabIncome,
-        tax: slabTax,
-        index: index + 1,
+    try {
+      // Call backend tax computation API
+      const response = await apiClient.post('/itr/compute-tax', {
+        formData,
+        regime,
+        assessmentYear,
       });
 
-      totalTax += slabTax;
-      remainingIncome -= slabIncome;
+      if (response.data.success) {
+        const breakdown = response.data.data;
+        setTaxBreakdown(breakdown);
 
-      if (remainingIncome <= 0) return;
-    });
+        if (onComputed) {
+          onComputed(breakdown);
+        }
+      } else {
+        throw new Error(response.data.error || 'Tax calculation failed');
+      }
+    } catch (error) {
+      // Fallback to client-side calculation if API fails
+      const income = formData.income || {};
+      const deductions = formData.deductions || {};
+      const taxesPaid = formData.taxesPaid || {};
 
-    // Calculate rebate 87A
-    let rebate87A = 0;
-    if (taxableIncome <= 500000) {
-      rebate87A = Math.min(12500, totalTax);
+      // Calculate capital gains from structured data (ITR-2) or simple number
+      let capitalGainsTotal = 0;
+      if (income.capitalGains) {
+        if (typeof income.capitalGains === 'object' && income.capitalGains.stcgDetails && income.capitalGains.ltcgDetails) {
+          // ITR-2 structured format
+          const stcgTotal = (income.capitalGains.stcgDetails || []).reduce(
+            (sum, entry) => sum + (parseFloat(entry.gainAmount) || 0),
+            0,
+          );
+          const ltcgTotal = (income.capitalGains.ltcgDetails || []).reduce(
+            (sum, entry) => sum + (parseFloat(entry.gainAmount) || 0),
+            0,
+          );
+          capitalGainsTotal = stcgTotal + ltcgTotal;
+        } else {
+          // Simple number format (ITR-1 fallback)
+          capitalGainsTotal = parseFloat(income.capitalGains) || 0;
+        }
+      }
+
+      // Calculate house property income from structured data (ITR-2) or simple number
+      let housePropertyTotal = 0;
+      if (income.houseProperty) {
+        if (Array.isArray(income.houseProperty)) {
+          // Array format
+          housePropertyTotal = income.houseProperty.reduce((sum, prop) => {
+            return sum + (parseFloat(prop.netRentalIncome) || 0);
+          }, 0);
+        } else if (income.houseProperty.properties && Array.isArray(income.houseProperty.properties)) {
+          // ITR-2 structured format with properties array
+          housePropertyTotal = income.houseProperty.properties.reduce((sum, prop) => {
+            const rentalIncome = parseFloat(prop.annualRentalIncome) || 0;
+            const municipalTaxes = parseFloat(prop.municipalTaxes) || 0;
+            const interestOnLoan = parseFloat(prop.interestOnLoan) || 0;
+            const netIncome = Math.max(0, rentalIncome - municipalTaxes - interestOnLoan);
+            return sum + netIncome;
+          }, 0);
+        } else {
+          // Simple number format
+          housePropertyTotal = parseFloat(income.houseProperty) || 0;
+        }
+      }
+
+      // Calculate foreign income total
+      let foreignIncomeTotal = 0;
+      if (income.foreignIncome && income.foreignIncome.foreignIncomeDetails) {
+        foreignIncomeTotal = (income.foreignIncome.foreignIncomeDetails || []).reduce(
+          (sum, entry) => sum + (parseFloat(entry.amountInr) || 0),
+          0,
+        );
+      }
+
+      // Calculate director/partner income
+      const directorPartnerIncome = (income.directorPartner?.directorIncome || 0) +
+                                    (income.directorPartner?.partnerIncome || 0);
+
+      const grossTotalIncome =
+        (income.salary || 0) +
+        (income.businessIncome || 0) +
+        (income.professionalIncome || 0) +
+        capitalGainsTotal +
+        housePropertyTotal +
+        foreignIncomeTotal +
+        directorPartnerIncome +
+        (income.otherIncome || 0);
+
+      const totalDeductions = regime === 'new'
+        ? 50000 // Only standard deduction in new regime
+        : Math.min(deductions.section80C || 0, 150000) +
+          Math.min(deductions.section80D || 0, 25000) +
+          (deductions.section80G || 0) +
+          50000; // Standard deduction
+
+      const taxableIncome = Math.max(0, grossTotalIncome - totalDeductions);
+
+      // Simplified tax calculation (fallback)
+      let taxLiability = 0;
+      if (taxableIncome <= 250000) {
+        taxLiability = 0;
+      } else if (taxableIncome <= 500000) {
+        taxLiability = (taxableIncome - 250000) * 0.05;
+      } else if (taxableIncome <= 1000000) {
+        taxLiability = 12500 + (taxableIncome - 500000) * 0.20;
+      } else {
+        taxLiability = 112500 + (taxableIncome - 1000000) * 0.30;
+      }
+
+      const cess = taxLiability * 0.04;
+      const totalTaxLiability = taxLiability + cess;
+      const totalTaxesPaid =
+        (taxesPaid.tds || 0) +
+        (taxesPaid.advanceTax || 0) +
+        (taxesPaid.selfAssessmentTax || 0);
+      const refundOrPayable = totalTaxesPaid - totalTaxLiability;
+
+      const breakdown = {
+        grossTotalIncome,
+        totalDeductions,
+        taxableIncome,
+        taxLiability,
+        cess,
+        totalTaxLiability,
+        totalTaxesPaid,
+        refundOrPayable,
+        isRefund: refundOrPayable > 0,
+        regime,
+      };
+
+      setTaxBreakdown(breakdown);
+      if (onComputed) {
+        onComputed(breakdown);
+      }
+    } finally {
+      setIsCalculating(false);
     }
-
-    // Calculate surcharge (for high income)
-    let surcharge = 0;
-    const totalIncome = calculateTotalIncome();
-    if (totalIncome > 5000000) {
-      surcharge = totalTax * 0.10;
-    }
-
-    // Calculate cess (4%)
-    const taxAfterRebateAndSurcharge = Math.max(0, totalTax - rebate87A + surcharge);
-    const cess = taxAfterRebateAndSurcharge * 0.04;
-
-    const finalTax = taxAfterRebateAndSurcharge + cess;
-
-    // Calculate net payable/refund
-    const tdsDeducted = filingData.income.salary?.tdsDeducted || 0;
-    const advanceTax = filingData.income.advanceTax || 0;
-    const totalTaxPaid = tdsDeducted + advanceTax;
-
-    let netRefund = 0;
-    let netPayable = 0;
-
-    if (totalTaxPaid > finalTax) {
-      netRefund = totalTaxPaid - finalTax;
-    } else {
-      netPayable = finalTax - totalTaxPaid;
-    }
-
-    const computation = {
-      totalIncome: calculateTotalIncome(),
-      totalDeductions: calculateTotalDeductions(),
-      taxableIncome,
-      slabCalculations,
-      totalTax,
-      rebate87A,
-      surcharge,
-      cess,
-      finalTax,
-      tdsDeducted,
-      advanceTax,
-      totalTaxPaid,
-      netRefund,
-      netPayable,
-    };
-
-    setTaxBreakdown(computation);
-
-    // Update filing data with tax computation
-    updateFilingData({
-      taxComputation: {
-        totalIncome: computation.totalIncome,
-        taxableIncome: computation.taxableIncome,
-        totalTax: computation.finalTax,
-        tdsDeducted: computation.tdsDeducted,
-        advanceTax: computation.advanceTax,
-        netRefund: computation.netRefund,
-        netPayable: computation.netPayable,
-      },
-    });
-
-    return computation;
   };
 
-  // Auto-calculate when data changes
-  useEffect(() => {
-    calculateTaxComputation();
-  }, [filingData.income, filingData.deductions, calculateTaxComputation]);
+  if (isCalculating) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="text-center">
+          <Calculator className="w-8 h-8 animate-pulse text-blue-600 mx-auto mb-2" />
+          <p className="text-sm text-gray-600">Calculating tax...</p>
+        </div>
+      </div>
+    );
+  }
 
-  const totalIncome = calculateTotalIncome();
-  const totalDeductions = calculateTotalDeductions();
-  const taxableIncome = calculateTaxableIncome();
+  if (!taxBreakdown) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        <p>Enter income and deduction details to calculate tax</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="dashboard-card-burnblack p-4">
-        <div className="flex items-center space-x-3 mb-4">
-          <div className="p-2 rounded-lg bg-burnblack-gold bg-opacity-20">
-            <Calculator className="h-6 w-6 text-burnblack-gold" />
+    <div className="space-y-4">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-gray-600">Gross Total Income</span>
+            <IndianRupee className="w-4 h-4 text-blue-600" />
           </div>
-          <div>
-            <h2 className="text-xl font-semibold text-burnblack-black">Tax Computation</h2>
-            <p className="text-sm text-neutral-500">
-              Real-time tax calculation with FY 2024-25 slabs
-            </p>
-          </div>
+          <p className="text-2xl font-bold text-gray-900">
+            ₹{taxBreakdown.grossTotalIncome.toLocaleString('en-IN')}
+          </p>
         </div>
 
-        {/* Recalculate Button */}
-        <button
-          onClick={calculateTaxComputation}
-          className="flex items-center space-x-2 px-4 py-2 bg-burnblack-gold text-white rounded-lg hover:bg-burnblack-gold-dark transition-colors"
-        >
-          <RefreshCw className="h-4 w-4" />
-          <span>Recalculate</span>
-        </button>
-      </div>
-
-      {/* Income Summary */}
-      <div className="dashboard-card-burnblack p-4">
-        <h3 className="text-lg font-semibold text-burnblack-black mb-4">Income Summary</h3>
-
-        <div className="space-y-3">
-          <div className="flex justify-between">
-            <span className="text-sm text-neutral-600">Total Income</span>
-            <span className="text-sm font-semibold text-burnblack-black">
-              ₹{totalIncome.toLocaleString()}
-            </span>
+        <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-gray-600">Total Deductions</span>
+            <TrendingDown className="w-4 h-4 text-green-600" />
           </div>
+          <p className="text-2xl font-bold text-gray-900">
+            ₹{taxBreakdown.totalDeductions.toLocaleString('en-IN')}
+          </p>
+        </div>
 
-          <div className="flex justify-between">
-            <span className="text-sm text-neutral-600">Total Deductions</span>
-            <span className="text-sm font-semibold text-burnblack-black">
-              ₹{totalDeductions.toLocaleString()}
-            </span>
+        <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-gray-600">Taxable Income</span>
+            <Calculator className="w-4 h-4 text-purple-600" />
           </div>
-
-          <div className="border-t border-neutral-200 pt-3">
-            <div className="flex justify-between">
-              <span className="text-sm font-semibold text-burnblack-black">Taxable Income</span>
-              <span className="text-lg font-bold text-burnblack-gold">
-                ₹{taxableIncome.toLocaleString()}
-              </span>
-            </div>
-          </div>
+          <p className="text-2xl font-bold text-gray-900">
+            ₹{taxBreakdown.taxableIncome.toLocaleString('en-IN')}
+          </p>
         </div>
       </div>
 
-      {/* Tax Slabs Breakdown */}
-      {taxBreakdown && (
-        <div className="dashboard-card-burnblack p-4">
-          <h3 className="text-lg font-semibold text-burnblack-black mb-4">Tax Slabs Breakdown</h3>
+      {/* Tax Breakdown */}
+      <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+        <h4 className="font-semibold text-gray-900 mb-3">Tax Breakdown</h4>
 
-          <div className="space-y-3">
-            {taxBreakdown.slabCalculations.map((slab, index) => (
-              <div key={index} className="flex justify-between items-center p-3 bg-neutral-50 rounded-lg">
-                <div>
-                  <span className="text-sm font-medium text-neutral-600">{slab.label}</span>
-                  <p className="text-xs text-neutral-500">
-                    {slab.rate * 100}% on ₹{slab.income.toLocaleString()}
-                  </p>
-                </div>
-                <span className="text-sm font-semibold text-burnblack-black">
-                  ₹{slab.tax.toLocaleString()}
-                </span>
-              </div>
-            ))}
-          </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-gray-600">Tax on Income</span>
+          <span className="font-semibold text-gray-900">
+            ₹{taxBreakdown.taxLiability.toLocaleString('en-IN')}
+          </span>
         </div>
-      )}
 
-      {/* Tax Calculation Details */}
-      {taxBreakdown && (
-        <div className="dashboard-card-burnblack p-4">
-          <h3 className="text-lg font-semibold text-burnblack-black mb-4">Tax Calculation</h3>
+        <div className="flex justify-between text-sm">
+          <span className="text-gray-600">Cess (4%)</span>
+          <span className="font-semibold text-gray-900">
+            ₹{taxBreakdown.cess.toLocaleString('en-IN')}
+          </span>
+        </div>
 
-          <div className="space-y-3">
-            <div className="flex justify-between">
-              <span className="text-sm text-neutral-600">Basic Tax</span>
-              <span className="text-sm font-semibold text-burnblack-black">
-                ₹{taxBreakdown.totalTax.toLocaleString()}
-              </span>
-            </div>
+        <div className="border-t border-gray-300 pt-2 flex justify-between">
+          <span className="font-semibold text-gray-900">Total Tax Liability</span>
+          <span className="font-bold text-gray-900">
+            ₹{taxBreakdown.totalTaxLiability.toLocaleString('en-IN')}
+          </span>
+        </div>
 
-            {taxBreakdown.rebate87A > 0 && (
-              <div className="flex justify-between">
-                <span className="text-sm text-neutral-600">Rebate 87A</span>
-                <span className="text-sm font-semibold text-success-600">
-                  -₹{taxBreakdown.rebate87A.toLocaleString()}
-                </span>
-              </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-gray-600">Taxes Already Paid</span>
+          <span className="font-semibold text-gray-900">
+            ₹{taxBreakdown.totalTaxesPaid.toLocaleString('en-IN')}
+          </span>
+        </div>
+      </div>
+
+      {/* Refund/Payable */}
+      <div className={`rounded-lg p-4 border-2 ${
+        taxBreakdown.isRefund
+          ? 'bg-green-50 border-green-200'
+          : 'bg-red-50 border-red-200'
+      }`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            {taxBreakdown.isRefund ? (
+              <TrendingUp className="w-5 h-5 text-green-600" />
+            ) : (
+              <TrendingDown className="w-5 h-5 text-red-600" />
             )}
-
-            {taxBreakdown.surcharge > 0 && (
-              <div className="flex justify-between">
-                <span className="text-sm text-neutral-600">Surcharge</span>
-                <span className="text-sm font-semibold text-burnblack-black">
-                  ₹{taxBreakdown.surcharge.toLocaleString()}
-                </span>
-              </div>
-            )}
-
-            <div className="flex justify-between">
-              <span className="text-sm text-neutral-600">Cess (4%)</span>
-              <span className="text-sm font-semibold text-burnblack-black">
-                ₹{taxBreakdown.cess.toLocaleString()}
-              </span>
-            </div>
-
-            <div className="border-t border-neutral-200 pt-3">
-              <div className="flex justify-between">
-                <span className="text-sm font-semibold text-burnblack-black">Total Tax</span>
-                <span className="text-lg font-bold text-burnblack-gold">
-                  ₹{taxBreakdown.finalTax.toLocaleString()}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TDS and Advance Tax */}
-      {taxBreakdown && (
-        <div className="dashboard-card-burnblack p-4">
-          <h3 className="text-lg font-semibold text-burnblack-black mb-4">Tax Already Paid</h3>
-
-          <div className="space-y-3">
-            <div className="flex justify-between">
-              <span className="text-sm text-neutral-600">TDS Deducted</span>
-              <span className="text-sm font-semibold text-burnblack-black">
-                ₹{taxBreakdown.tdsDeducted.toLocaleString()}
-              </span>
-            </div>
-
-            <div className="flex justify-between">
-              <span className="text-sm text-neutral-600">Advance Tax</span>
-              <span className="text-sm font-semibold text-burnblack-black">
-                ₹{taxBreakdown.advanceTax.toLocaleString()}
-              </span>
-            </div>
-
-            <div className="border-t border-neutral-200 pt-3">
-              <div className="flex justify-between">
-                <span className="text-sm font-semibold text-burnblack-black">Total Tax Paid</span>
-                <span className="text-sm font-semibold text-burnblack-black">
-                  ₹{taxBreakdown.totalTaxPaid.toLocaleString()}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Final Result */}
-      {taxBreakdown && (
-        <div className="dashboard-card-burnblack p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              {taxBreakdown.netRefund > 0 ? (
-                <CheckCircle className="h-6 w-6 text-success-600" />
-              ) : (
-                <AlertCircle className="h-6 w-6 text-error-600" />
-              )}
-              <span className="text-lg font-semibold text-burnblack-black">
-                {taxBreakdown.netRefund > 0 ? 'Refund Due' : 'Tax Payable'}
-              </span>
-            </div>
-            <span className={`text-2xl font-bold ${
-              taxBreakdown.netRefund > 0 ? 'text-success-600' : 'text-error-600'
-            }`}>
-              ₹{Math.abs(taxBreakdown.netRefund || taxBreakdown.netPayable).toLocaleString()}
+            <span className="font-semibold text-gray-900">
+              {taxBreakdown.isRefund ? 'Refund Due' : 'Tax Payable'}
             </span>
           </div>
-
-          {taxBreakdown.netRefund > 0 && (
-            <p className="text-sm text-neutral-500 mt-2">
-              Refund will be processed within 15-30 days after filing
-            </p>
-          )}
-
-          {taxBreakdown.netPayable > 0 && (
-            <p className="text-sm text-neutral-500 mt-2">
-              Pay the tax before filing your return
-            </p>
-          )}
+          <span className={`text-2xl font-bold ${
+            taxBreakdown.isRefund ? 'text-green-700' : 'text-red-700'
+          }`}>
+            {taxBreakdown.isRefund ? '+' : '-'}₹{Math.abs(taxBreakdown.refundOrPayable).toLocaleString('en-IN')}
+          </span>
         </div>
-      )}
-
-      {/* Validation Summary */}
-      {validationResults.length > 0 && (
-        <div className="dashboard-card-burnblack p-4">
-          <h3 className="text-sm font-semibold text-burnblack-black mb-3">Validation Results</h3>
-          <div className="space-y-2">
-            {validationResults.map((result, index) => (
-              <div key={index} className={`flex items-center space-x-2 text-sm ${
-                result.severity === 'error' ? 'text-error-600' : 'text-warning-600'
-              }`}>
-                {result.severity === 'error' ? (
-                  <AlertCircle className="h-4 w-4" />
-                ) : (
-                  <AlertCircle className="h-4 w-4" />
-                )}
-                <span>{result.error}</span>
-                {result.suggestion && (
-                  <span className="text-neutral-500">- {result.suggestion}</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* AI Suggestions */}
-      {aiSuggestions.length > 0 && (
-        <div className="dashboard-card-burnblack p-4">
-          <h3 className="text-sm font-semibold text-burnblack-black mb-3">AI Suggestions</h3>
-          <div className="space-y-3">
-            {aiSuggestions.map((suggestion, index) => (
-              <div key={index} className="p-3 bg-burnblack-gold bg-opacity-10 rounded-lg">
-                <p className="text-sm text-burnblack-black">{suggestion.message}</p>
-                {suggestion.suggestion && (
-                  <p className="text-xs text-neutral-600 mt-1">{suggestion.suggestion}</p>
-                )}
-                {suggestion.action && (
-                  <button className="text-xs text-burnblack-gold font-medium mt-2 hover:underline">
-                    {suggestion.action}
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 };

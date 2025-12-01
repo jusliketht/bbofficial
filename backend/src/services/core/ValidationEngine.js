@@ -17,7 +17,7 @@ class ValidationEngine {
    */
   async loadRules() {
     try {
-      const rulesDir = path.join(__dirname, '../common/rules');
+      const rulesDir = path.join(__dirname, '../../common/rules');
       const ruleFiles = ['itr1.rules.json', 'itr2.rules.json', 'itr3.rules.json', 'itr4.rules.json'];
 
       for (const file of ruleFiles) {
@@ -190,6 +190,235 @@ class ValidationEngine {
         message: `Business rule validation error: ${error.message}`,
       };
     }
+  }
+
+  /**
+   * Perform cross-section validation
+   * @param {Object} formData - Complete form data
+   * @param {string} itrType - ITR type
+   * @returns {Array} Array of validation errors
+   */
+  performCrossValidation(formData, itrType) {
+    const errors = [];
+
+    // Calculate totals
+    const totalIncome = this.calculateTotalIncome(formData);
+    const totalDeductions = this.calculateTotalDeductions(formData);
+
+    // Income vs Deductions validation
+    if (totalDeductions > totalIncome) {
+      errors.push({
+        field: 'deductions',
+        message: 'Total deductions cannot exceed total income',
+        severity: 'error',
+      });
+    }
+
+    // Salary vs HRA validation
+    const salary = formData.income?.salary || formData.income?.gross_salary || 0;
+    const hraReceived = formData.income?.hra_received || formData.income?.hra || 0;
+    const rentPaid = formData.income?.rent_paid || 0;
+    if (hraReceived > 0 && rentPaid === 0) {
+      errors.push({
+        field: 'income.rent_paid',
+        message: 'Rent paid is required when HRA is received',
+        severity: 'error',
+      });
+    }
+    if (hraReceived > salary * 0.5) {
+      errors.push({
+        field: 'income.hra',
+        message: 'HRA received cannot exceed 50% of salary',
+        severity: 'warning',
+      });
+    }
+
+    // TDS vs Income validation
+    const tdsOnSalary = formData.taxes_paid?.tds_salary || formData.taxesPaid?.tdsSalary || 0;
+    if (tdsOnSalary > 0 && salary === 0) {
+      errors.push({
+        field: 'taxes_paid.tds_salary',
+        message: 'TDS on salary cannot be declared without salary income',
+        severity: 'error',
+      });
+    }
+
+    // Bank Account vs Refund validation
+    const refundAmount = formData.tax_computation?.refund || formData.taxComputation?.refundAmount || 0;
+    const bankAccounts = formData.bank_details?.accounts || formData.bankDetails?.accounts || [];
+    if (refundAmount > 0 && bankAccounts.length === 0) {
+      errors.push({
+        field: 'bank_details',
+        message: 'Bank account details are required when refund is due',
+        severity: 'error',
+      });
+    }
+
+    return errors;
+  }
+
+  /**
+   * Calculate total income from form data
+   * @param {Object} formData - Form data
+   * @returns {number} Total income
+   */
+  calculateTotalIncome(formData) {
+    let total = 0;
+    const income = formData.income || {};
+    total += parseFloat(income.gross_salary || income.salary || 0);
+    total += parseFloat(income.rental_income || 0);
+    total += parseFloat(income.interest_income || 0);
+    total += parseFloat(income.dividend_income || 0);
+    total += parseFloat(income.capital_gains || 0);
+    total += parseFloat(income.other_sources || income.otherIncome || 0);
+    return total;
+  }
+
+  /**
+   * Calculate total deductions from form data
+   * @param {Object} formData - Form data
+   * @returns {number} Total deductions
+   */
+  calculateTotalDeductions(formData) {
+    let total = 0;
+    const deductions = formData.deductions || {};
+    total += parseFloat(deductions.section_80c || deductions.section80C || 0);
+    total += parseFloat(deductions.section_80d || deductions.section80D || 0);
+    total += parseFloat(deductions.section_80g || deductions.section80G || 0);
+    // Add other deductions as needed
+    return total;
+  }
+
+  /**
+   * Validate all form data with cross-section and business rules
+   * @param {Object} formData - Complete form data
+   * @param {string} itrType - ITR type
+   * @returns {Object} Complete validation result
+   */
+  validateAll(formData, itrType = 'itr1') {
+    const basicValidation = this.validate(itrType, formData);
+    const crossValidation = this.performCrossValidation(formData, itrType);
+
+    const allErrors = [...basicValidation.errors];
+    const allWarnings = [...basicValidation.warnings];
+
+    crossValidation.forEach(error => {
+      if (error.severity === 'error') {
+        allErrors.push(error.message);
+      } else {
+        allWarnings.push(error.message);
+      }
+    });
+
+    return {
+      isValid: allErrors.length === 0,
+      errors: allErrors,
+      warnings: allWarnings,
+      crossSectionErrors: crossValidation.filter(e => e.severity === 'error'),
+      crossSectionWarnings: crossValidation.filter(e => e.severity === 'warning'),
+    };
+  }
+
+  /**
+   * Validate ITR-specific business rules
+   * @param {string} itrType - ITR type (ITR-1, ITR-2, ITR-3, ITR-4)
+   * @param {Object} formData - Form data to validate
+   * @returns {Object} Validation result with errors and warnings
+   */
+  validateITRSpecific(itrType, formData) {
+    const errors = [];
+    const warnings = [];
+    const normalizedType = itrType.replace('-', '').toLowerCase();
+
+    // Get rules for this ITR type
+    const rules = this.rules.get(normalizedType);
+    if (!rules) {
+      return {
+        isValid: false,
+        errors: [`No validation rules found for ITR type: ${itrType}`],
+        warnings: [],
+      };
+    }
+
+    // Check restrictions
+    if (rules.restrictions) {
+      // ITR-1 restrictions
+      if (normalizedType === 'itr1') {
+        if (formData.income?.businessIncome && formData.income.businessIncome > 0) {
+          errors.push('ITR-1 does not allow business income. Use ITR-3 or ITR-4 instead.');
+        }
+        if (formData.income?.professionalIncome && formData.income.professionalIncome > 0) {
+          errors.push('ITR-1 does not allow professional income. Use ITR-3 instead.');
+        }
+        if (formData.income?.capitalGains && formData.income.capitalGains > 0) {
+          errors.push('ITR-1 does not allow capital gains. Use ITR-2 instead.');
+        }
+      }
+
+      // ITR-2 restrictions
+      if (normalizedType === 'itr2') {
+        if (formData.income?.businessIncome && formData.income.businessIncome > 0) {
+          errors.push('ITR-2 does not allow business income. Use ITR-3 or ITR-4 instead.');
+        }
+        if (formData.income?.professionalIncome && formData.income.professionalIncome > 0) {
+          errors.push('ITR-2 does not allow professional income. Use ITR-3 instead.');
+        }
+      }
+
+      // ITR-4 restrictions (presumptive only)
+      if (normalizedType === 'itr4') {
+        if (rules.restrictions.presumptiveOnly) {
+          const businessIncome = formData.income?.businessIncome || formData.income?.presumptiveBusiness || 0;
+          const professionalIncome = formData.income?.professionalIncome || formData.income?.presumptiveProfessional || 0;
+          
+          // Check if business income exceeds presumptive limit
+          if (businessIncome > 0 && businessIncome > 2000000) {
+            errors.push('ITR-4 business income cannot exceed ₹20 lakh. Use ITR-3 for higher business income.');
+          }
+          
+          // Check if professional income exceeds presumptive limit
+          if (professionalIncome > 0 && professionalIncome > 500000) {
+            errors.push('ITR-4 professional income cannot exceed ₹5 lakh. Use ITR-3 for higher professional income.');
+          }
+
+          // ITR-4 should not have detailed P&L
+          if (formData.businessIncome?.grossReceipts && formData.businessIncome.grossReceipts > 0) {
+            if (formData.businessIncome.expenses !== undefined || formData.businessIncome.purchases !== undefined) {
+              warnings.push('ITR-4 uses presumptive taxation. Detailed expenses are not required.');
+            }
+          }
+        }
+      }
+    }
+
+    // ITR-3 specific validations
+    if (normalizedType === 'itr3') {
+      // Validate business income structure if provided
+      if (formData.businessIncome) {
+        const grossReceipts = parseFloat(formData.businessIncome.grossReceipts || 0);
+        const expenses = parseFloat(formData.businessIncome.expenses || 0);
+        
+        if (grossReceipts > 0 && expenses > grossReceipts * 1.2) {
+          warnings.push('Business expenses exceed gross receipts by more than 20%. Please verify.');
+        }
+      }
+
+      // Validate professional income structure if provided
+      if (formData.professionalIncome) {
+        const fees = parseFloat(formData.professionalIncome.professionalFees || 0);
+        const expenses = parseFloat(formData.professionalIncome.expenses || 0);
+        
+        if (fees > 0 && expenses > fees * 0.9) {
+          warnings.push('Professional expenses exceed 90% of fees. Please verify.');
+        }
+      }
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+      warnings,
+    };
   }
 
   /**

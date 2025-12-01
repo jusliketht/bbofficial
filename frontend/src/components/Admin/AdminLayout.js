@@ -12,7 +12,7 @@ import {
   Users,
   FileText,
   MessageSquare,
-  DollarSign,
+  IndianRupee,
   Settings,
   LogOut,
   Menu,
@@ -46,7 +46,19 @@ const AdminLayout = ({ children }) => {
       name: 'User Management',
       href: '/admin/users',
       icon: Users,
-      current: location.pathname === '/admin/users',
+      current: location.pathname.startsWith('/admin/users'),
+    },
+    {
+      name: 'ITR Filings',
+      href: '/admin/filings',
+      icon: FileText,
+      current: location.pathname.startsWith('/admin/filings'),
+    },
+    {
+      name: 'Documents',
+      href: '/admin/documents',
+      icon: FileText,
+      current: location.pathname.startsWith('/admin/documents'),
     },
     {
       name: 'CA Firm Management',
@@ -69,7 +81,7 @@ const AdminLayout = ({ children }) => {
     {
       name: 'Pricing Control',
       href: '/admin/pricing',
-      icon: DollarSign,
+      icon: IndianRupee,
       current: location.pathname === '/admin/pricing',
     },
     {

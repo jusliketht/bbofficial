@@ -31,7 +31,7 @@ const Sidebar = ({ isCollapsed, onToggle, isMobile, onClose }) => {
     },
     {
       name: 'Start Filing',
-      path: '/itr/start',
+      path: '/itr/select-person',
       icon: FileText,
     },
     {
@@ -99,15 +99,36 @@ const Sidebar = ({ isCollapsed, onToggle, isMobile, onClose }) => {
         <div className="flex items-center justify-between h-14 sm:h-16 px-3 sm:px-4 border-b border-gray-200">
           {!isCollapsed && (
             <div className="flex items-center space-x-2">
-              <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-xs sm:text-sm">BB</span>
+              <div className="w-7 h-7 sm:w-8 sm:h-8 bg-burn-gradient rounded-lg flex items-center justify-center shadow-card relative">
+                <img
+                  src="/bb-logo.svg"
+                  alt="BurnBlack Logo"
+                  className="w-full h-full object-contain p-1"
+                  onError={(e) => {
+                    // Fallback to text if logo fails to load
+                    e.target.style.display = 'none';
+                    const fallback = e.target.parentElement.querySelector('.logo-fallback');
+                    if (fallback) fallback.style.display = 'block';
+                  }}
+                />
+                <span className="text-white font-bold text-xs sm:text-sm hidden logo-fallback absolute inset-0 flex items-center justify-center">BB</span>
               </div>
               <span className="text-base sm:text-lg font-semibold text-gray-900">BurnBlack</span>
             </div>
           )}
           {isCollapsed && (
-            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center mx-auto">
-              <span className="text-white font-bold text-xs sm:text-sm">BB</span>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-burn-gradient rounded-lg flex items-center justify-center mx-auto shadow-card">
+              <img
+                src="/bb-logo.svg"
+                alt="BurnBlack Logo"
+                className="w-full h-full object-contain p-1"
+                onError={(e) => {
+                  // Fallback to text if logo fails to load
+                  e.target.style.display = 'none';
+                  e.target.nextSibling.style.display = 'block';
+                }}
+              />
+              <span className="text-white font-bold text-xs sm:text-sm hidden">BB</span>
             </div>
           )}
           {!isMobile && (
@@ -140,14 +161,14 @@ const Sidebar = ({ isCollapsed, onToggle, isMobile, onClose }) => {
                       transition-all duration-200 text-sm sm:text-base
                       ${
                         active
-                          ? 'bg-blue-50 text-blue-700 font-medium'
+                          ? 'bg-orange-50 text-orange-700 font-medium'
                           : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
                       }
                       ${isCollapsed ? 'justify-center' : ''}
                     `}
                     title={isCollapsed ? item.name : ''}
                   >
-                    <Icon className={`h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 ${active ? 'text-blue-600' : ''}`} />
+                    <Icon className={`h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 ${active ? 'text-orange-600' : ''}`} />
                     {!isCollapsed && <span className="text-sm sm:text-base">{item.name}</span>}
                   </button>
                 </li>
@@ -160,7 +181,7 @@ const Sidebar = ({ isCollapsed, onToggle, isMobile, onClose }) => {
         {!isCollapsed && (
           <div className="p-4 border-t border-gray-200">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+              <div className="w-10 h-10 bg-burn-gradient rounded-full flex items-center justify-center shadow-card">
                 <span className="text-white text-sm font-medium">
                   {user?.fullName
                     ?.split(' ')

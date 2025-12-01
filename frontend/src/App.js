@@ -5,8 +5,6 @@
 
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Toaster } from 'react-hot-toast';
 
 // Core components
 import Layout from './components/Layout.js';
@@ -15,41 +13,72 @@ import HomeRedirect from './pages/HomeRedirect';
 
 // Auth components
 import LoginPage from './pages/Auth/LoginPage';
+import SignupPage from './pages/Auth/SignupPage';
+import MobileOTPSignup from './pages/Auth/MobileOTPSignup';
+import EmailVerification from './pages/Auth/EmailVerification';
+import MobileVerification from './pages/Auth/MobileVerification';
+import ForgotPassword from './pages/Auth/ForgotPassword';
+import ResetPassword from './pages/Auth/ResetPassword';
 import GoogleOAuthSuccess from './pages/Auth/GoogleOAuthSuccess';
 
 // CA Registration components
 import RegisterCAFirm from './pages/CA/RegisterCAFirm';
 import RegistrationSuccess from './pages/CA/RegistrationSuccess';
+import CAMarketplace from './pages/CA/Marketplace';
+import CAProfile from './pages/CA/CAProfile';
 
 // Admin components
 import AdminDashboard from './pages/Admin/AdminDashboard';
+import AdminUserManagement from './pages/Admin/AdminUserManagement';
+import AdminUserDetails from './pages/Admin/AdminUserDetails';
+import AdminFilings from './pages/Admin/AdminFilings';
+import AdminFilingDetails from './pages/Admin/AdminFilingDetails';
+import AdminDocuments from './pages/Admin/AdminDocuments';
 import AdminLayout from './components/Admin/AdminLayout';
 
 // CA Firm components
 import CAFirmAdminDashboard from './pages/Dashboard/CAFirmAdminDashboard';
 import CAStaffDashboard from './pages/Dashboard/CAStaffDashboard';
+import FirmDashboard from './pages/Firm/FirmDashboard';
+import ClientList from './pages/Firm/ClientList';
+import ClientOnboardingForm from './pages/Firm/ClientOnboardingForm';
+import CAReviewQueue from './pages/Firm/CAReviewQueue';
 
 // User pages
 import UserDashboard from './pages/Dashboard/UserDashboard';
 import StartFiling from './pages/ITR/StartFiling';
-import ITRFiling from './pages/ITR/ITRFiling';
-import DynamicFilingPage from './pages/ITR/DynamicFilingPage';
 import FilingHistory from './pages/ITR/FilingHistory';
+import FilingPersonSelector from './components/ITR/FilingPersonSelector';
+import ITRComputation from './pages/ITR/ITRComputation';
+import RefundTracking from './pages/ITR/RefundTracking';
+import DataSourceSelector from './components/ITR/DataSourceSelector';
+import PreviousYearSelector from './features/itr/components/previous-year-selector';
+import PreviousYearPreview from './features/itr/components/previous-year-preview';
+import PreviousYearReview from './features/itr/components/previous-year-review';
 import AddMembers from './pages/Members/AddMembers';
 import UserSettings from './pages/User/UserSettings';
 import ProfileSettings from './pages/User/ProfileSettings';
+import Preferences from './pages/Settings/Preferences';
+import NotificationsCenter from './pages/Notifications/NotificationsCenter';
 import Documents from './pages/User/Documents';
+import SessionManagement from './pages/User/SessionManagement';
+
+// Help pages
+import HelpCenter from './pages/Help/HelpCenter';
+import FAQs from './pages/Help/FAQs';
+import TaxGlossary from './pages/Help/TaxGlossary';
+import ContactSupport from './pages/Help/ContactSupport';
+import ArticleView from './pages/Help/ArticleView';
+import ReportBug from './pages/Help/ReportBug';
+import FeatureRequest from './pages/Help/FeatureRequest';
 import FinancialProfilePage from './pages/FinancialProfile/FinancialProfilePage';
 import ServiceTicketManagement from './pages/Service/ServiceTicketManagement';
+import ToolsPage from './pages/Tools/ToolsPage';
 // Design System Components (Development only)
 // import StyleGuide from './components/DesignSystem/StyleGuide'; // Temporarily disabled
 
 // CABot Page (Development/Testing)
 // import CABotPage from './pages/CABot/CABotPage'; // Temporarily disabled
-
-// Context providers
-import { AuthProvider } from './contexts/AuthContext';
-// import { CABotProvider } from './contexts/CABotContext'; // Temporarily disabled
 
 // Auth components
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -60,16 +89,6 @@ import ErrorBoundary from './components/ErrorBoundary';
 // Styles
 import './styles/GlobalStyles.css';
 
-// Create query client
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
-
 // Main App Component
 const AppContent = () => {
   return (
@@ -78,11 +97,35 @@ const AppContent = () => {
         {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/signup/mobile" element={<MobileOTPSignup />} />
+        <Route path="/email-verification" element={<EmailVerification />} />
+        <Route path="/mobile-verification" element={<MobileVerification />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/auth/google/success" element={<GoogleOAuthSuccess />} />
 
         {/* CA Registration Routes */}
         <Route path="/ca/register" element={<RegisterCAFirm />} />
         <Route path="/ca/registration-success" element={<RegistrationSuccess />} />
+
+        {/* CA Marketplace Routes (Public) */}
+        <Route
+          path="/ca/marketplace"
+          element={
+            <Layout>
+              <CAMarketplace />
+            </Layout>
+          }
+        />
+        <Route
+          path="/ca/:firmId"
+          element={
+            <Layout>
+              <CAProfile />
+            </Layout>
+          }
+        />
 
         {/* Protected Routes */}
         <Route element={<ProtectedRoute />}>
@@ -109,6 +152,46 @@ const AppContent = () => {
             }
           />
           <Route
+            path="/admin/users"
+            element={
+              <AdminLayout>
+                <AdminUserManagement />
+              </AdminLayout>
+            }
+          />
+          <Route
+            path="/admin/users/:userId"
+            element={
+              <AdminLayout>
+                <AdminUserDetails />
+              </AdminLayout>
+            }
+          />
+          <Route
+            path="/admin/filings"
+            element={
+              <AdminLayout>
+                <AdminFilings />
+              </AdminLayout>
+            }
+          />
+          <Route
+            path="/admin/filings/:filingId"
+            element={
+              <AdminLayout>
+                <AdminFilingDetails />
+              </AdminLayout>
+            }
+          />
+          <Route
+            path="/admin/documents"
+            element={
+              <AdminLayout>
+                <AdminDocuments />
+              </AdminLayout>
+            }
+          />
+          <Route
             path="/firm/dashboard"
             element={
               <AdminLayout>
@@ -127,6 +210,63 @@ const AppContent = () => {
 
           {/* ITR Filing Routes */}
           <Route
+            path="/itr/select-person"
+            element={
+              <Layout>
+                <FilingPersonSelector />
+              </Layout>
+            }
+          />
+          <Route
+            path="/itr/data-source"
+            element={
+              <Layout>
+                <DataSourceSelector />
+              </Layout>
+            }
+          />
+          <Route
+            path="/itr/computation"
+            element={
+              <Layout>
+                <ITRComputation />
+              </Layout>
+            }
+          />
+          <Route
+            path="/itr/filing/:filingId/*"
+            element={
+              <Layout>
+                <ITRComputation />
+              </Layout>
+            }
+          />
+          <Route
+            path="/itr/previous-year-selector"
+            element={
+              <Layout>
+                <PreviousYearSelector />
+              </Layout>
+            }
+          />
+          <Route
+            path="/itr/previous-year-preview"
+            element={
+              <Layout>
+                <PreviousYearPreview />
+              </Layout>
+            }
+          />
+          <Route
+            path="/itr/previous-year-review"
+            element={
+              <Layout>
+                <PreviousYearReview />
+              </Layout>
+            }
+          />
+          {/* Legacy route - redirects to select-person */}
+          <Route
             path="/itr/start"
             element={
               <Layout>
@@ -135,26 +275,18 @@ const AppContent = () => {
             }
           />
           <Route
-            path="/itr/filing"
-            element={
-              <Layout>
-                <ITRFiling />
-              </Layout>
-            }
-          />
-          <Route
-            path="/dynamic-filing/:id"
-            element={
-              <Layout>
-                <DynamicFilingPage />
-              </Layout>
-            }
-          />
-          <Route
             path="/filing-history"
             element={
               <Layout>
                 <FilingHistory />
+              </Layout>
+            }
+          />
+          <Route
+            path="/itr/refund-tracking"
+            element={
+              <Layout>
+                <RefundTracking />
               </Layout>
             }
           />
@@ -184,6 +316,80 @@ const AppContent = () => {
               </Layout>
             }
           />
+          <Route
+            path="/preferences"
+            element={
+              <Layout>
+                <Preferences />
+              </Layout>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <Layout>
+                <NotificationsCenter />
+              </Layout>
+            }
+          />
+          <Route
+            path="/sessions"
+            element={
+              <Layout>
+                <SessionManagement />
+              </Layout>
+            }
+          />
+          <Route
+            path="/financial-profile"
+            element={
+              <Layout>
+                <FinancialProfilePage />
+              </Layout>
+            }
+          />
+          <Route
+            path="/tools"
+            element={
+              <Layout>
+                <ToolsPage />
+              </Layout>
+            }
+          />
+
+          {/* Firm Management Routes */}
+          <Route
+            path="/firm/:firmId/dashboard"
+            element={
+              <Layout>
+                <FirmDashboard />
+              </Layout>
+            }
+          />
+          <Route
+            path="/firm/:firmId/clients"
+            element={
+              <Layout>
+                <ClientList />
+              </Layout>
+            }
+          />
+          <Route
+            path="/firm/:firmId/clients/new"
+            element={
+              <Layout>
+                <ClientOnboardingForm />
+              </Layout>
+            }
+          />
+          <Route
+            path="/firm/:firmId/review-queue"
+            element={
+              <Layout>
+                <CAReviewQueue />
+              </Layout>
+            }
+          />
 
           {/* CA Bot Route - Temporarily disabled */}
           {/* <Route
@@ -196,6 +402,64 @@ const AppContent = () => {
               </CABotProvider>
             }
           /> */}
+
+          {/* Help & Support Routes */}
+          <Route
+            path="/help"
+            element={
+              <Layout>
+                <HelpCenter />
+              </Layout>
+            }
+          />
+          <Route
+            path="/help/faqs"
+            element={
+              <Layout>
+                <FAQs />
+              </Layout>
+            }
+          />
+          <Route
+            path="/help/glossary"
+            element={
+              <Layout>
+                <TaxGlossary />
+              </Layout>
+            }
+          />
+              <Route
+                path="/help/contact"
+                element={
+                  <Layout>
+                    <ContactSupport />
+                  </Layout>
+                }
+              />
+              <Route
+                path="/help/articles/:articleId"
+                element={
+                  <Layout>
+                    <ArticleView />
+                  </Layout>
+                }
+              />
+              <Route
+                path="/help/report-bug"
+                element={
+                  <Layout>
+                    <ReportBug />
+                  </Layout>
+                }
+              />
+              <Route
+                path="/help/feature-request"
+                element={
+                  <Layout>
+                    <FeatureRequest />
+                  </Layout>
+                }
+              />
           </Route>
 
         {/* Catch all - redirect to landing page */}
@@ -211,21 +475,7 @@ const AppContent = () => {
 const App = () => {
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <AppContent />
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              duration: 4000,
-              style: {
-                background: '#363636',
-                color: '#fff',
-              },
-            }}
-          />
-        </AuthProvider>
-      </QueryClientProvider>
+      <AppContent />
     </ErrorBoundary>
   );
 };

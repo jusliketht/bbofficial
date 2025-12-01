@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import itrService from '../services/api/itrService';
+import toast from 'react-hot-toast';
 
 const useFilingList = () => {
   const [filings, setFilings] = useState([]);
@@ -21,100 +23,101 @@ const useFilingList = () => {
     setError(null);
 
     try {
-      // Mock API call - replace with actual API
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Build query parameters
+      const params = {};
+      if (currentFilters.status) {
+        params.status = currentFilters.status;
+      }
+      if (currentFilters.itrType) {
+        params.itrType = currentFilters.itrType;
+      }
+      if (currentFilters.year) {
+        params.assessmentYear = currentFilters.year;
+      }
+      if (currentFilters.page) {
+        params.page = currentFilters.page;
+      }
+      if (currentFilters.limit) {
+        params.limit = currentFilters.limit;
+      }
 
-      const mockFilings = [
-        {
-          id: 1,
-          taxpayerName: 'John Doe',
-          pan: 'ABCDE1234F',
-          ticketNumber: 'TKT001',
-          type: 'ITR-1',
-          status: 'completed',
-          itrType: 'ITR-1',
-          filingContext: 'individual',
-          assessmentYear: '2023-24',
-          year: '2023-24',
-          submittedAt: new Date(),
-          taxComputed: 15000,
-          taxSaved: 2500,
-        },
-        {
-          id: 2,
-          taxpayerName: 'Jane Smith',
-          pan: 'FGHIJ5678K',
-          ticketNumber: 'TKT002',
-          type: 'ITR-2',
-          status: 'pending',
-          itrType: 'ITR-2',
-          filingContext: 'individual',
-          assessmentYear: '2023-24',
-          year: '2023-24',
-          submittedAt: new Date(),
-          taxComputed: 25000,
-          taxSaved: 0,
-        },
-        {
-          id: 3,
-          taxpayerName: 'Business Corp',
-          pan: 'LMNOP9012Q',
-          ticketNumber: 'TKT003',
-          type: 'ITR-3',
-          status: 'draft',
-          itrType: 'ITR-3',
-          filingContext: 'business',
-          assessmentYear: '2023-24',
-          year: '2023-24',
-          submittedAt: new Date(),
-          taxComputed: 0,
-          taxSaved: 0,
-        },
-      ];
+      // Call real API
+      const response = await itrService.getUserITRs(params);
 
-      // Apply filters
-      let filteredFilings = mockFilings;
+      // Extract filings from response
+      let fetchedFilings = [];
+      if (response.filings) {
+        fetchedFilings = Array.isArray(response.filings) ? response.filings : [response.filings];
+      } else if (Array.isArray(response)) {
+        fetchedFilings = response;
+      } else if (response.data && Array.isArray(response.data)) {
+        fetchedFilings = response.data;
+      }
 
+      // Transform API response to match expected format
+      const transformedFilings = fetchedFilings.map(filing => ({
+        id: filing.id,
+        taxpayerName: filing.client?.name || filing.user?.name || 'N/A',
+        pan: filing.client?.pan || filing.user?.panNumber || 'N/A',
+        ticketNumber: filing.ticketNumber || `TKT${String(filing.id).padStart(3, '0')}`,
+        type: filing.itrType || filing.itr_type,
+        status: filing.status,
+        itrType: filing.itrType || filing.itr_type,
+        filingContext: filing.filingContext || 'individual',
+        assessmentYear: filing.assessmentYear || filing.assessment_year,
+        year: filing.assessmentYear || filing.assessment_year,
+        submittedAt: filing.submittedAt || filing.submitted_at,
+        createdAt: filing.createdAt || filing.created_at,
+        updatedAt: filing.updatedAt || filing.updated_at,
+        pausedAt: filing.pausedAt || filing.paused_at,
+        resumedAt: filing.resumedAt || filing.resumed_at,
+        taxComputed: filing.taxComputation?.finalTaxLiability || 0,
+        taxSaved: filing.taxComputation?.savings || 0,
+        invoice: filing.invoice,
+        client: filing.client,
+        assignedTo: filing.assignedTo,
+        reviewStatus: filing.reviewStatus || filing.review_status,
+      }));
+
+      // Apply client-side search filter if provided
+      let filteredFilings = transformedFilings;
       if (currentFilters.search) {
         const searchLower = currentFilters.search.toLowerCase();
-        filteredFilings = filteredFilings.filter(filing =>
+        filteredFilings = transformedFilings.filter(filing =>
           filing.taxpayerName.toLowerCase().includes(searchLower) ||
           filing.pan.toLowerCase().includes(searchLower) ||
           filing.ticketNumber.toLowerCase().includes(searchLower),
         );
       }
 
-      if (currentFilters.status) {
-        filteredFilings = filteredFilings.filter(filing =>
-          filing.status === currentFilters.status,
-        );
-      }
-
-      if (currentFilters.itrType) {
-        filteredFilings = filteredFilings.filter(filing =>
-          filing.itrType === currentFilters.itrType,
-        );
-      }
-
+      // Apply client-side context filter if provided
       if (currentFilters.context) {
         filteredFilings = filteredFilings.filter(filing =>
           filing.filingContext === currentFilters.context,
         );
       }
 
-      if (currentFilters.year) {
-        filteredFilings = filteredFilings.filter(filing =>
-          filing.assessmentYear === currentFilters.year,
-        );
-      }
-
       setFilings(filteredFilings);
     } catch (err) {
-      setError(err.message);
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to load filings';
+      setError(errorMessage);
+      setFilings([]); // Set empty array on error
+
+      // Show user-friendly error message
+      if (err.response?.status !== 401) {
+        // Don't show toast for 401 (unauthorized) - handled by auth interceptor
+        toast.error(errorMessage);
+      }
+
+      // Log error for debugging (only in development)
+      if (process.env.NODE_ENV === 'development') {
+        // eslint-disable-next-line no-console
+        console.error('Failed to fetch filings:', err);
+      }
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, []);
 
   // ✅ Stable setFilters function
   const stableSetFilters = useCallback((newFilters) => {

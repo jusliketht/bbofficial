@@ -822,4 +822,5 @@ class AISForm26ASService {
 
 // Export singleton instance
 export const aisForm26ASService = new AISForm26ASService();
+export { AISForm26ASService };
 export default aisForm26ASService;

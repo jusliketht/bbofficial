@@ -16,7 +16,7 @@ import {
   Calendar,
   FileText,
   Users,
-  DollarSign,
+  IndianRupee,
   Building2,
   Clock,
   CheckCircle,
@@ -91,7 +91,7 @@ const AdminReports = () => {
       id: 'revenue',
       name: 'Revenue Analysis',
       description: 'Financial performance and revenue tracking',
-      icon: DollarSign,
+      icon: IndianRupee,
       color: 'yellow',
     },
     {
@@ -152,7 +152,7 @@ const AdminReports = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
       </div>
     );
   }
@@ -243,7 +243,7 @@ const AdminReports = () => {
             <div className="flex items-end">
               <button
                 onClick={handleGenerateReport}
-                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                className="bg-orange-500 text-white px-6 py-2 rounded-lg hover:bg-orange-600 transition-colors flex items-center space-x-2"
               >
                 <RefreshCw className="h-4 w-4" />
                 <span>Generate</span>
@@ -260,7 +260,7 @@ const AdminReports = () => {
               onClick={() => setSelectedReport(type.id)}
               className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${
                 selectedReport === type.id
-                  ? 'border-blue-500 bg-blue-50'
+                  ? 'border-orange-500 bg-orange-50'
                   : 'border-gray-200 hover:border-gray-300'
               }`}
             >
@@ -286,7 +286,7 @@ const AdminReports = () => {
                 </div>
                 <div>
                   <h3 className="font-medium text-gray-900">{type.name}</h3>
-                  <p className="text-sm text-gray-500">{type.description}</p>
+                  <p className="text-body-md text-gray-500">{type.description}</p>
                 </div>
               </div>
             </div>
@@ -334,7 +334,7 @@ const AdminReports = () => {
 
             <div className="bg-gray-50 rounded-lg p-4">
               <div className="flex items-center">
-                <DollarSign className="h-8 w-8 text-purple-600" />
+                <IndianRupee className="h-8 w-8 text-purple-600" />
                 <div className="ml-3">
                   <p className="text-sm font-medium text-gray-600">Revenue</p>
                   <p className="text-2xl font-semibold text-gray-900">₹{report.revenue || 0}</p>

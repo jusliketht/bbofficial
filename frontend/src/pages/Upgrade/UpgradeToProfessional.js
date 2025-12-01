@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Crown, Building2, Users, Shield, CheckCircle, ArrowRight,
-  Star, Zap, Target, TrendingUp, DollarSign, Clock,
+  Star, Zap, Target, TrendingUp, IndianRupee, Clock,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
@@ -55,7 +55,7 @@ const UpgradeToProfessional = () => {
       color: 'text-orange-600',
     },
     {
-      icon: DollarSign,
+      icon: IndianRupee,
       title: 'Billing Management',
       description: 'Track invoices, payments, and client billing',
       color: 'text-red-600',

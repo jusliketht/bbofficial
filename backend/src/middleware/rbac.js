@@ -7,10 +7,12 @@ const enterpriseLogger = require('../utils/logger');
 
 // Role hierarchy for permission inheritance
 const ROLE_HIERARCHY = {
-  'SUPER_ADMIN': 5,
-  'PLATFORM_ADMIN': 4,
-  'CA_FIRM_ADMIN': 3,
-  'CA': 2,
+  'SUPER_ADMIN': 6,
+  'PLATFORM_ADMIN': 5,
+  'CA_FIRM_ADMIN': 4,
+  'CA': 3,
+  'REVIEWER': 2,
+  'PREPARER': 2,
   'END_USER': 1,
 };
 
@@ -29,11 +31,13 @@ const PERMISSIONS = {
   'ca_firms.delete': ['SUPER_ADMIN', 'PLATFORM_ADMIN'],
 
   // ITR Filing management
-  'filings.create': ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CA_FIRM_ADMIN', 'CA', 'END_USER'],
-  'filings.read': ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CA_FIRM_ADMIN', 'CA', 'END_USER'],
-  'filings.update': ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CA_FIRM_ADMIN', 'CA', 'END_USER'],
+  'filings.create': ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CA_FIRM_ADMIN', 'CA', 'PREPARER', 'REVIEWER', 'END_USER'],
+  'filings.read': ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CA_FIRM_ADMIN', 'CA', 'PREPARER', 'REVIEWER', 'END_USER'],
+  'filings.update': ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CA_FIRM_ADMIN', 'CA', 'PREPARER', 'REVIEWER', 'END_USER'],
   'filings.delete': ['SUPER_ADMIN', 'PLATFORM_ADMIN'],
-  'filings.submit': ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CA_FIRM_ADMIN', 'CA'],
+  'filings.submit': ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CA_FIRM_ADMIN', 'CA', 'REVIEWER'],
+  'filings.review': ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CA_FIRM_ADMIN', 'CA', 'REVIEWER'],
+  'filings.approve': ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CA_FIRM_ADMIN', 'CA', 'REVIEWER'],
 
   // Document management
   'documents.create': ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CA_FIRM_ADMIN', 'CA', 'END_USER'],
@@ -49,8 +53,11 @@ const PERMISSIONS = {
 
   // CA Firm specific
   'ca_firm.staff_manage': ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CA_FIRM_ADMIN'],
-  'ca_firm.clients_assign': ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CA_FIRM_ADMIN', 'CA'],
+  'ca_firm.clients_assign': ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CA_FIRM_ADMIN'],
+  'ca_firm.clients_view': ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CA_FIRM_ADMIN', 'CA', 'PREPARER', 'REVIEWER'],
   'ca_firm.billing_view': ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CA_FIRM_ADMIN'],
+  'ca_firm.queue_view': ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CA_FIRM_ADMIN', 'CA', 'REVIEWER'],
+  'ca_firm.queue_assign': ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'CA_FIRM_ADMIN'],
 };
 
 /**
@@ -196,8 +203,8 @@ const requireCAFirmAccess = (firmIdParam = 'firmId') => {
         return next();
       }
 
-      // CA firm admin and CA staff must belong to the requested firm
-      if (userRole === 'CA_FIRM_ADMIN' || userRole === 'CA') {
+      // CA firm admin and CA staff (CA, PREPARER, REVIEWER) must belong to the requested firm
+      if (['CA_FIRM_ADMIN', 'CA', 'PREPARER', 'REVIEWER'].includes(userRole)) {
         if (userCAFirmId !== requestedFirmId) {
           enterpriseLogger.warn('CA firm access denied: User does not belong to requested firm', {
             userId: req.user?.userId,

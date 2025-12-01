@@ -1,13 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { authService } from '../../services';
+import { useSearchParams, Link } from 'react-router-dom';
+import { AlertCircle, Clock } from 'lucide-react';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+const [searchParams] = useSearchParams();
   const { login } = useAuth();
+
+  // Check for error messages from URL params (e.g., OAuth errors)
+  useEffect(() => {
+    const errorParam = searchParams.get('error');
+    const messageParam = searchParams.get('message');
+
+    if (errorParam === 'oauth_rate_limit' || messageParam?.includes('too many requests')) {
+      setError('Google OAuth rate limit exceeded. Please wait 15-30 minutes before trying again.');
+    } else if (errorParam === 'oauth_failed') {
+      setError(messageParam || 'Google OAuth authentication failed. Please try again.');
+    } else if (messageParam) {
+      setError(decodeURIComponent(messageParam));
+    }
+  }, [searchParams]);
 
   const handleManualLogin = async (e) => {
     e.preventDefault();
@@ -15,11 +32,13 @@ const LoginPage = () => {
     setError('');
 
     try {
-      const { user, accessToken, refreshToken } = await authService.login({ email, password });
-      login(user, accessToken, refreshToken);
+      const result = await login({ email, password });
+      if (!result.success) {
+        setError(result.message || 'Login failed. Please try again.');
+      }
     } catch (error) {
-      console.error('Login failed:', error);
-      setError(error.response?.data?.message || 'Login failed. Please try again.');
+      console.error('Login error:', error);
+      setError(error.response?.data?.error || error.response?.data?.message || error.message || 'Login failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -33,14 +52,31 @@ const LoginPage = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-black">
             Sign in to your account
           </h2>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleManualLogin}>
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md">
-              {error}
+            <div className={`px-4 py-3 rounded-md flex items-start space-x-3 ${
+              error.includes('rate limit') || error.includes('too many requests')
+                ? 'bg-yellow-50 border border-yellow-200 text-yellow-800'
+                : 'bg-red-50 border border-red-200 text-red-600'
+            }`}>
+              {error.includes('rate limit') || error.includes('too many requests') ? (
+                <Clock className="h-5 w-5 mt-0.5 flex-shrink-0" />
+              ) : (
+                <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
+              )}
+              <div className="flex-1">
+                <p className="font-medium">{error.includes('rate limit') || error.includes('too many requests') ? 'Rate Limit Exceeded' : 'Authentication Error'}</p>
+                <p className="text-sm mt-1">{error}</p>
+                {(error.includes('rate limit') || error.includes('too many requests')) && (
+                  <p className="text-xs mt-2 opacity-80">
+                    This is a temporary restriction from Google. Please wait before trying again.
+                  </p>
+                )}
+              </div>
             </div>
           )}
           <div className="rounded-md shadow-sm -space-y-px">
@@ -54,7 +90,7 @@ const LoginPage = () => {
                 type="email"
                 autoComplete="email"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm"
                 placeholder="Email address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -70,7 +106,7 @@ const LoginPage = () => {
                 type="password"
                 autoComplete="current-password"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-orange-500 focus:border-orange-500 focus:z-10 sm:text-sm"
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -82,7 +118,7 @@ const LoginPage = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-orange-500 hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50"
             >
               {isLoading ? 'Signing in...' : 'Sign in'}
             </button>
@@ -125,6 +161,23 @@ const LoginPage = () => {
                 <span className="ml-2">Continue with Google</span>
               </button>
             </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="text-sm">
+              <Link to="/forgot-password" className="font-medium text-orange-600 hover:text-orange-500">
+                Forgot password?
+              </Link>
+            </div>
+          </div>
+
+          <div className="text-center">
+            <p className="text-body-sm text-gray-600">
+              Don't have an account?{' '}
+              <Link to="/signup" className="font-medium text-orange-600 hover:text-orange-500">
+                Sign up
+              </Link>
+            </p>
           </div>
         </form>
       </div>

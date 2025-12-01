@@ -18,6 +18,7 @@ import {
   Calculator,
   CreditCard,
 } from 'lucide-react';
+import { ShareDraftModal } from '../../features/itr';
 
 const FinalActions = ({
   filingData,
@@ -34,6 +35,7 @@ const FinalActions = ({
   filingStatus = 'ready',
 }) => {
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   const handleSubmit = () => {
     if (validationErrors.length > 0) {
@@ -185,7 +187,13 @@ const FinalActions = ({
           <ActionButton
             icon={Share}
             label="Share"
-            onClick={onShare}
+            onClick={() => {
+              if (onShare) {
+                onShare();
+              } else {
+                setShowShareModal(true);
+              }
+            }}
             variant="secondary"
           />
         </div>
@@ -301,6 +309,18 @@ const FinalActions = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Share Draft Modal */}
+      {filingData?.id && (
+        <ShareDraftModal
+          filingId={filingData.id}
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          onSuccess={() => {
+            setShowShareModal(false);
+          }}
+        />
       )}
     </div>
   );

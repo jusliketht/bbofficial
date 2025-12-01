@@ -10,7 +10,7 @@ module.exports = {
       // ENTERPRISE COLOR SYSTEM - PIXEL PERFECT CONSISTENCY
       // =====================================================
       colors: {
-        // BurnBlack Primary Palette
+        // BurnBlack Primary Palette (keeping for backward compatibility)
         burnblack: {
           50: '#f5f5f5',   // White/Neutral
           100: '#e8e8e8',  // Light Grey
@@ -24,13 +24,29 @@ module.exports = {
           900: '#000000',  // Pure Black
         },
         
-        // Gold Accent - Wealth & Transformation
+        // BLAZE ORANGE (Primary Action Color) - UI.md Design System
+        orange: {
+          50: '#FFF8F2',   // Subtle highlight background
+          100: '#FFF0E5',  // Light background tint
+          400: '#FF8533',  // Disabled state (with opacity)
+          500: '#FF6B00',  // Primary buttons, key CTAs
+          600: '#E55F00',  // Hover state
+          700: '#CC5500',  // Active/pressed state
+        },
+        
+        // GOLDEN YELLOW (Success, Positive Values) - UI.md Design System
         gold: {
-          50: '#fffdf7',   // Light Gold
-          100: '#fff9e6',  // Light Gold
+          50: '#FFFCF2',   // Subtle success tint
+          100: '#FFF9E5',  // Success background
+          400: '#FFC933',  // Lighter variant
+          500: '#FFB800',  // Success highlights, savings shown
+          600: '#E5A600',  // Hover
+        },
+        
+        // Legacy Gold (keeping for backward compatibility)
+        goldLegacy: {
           200: '#fff2cc',  // Light Gold
           300: '#ffe699',  // Light Gold
-          400: '#ffd966',  // Medium Gold
           500: '#d4af37',  // MAIN GOLD - Wealth, transformation, premium
           600: '#b8941f',  // Dark Gold
           700: '#9c7a17',  // Dark Gold
@@ -94,6 +110,57 @@ module.exports = {
           900: '#154360',  // Dark Blue
         },
         
+        // BLACK SCALE - UI.md Design System
+        black: {
+          500: '#737373',  // Placeholder text
+          600: '#525252',  // Secondary text (dark mode)
+          700: '#404040',  // Borders (dark mode)
+          800: '#262626',  // Secondary backgrounds (dark mode)
+          900: '#171717',  // Card backgrounds (dark mode)
+          950: '#0A0A0A',  // True black, headers, primary text
+        },
+        
+        // SEMANTIC COLORS - UI.md Design System
+        success: {
+          50: '#F0FDF4',   // Subtle tint
+          100: '#DCFCE7',  // Background
+          500: '#22C55E',  // Icons, checkmarks
+          600: '#16A34A',  // Hover
+        },
+        error: {
+          50: '#FEF2F2',   // Subtle tint
+          100: '#FEE2E2',  // Background
+          500: '#EF4444',  // Icons, error text
+          600: '#DC2626',  // Hover
+        },
+        warning: {
+          50: '#FFFBEB',   // Subtle tint
+          100: '#FEF3C7',  // Background
+          500: '#F59E0B',  // Icons, warning text
+          600: '#D97706',  // Hover
+        },
+        info: {
+          50: '#EFF6FF',   // Subtle tint
+          100: '#DBEAFE',  // Background
+          500: '#3B82F6',  // Icons, info badges
+          600: '#2563EB',  // Hover
+        },
+        
+        // REGIME COMPARISON COLORS - UI.md Design System
+        regime: {
+          old: '#6366F1',   // Indigo (distinct from orange)
+          new: '#8B5CF6',   // Violet (pairs with indigo)
+        },
+        
+        // DATA PROVENANCE COLORS - UI.md Design System
+        source: {
+          form16: '#3B82F6',   // Blue chip
+          ais: '#06B6D4',      // Cyan chip
+          '26as': '#14B8A6',   // Teal chip
+          broker: '#8B5CF6',   // Violet chip
+          manual: '#737373',   // Gray chip
+        },
+        
         // Legacy aliases for compatibility
         primary: {
           50: '#f5f5f5', 100: '#e8e8e8', 200: '#b3b3b3', 300: '#4d4d4d', 400: '#2c2c2c',
@@ -121,10 +188,27 @@ module.exports = {
         }
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Fira Code', 'Consolas', 'monospace'],
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['JetBrains Mono', 'Courier New', 'monospace'],
       },
       fontSize: {
+        // UI.md Typography System
+        'display-lg': ['36px', { lineHeight: '44px', fontWeight: '700' }],
+        'display-md': ['30px', { lineHeight: '38px', fontWeight: '700' }],
+        'display-sm': ['24px', { lineHeight: '32px', fontWeight: '600' }],
+        'heading-lg': ['20px', { lineHeight: '28px', fontWeight: '600' }],
+        'heading-md': ['18px', { lineHeight: '26px', fontWeight: '600' }],
+        'heading-sm': ['16px', { lineHeight: '24px', fontWeight: '600' }],
+        'body-lg': ['16px', { lineHeight: '24px', fontWeight: '400' }],
+        'body-md': ['14px', { lineHeight: '22px', fontWeight: '400' }],
+        'body-sm': ['13px', { lineHeight: '20px', fontWeight: '400' }],
+        'label-lg': ['14px', { lineHeight: '20px', fontWeight: '500' }],
+        'label-md': ['13px', { lineHeight: '18px', fontWeight: '500' }],
+        'label-sm': ['11px', { lineHeight: '16px', fontWeight: '500' }],
+        'number-lg': ['24px', { lineHeight: '32px', fontWeight: '600' }],
+        'number-md': ['18px', { lineHeight: '26px', fontWeight: '600' }],
+        'number-sm': ['14px', { lineHeight: '22px', fontWeight: '500' }],
+        // Legacy sizes (keeping for backward compatibility)
         'xs': ['0.75rem', { lineHeight: '1rem' }],
         'sm': ['0.875rem', { lineHeight: '1.25rem' }],
         'base': ['1rem', { lineHeight: '1.5rem' }],
@@ -137,15 +221,31 @@ module.exports = {
         '6xl': ['3.75rem', { lineHeight: '1' }],
       },
       spacing: {
-        '18': '4.5rem',
+        // UI.md 8px Grid System
+        '13': '3.25rem', // 52px
+        '15': '3.75rem', // 60px
+        '18': '4.5rem',  // 72px
+        // Additional spacing tokens
         '88': '22rem',
         '128': '32rem',
       },
       borderRadius: {
+        // UI.md Border Radius Tokens
+        'xl': '12px',
+        '2xl': '16px',
+        '3xl': '20px',
+        // Legacy tokens (keeping for backward compatibility)
         '4xl': '2rem',
         '5xl': '2.5rem',
       },
       boxShadow: {
+        // UI.md Elevation System
+        'card': '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)',
+        'card-hover': '0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06)',
+        'elevated': '0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06)',
+        'floating': '0 10px 25px rgba(0,0,0,0.1), 0 6px 10px rgba(0,0,0,0.08)',
+        'overlay': '0 20px 40px rgba(0,0,0,0.15), 0 10px 20px rgba(0,0,0,0.1)',
+        // Legacy shadows (keeping for backward compatibility)
         'soft': '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',
         'medium': '0 4px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
         'strong': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
@@ -162,6 +262,9 @@ module.exports = {
         'royal-glow': '0 0 25px rgba(41, 128, 185, 0.4)',
       },
       backgroundImage: {
+        // UI.md Brand Gradient
+        'burn-gradient': 'linear-gradient(135deg, #FF6B00 0%, #FFB800 100%)',
+        // Legacy gradients (keeping for backward compatibility)
         'gradient-burnblack-gold': 'linear-gradient(135deg, #0b0b0b 0%, #d4af37 100%)',
         'gradient-gold-emerald': 'linear-gradient(135deg, #d4af37 0%, #2ecc71 100%)',
         'gradient-burnblack-emerald': 'linear-gradient(135deg, #0b0b0b 0%, #2ecc71 100%)',
@@ -169,30 +272,78 @@ module.exports = {
         'gradient-sunset-crimson': 'linear-gradient(135deg, #e67e22 0%, #c0392b 100%)',
       },
       animation: {
-        'fade-in': 'fadeIn 0.5s ease-in-out',
-        'slide-up': 'slideUp 0.3s ease-out',
+        // UI.md Motion System - Core Animations
+        'shimmer': 'shimmer 1.5s infinite',
+        'fade-in': 'fadeIn 0.2s ease-out',
+        'slide-up': 'slideUp 0.2s ease-out',
+        'scale-in': 'scaleIn 0.15s ease-out',
+        // UI.md Motion System - Component Animations
+        'breathing-expand': 'breathingExpand 400ms cubic-bezier(0, 0, 0.2, 1)',
+        'breathing-collapse': 'breathingCollapse 400ms cubic-bezier(0.4, 0, 1, 1)',
+        'content-fade-in': 'contentFadeIn 200ms cubic-bezier(0, 0, 0.2, 1) 100ms',
+        'regime-toggle': 'regimeToggle 300ms cubic-bezier(0.4, 0, 0.2, 1)',
+        'success-check': 'successCheck 300ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+        'toast-enter': 'toastEnter 200ms cubic-bezier(0, 0, 0.2, 1)',
+        'toast-exit': 'toastExit 200ms cubic-bezier(0.4, 0, 1, 1)',
+        // Legacy animations (keeping for backward compatibility)
         'slide-down': 'slideDown 0.3s ease-out',
-        'scale-in': 'scaleIn 0.2s ease-out',
         'bounce-gentle': 'bounceGentle 0.6s ease-in-out',
         'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
         'float': 'float 3s ease-in-out infinite',
       },
       keyframes: {
+        // UI.md Motion System - Core Keyframes
+        shimmer: {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
+        },
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
         },
         slideUp: {
-          '0%': { transform: 'translateY(10px)', opacity: '0' },
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        scaleIn: {
+          '0%': { opacity: '0', transform: 'scale(0.95)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        // UI.md Motion System - Component Keyframes
+        breathingExpand: {
+          '0%': { width: 'var(--card-summary-width)', opacity: '1' },
+          '100%': { width: 'var(--card-expanded-width)', opacity: '1' },
+        },
+        breathingCollapse: {
+          '0%': { width: 'var(--card-summary-width)', opacity: '1' },
+          '100%': { width: 'var(--card-glance-width)', opacity: '1' },
+        },
+        contentFadeIn: {
+          '0%': { transform: 'translateY(8px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
         },
+        regimeToggle: {
+          '0%': { opacity: '1' },
+          '50%': { opacity: '0.5' },
+          '100%': { opacity: '1' },
+        },
+        successCheck: {
+          '0%': { transform: 'scale(0)' },
+          '50%': { transform: 'scale(1.1)' },
+          '100%': { transform: 'scale(1)' },
+        },
+        toastEnter: {
+          '0%': { transform: 'translateY(100%)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+        toastExit: {
+          '0%': { transform: 'translateY(0)', opacity: '1' },
+          '100%': { transform: 'translateY(-20px)', opacity: '0' },
+        },
+        // Legacy keyframes (keeping for backward compatibility)
         slideDown: {
           '0%': { transform: 'translateY(-10px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
-        },
-        scaleIn: {
-          '0%': { transform: 'scale(0.95)', opacity: '0' },
-          '100%': { transform: 'scale(1)', opacity: '1' },
         },
         bounceGentle: {
           '0%, 100%': { transform: 'translateY(0)' },
@@ -207,6 +358,21 @@ module.exports = {
           '50%': { transform: 'translateY(-10px)' },
         },
       },
+      transitionDuration: {
+        'instant': '0ms',
+        'fast': '100ms',
+        'normal': '200ms',
+        'relaxed': '300ms',
+        'slow': '500ms',
+        'slower': '700ms',
+        'breathing': '400ms',
+      },
+      transitionTimingFunction: {
+        'ease-out': 'cubic-bezier(0, 0, 0.2, 1)',
+        'ease-in': 'cubic-bezier(0.4, 0, 1, 1)',
+        'ease-both': 'cubic-bezier(0.4, 0, 0.2, 1)',
+        'spring': 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+      },
       backdropBlur: {
         xs: '2px',
       },
@@ -216,5 +382,6 @@ module.exports = {
     require('@tailwindcss/forms'),
     require('@tailwindcss/typography'),
     require('@tailwindcss/aspect-ratio'),
+    require('tailwindcss-animate'),
   ],
 }

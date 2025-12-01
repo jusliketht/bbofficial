@@ -56,4 +56,51 @@
   .form-help {
     @apply text-sm text-gray-500;
   }
+
+  /* Breathing Grid Animations */
+  @keyframes contentFadeIn {
+    0% {
+      transform: translateY(8px);
+      opacity: 0;
+    }
+    100% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  .section-card-content {
+    animation: contentFadeIn 200ms cubic-bezier(0, 0, 0.2, 1) 100ms both;
+  }
+
+  /* Mobile/Tablet Glance Bar */
+  .glance-bar-container {
+    @apply sticky top-16 z-30 bg-white border-b border-gray-200;
+    height: 56px;
+  }
+
+  .glance-bar {
+    @apply flex items-center space-x-2 px-4 overflow-x-auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .glance-bar > * {
+    scroll-snap-align: start;
+    flex-shrink: 0;
+  }
+
+  .expanded-content-mobile {
+    @apply p-4;
+  }
+
+  /* Reduced Motion Support */
+  @media (prefers-reduced-motion: reduce) {
+    .section-card,
+    .breathing-grid,
+    .section-card-content {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
 }

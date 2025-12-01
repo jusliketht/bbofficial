@@ -61,6 +61,67 @@ const CAFirm = sequelize.define('CAFirm', {
     defaultValue: 'active',
     allowNull: false,
   },
+  specialization: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'specialization',
+    comment: 'Primary specialization (e.g., ITR Filing, GST Compliance)',
+  },
+  averageRating: {
+    type: DataTypes.DECIMAL(3, 2),
+    allowNull: true,
+    defaultValue: 0,
+    field: 'average_rating',
+    validate: {
+      min: 0,
+      max: 5,
+    },
+    comment: 'Average rating from reviews (0-5)',
+  },
+  reviewCount: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    defaultValue: 0,
+    field: 'review_count',
+    comment: 'Total number of reviews',
+  },
+  minPrice: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,
+    field: 'min_price',
+    comment: 'Minimum service price in INR',
+  },
+  location: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    field: 'location',
+    comment: 'Structured location data: {city, state, pincode, address}',
+  },
+  availability: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    field: 'availability',
+    comment: 'Booking calendar and available slots structure',
+  },
+  services: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    defaultValue: [],
+    field: 'services',
+    comment: 'Array of service offerings: [{name, price, description}]',
+  },
+  description: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    field: 'description',
+    comment: 'Firm description for marketplace',
+  },
+  profileImageUrl: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'profile_image_url',
+    comment: 'URL to firm logo/profile image',
+  },
   metadata: {
     type: DataTypes.JSONB,
     allowNull: true,
@@ -95,6 +156,18 @@ const CAFirm = sequelize.define('CAFirm', {
     },
     {
       fields: ['name'],
+    },
+    {
+      fields: ['specialization'],
+    },
+    {
+      fields: ['average_rating'],
+    },
+    {
+      fields: ['location'],
+      using: 'gin',
+      name: 'idx_ca_firms_location_gin',
+      comment: 'GIN index for JSONB location queries',
     },
   ],
 });

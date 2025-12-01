@@ -128,6 +128,139 @@
     "phone": {
       "pattern": "^[6-9]\\d{9}$",
       "required": false
+    },
+    "businessIncome": {
+      "grossReceipts": {
+        "min": 0,
+        "max": 999999999999,
+        "required": false,
+        "description": "Gross receipts/turnover must be non-negative"
+      },
+      "openingStock": {
+        "min": 0,
+        "max": 999999999999,
+        "required": false,
+        "description": "Opening stock must be non-negative"
+      },
+      "closingStock": {
+        "min": 0,
+        "max": 999999999999,
+        "required": false,
+        "description": "Closing stock must be non-negative"
+      },
+      "purchases": {
+        "min": 0,
+        "max": 999999999999,
+        "required": false,
+        "description": "Purchases must be non-negative"
+      },
+      "expenses": {
+        "min": 0,
+        "max": 999999999999,
+        "required": false,
+        "description": "Expenses must be non-negative"
+      },
+      "depreciation": {
+        "min": 0,
+        "max": 999999999999,
+        "required": false,
+        "description": "Depreciation must be non-negative"
+      },
+      "validationChecks": {
+        "closingStockCheck": {
+          "description": "Closing stock should not exceed opening stock + purchases (with 10% tolerance)",
+          "enabled": true
+        },
+        "expenseReasonableness": {
+          "description": "Total expenses should not exceed gross receipts (with tolerance for losses)",
+          "enabled": true,
+          "tolerance": 0.2
+        }
+      }
+    },
+    "professionalIncome": {
+      "professionalFees": {
+        "min": 0,
+        "max": 999999999999,
+        "required": false,
+        "description": "Professional fees must be non-negative"
+      },
+      "expenses": {
+        "min": 0,
+        "max": 999999999999,
+        "required": false,
+        "description": "Professional expenses must be non-negative"
+      },
+      "depreciation": {
+        "min": 0,
+        "max": 999999999999,
+        "required": false,
+        "description": "Depreciation must be non-negative"
+      },
+      "validationChecks": {
+        "expenseReasonableness": {
+          "description": "Professional expenses should be reasonable compared to fees",
+          "enabled": true,
+          "maxPercentage": 90
+        }
+      }
+    },
+    "balanceSheet": {
+      "assets": {
+        "min": 0,
+        "max": 999999999999,
+        "description": "Total assets must be non-negative"
+      },
+      "liabilities": {
+        "min": 0,
+        "max": 999999999999,
+        "description": "Total liabilities must be non-negative"
+      },
+      "balanceCheck": {
+        "description": "Assets must equal Liabilities + Capital",
+        "enabled": true,
+        "tolerance": 0.01
+      }
+    },
+    "auditInfo": {
+      "isAuditApplicable": {
+        "type": "boolean",
+        "required": false
+      },
+      "auditReportNumber": {
+        "required": {
+          "condition": "isAuditApplicable === true",
+          "message": "Audit report number is required when audit is applicable"
+        },
+        "maxLength": 50
+      },
+      "auditReportDate": {
+        "required": {
+          "condition": "isAuditApplicable === true",
+          "message": "Audit report date is required when audit is applicable"
+        },
+        "maxDate": "today",
+        "description": "Audit report date cannot be in the future"
+      },
+      "caDetails": {
+        "required": {
+          "condition": "isAuditApplicable === true",
+          "message": "CA details are required when audit is applicable"
+        },
+        "caName": {
+          "required": {
+            "condition": "isAuditApplicable === true"
+          },
+          "maxLength": 100
+        },
+        "membershipNumber": {
+          "required": {
+            "condition": "isAuditApplicable === true"
+          },
+          "pattern": "^[0-9]{6,8}$",
+          "description": "ICAI membership number"
+        }
+      }
     }
   },
   "restrictions": {

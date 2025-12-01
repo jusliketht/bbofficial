@@ -26,7 +26,7 @@ import {
   Globe,
   Users,
   FileText,
-  DollarSign,
+  IndianRupee,
   BarChart3,
   PieChart,
   LineChart,
@@ -95,11 +95,11 @@ const AdminSystemHealth = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'healthy':
-        return 'bg-green-100 text-green-800';
+        return 'bg-success-100 text-success-800';
       case 'warning':
         return 'bg-orange-100 text-orange-800';
       case 'critical':
-        return 'bg-red-100 text-red-800';
+        return 'bg-error-100 text-error-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -108,11 +108,11 @@ const AdminSystemHealth = () => {
   const getAlertIcon = (severity) => {
     switch (severity) {
       case 'critical':
-        return <AlertTriangle className="h-4 w-4 text-red-500" />;
+        return <AlertTriangle className="h-4 w-4 text-error-500" />;
       case 'warning':
         return <AlertTriangle className="h-4 w-4 text-orange-500" />;
       case 'info':
-        return <Activity className="h-4 w-4 text-blue-500" />;
+        return <Activity className="h-4 w-4 text-info-500" />;
       default:
         return <Activity className="h-4 w-4 text-gray-500" />;
     }
@@ -121,11 +121,11 @@ const AdminSystemHealth = () => {
   const getAlertColor = (severity) => {
     switch (severity) {
       case 'critical':
-        return 'bg-red-50 border-red-200';
+        return 'bg-error-50 border-error-200';
       case 'warning':
         return 'bg-orange-50 border-orange-200';
       case 'info':
-        return 'bg-blue-50 border-blue-200';
+        return 'bg-info-50 border-info-200';
       default:
         return 'bg-gray-50 border-gray-200';
     }
@@ -134,7 +134,7 @@ const AdminSystemHealth = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
       </div>
     );
   }
@@ -142,26 +142,26 @@ const AdminSystemHealth = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header className="bg-white shadow-card border-b">
+        <div className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => navigate('/dashboard')}
-                className="text-gray-600 hover:text-gray-900"
+                className="text-body-md text-gray-600 hover:text-gray-900"
               >
                 ← Back to Dashboard
               </button>
-              <h1 className="text-xl font-semibold text-gray-900">System Health</h1>
+              <h1 className="text-heading-lg font-semibold text-gray-900">System Health</h1>
             </div>
 
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
-                <label className="text-sm text-gray-600">Auto Refresh</label>
+                <label className="text-label-lg text-gray-600">Auto Refresh</label>
                 <button
                   onClick={() => setAutoRefresh(!autoRefresh)}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    autoRefresh ? 'bg-blue-600' : 'bg-gray-200'
+                    autoRefresh ? 'bg-orange-500' : 'bg-gray-200'
                   }`}
                 >
                   <span
@@ -175,7 +175,7 @@ const AdminSystemHealth = () => {
               <select
                 value={selectedTimeRange}
                 onChange={(e) => setSelectedTimeRange(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
               >
                 <option value="1h">Last Hour</option>
                 <option value="24h">Last 24 Hours</option>
@@ -199,16 +199,16 @@ const AdminSystemHealth = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* System Status Overview */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg shadow-sm p-4">
-            <div className="flex items-center">
-              <Server className="h-8 w-8 text-blue-600" />
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-600">Server Status</p>
-                <div className="flex items-center space-x-2">
-                  <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(health.server?.status || 'healthy')}`}>
-                    {health.server?.status || 'healthy'}
-                  </span>
-                  <span className="text-sm text-gray-500">
+              <div className="bg-white rounded-lg shadow-card p-4">
+                <div className="flex items-center">
+              <Server className="h-8 w-8 text-info-600" />
+                  <div className="ml-3">
+                    <p className="text-label-lg font-medium text-gray-600">Server Status</p>
+                    <div className="flex items-center space-x-2">
+                      <span className={`px-2 py-1 text-label-sm rounded-full ${getStatusColor(health.server?.status || 'healthy')}`}>
+                        {health.server?.status || 'healthy'}
+                      </span>
+                      <span className="text-body-md text-gray-500">
                     Uptime: {health.server?.uptime || '99.9%'}
                   </span>
                 </div>
@@ -216,16 +216,16 @@ const AdminSystemHealth = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm p-4">
-            <div className="flex items-center">
-              <Database className="h-8 w-8 text-green-600" />
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-600">Database</p>
-                <div className="flex items-center space-x-2">
-                  <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(health.database?.status || 'healthy')}`}>
-                    {health.database?.status || 'healthy'}
-                  </span>
-                  <span className="text-sm text-gray-500">
+              <div className="bg-white rounded-lg shadow-card p-4">
+                <div className="flex items-center">
+              <Database className="h-8 w-8 text-success-600" />
+                  <div className="ml-3">
+                    <p className="text-label-lg font-medium text-gray-600">Database</p>
+                    <div className="flex items-center space-x-2">
+                      <span className={`px-2 py-1 text-label-sm rounded-full ${getStatusColor(health.database?.status || 'healthy')}`}>
+                        {health.database?.status || 'healthy'}
+                      </span>
+                      <span className="text-body-md text-gray-500">
                     {health.database?.connections || 0} connections
                   </span>
                 </div>
@@ -233,16 +233,16 @@ const AdminSystemHealth = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm p-4">
-            <div className="flex items-center">
-              <Wifi className="h-8 w-8 text-purple-600" />
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-600">API Response</p>
-                <div className="flex items-center space-x-2">
-                  <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(health.api?.status || 'healthy')}`}>
-                    {health.api?.status || 'healthy'}
-                  </span>
-                  <span className="text-sm text-gray-500">
+              <div className="bg-white rounded-lg shadow-card p-4">
+                <div className="flex items-center">
+              <Wifi className="h-8 w-8 text-info-600" />
+                  <div className="ml-3">
+                    <p className="text-label-lg font-medium text-gray-600">API Response</p>
+                    <div className="flex items-center space-x-2">
+                      <span className={`px-2 py-1 text-label-sm rounded-full ${getStatusColor(health.api?.status || 'healthy')}`}>
+                        {health.api?.status || 'healthy'}
+                      </span>
+                      <span className="text-body-md text-gray-500">
                     {health.api?.avg_response_time || 0}ms avg
                   </span>
                 </div>
@@ -250,11 +250,11 @@ const AdminSystemHealth = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm p-4">
-            <div className="flex items-center">
-              <Shield className="h-8 w-8 text-red-600" />
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-600">Security</p>
+              <div className="bg-white rounded-lg shadow-card p-4">
+                <div className="flex items-center">
+              <Shield className="h-8 w-8 text-error-600" />
+                  <div className="ml-3">
+                    <p className="text-label-lg font-medium text-gray-600">Security</p>
                 <div className="flex items-center space-x-2">
                   <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(health.security?.status || 'healthy')}`}>
                     {health.security?.status || 'healthy'}
@@ -405,7 +405,7 @@ const AdminSystemHealth = () => {
 
           <div className="bg-white rounded-lg shadow-sm p-4">
             <div className="flex items-center">
-              <DollarSign className="h-8 w-8 text-purple-600" />
+              <IndianRupee className="h-8 w-8 text-purple-600" />
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-600">Revenue Today</p>
                 <p className="text-2xl font-semibold text-gray-900">₹{metrics.revenue?.today || 0}</p>

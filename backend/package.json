@@ -25,7 +25,13 @@
     "db:check-schema-details": "node src/scripts/checkCurrentSchema.js",
     "db:fix-cafirm": "node src/scripts/fixCAFirmSchema.js",
     "db:migrate-robust": "node src/scripts/migrateRobust.js",
-    "admin:reset": "node src/scripts/resetAndCreateAdmin.js"
+    "admin:reset": "node src/scripts/resetAndCreateAdmin.js",
+    "admin:create": "node src/scripts/createSuperAdmin.js",
+    "admin:reset-password": "node src/scripts/resetAdminPassword.js",
+    "admin:test-login": "node src/scripts/testAdminLogin.js",
+    "admin:check": "node src/scripts/checkAdminUser.js",
+    "admin:test-query": "node src/scripts/testLoginQuery.js",
+    "db:add-user-columns": "node src/scripts/addMissingUserColumns.js"
   },
   "keywords": [
     "itr",

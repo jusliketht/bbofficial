@@ -8,7 +8,7 @@ import { motion } from 'framer-motion';
 import { Card, CardHeader, CardTitle, CardContent, Typography } from '../../components/DesignSystem/DesignSystem';
 import { PageTransition, FadeInUp } from '../../components/DesignSystem/Animations';
 import {
-  DollarSign,
+  IndianRupee,
   Users,
   Building2,
   Settings,

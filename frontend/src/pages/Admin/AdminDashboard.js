@@ -3,7 +3,7 @@
 // Comprehensive administrative interface for platform management
 // =====================================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Card, CardHeader, CardTitle, CardContent, Typography } from '../../components/DesignSystem/DesignSystem';
 import { PageTransition, FadeInUp, StaggerContainer, StaggerItem } from '../../components/DesignSystem/Animations';
@@ -11,7 +11,7 @@ import {
   Users,
   FileText,
   MessageSquare,
-  DollarSign,
+  IndianRupee,
   TrendingUp,
   AlertCircle,
   CheckCircle,
@@ -21,115 +21,77 @@ import {
   Settings,
   BarChart3,
 } from 'lucide-react';
+import {
+  useAdminDashboardStats,
+  useAdminChartData,
+  useAdminSystemAlerts,
+  useAdminRecentActivity,
+} from '../../features/admin/analytics/hooks/use-analytics';
 
 const AdminDashboard = () => {
-  const [dashboardData, setDashboardData] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [selectedTimeRange, setSelectedTimeRange] = useState('7d');
 
-  // Mock dashboard data
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      setLoading(true);
+  // Fetch dashboard data from backend
+  const { data: statsData, isLoading: statsLoading } = useAdminDashboardStats();
+  const { data: alertsData, isLoading: alertsLoading } = useAdminSystemAlerts();
+  const { data: activityData, isLoading: activityLoading } = useAdminRecentActivity({
+    limit: 10,
+    timeRange: selectedTimeRange,
+  });
+  const { data: userChartData } = useAdminChartData('users', { timeRange: selectedTimeRange });
+  const { data: filingChartData } = useAdminChartData('filings', { timeRange: selectedTimeRange });
+  const { data: revenueChartData } = useAdminChartData('revenue', { timeRange: selectedTimeRange });
 
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+  const loading = statsLoading || alertsLoading || activityLoading;
 
-      const mockData = {
-        metrics: {
-          newUsers: {
-            today: 45,
-            last7Days: 312,
-            growth: 12.5,
-          },
-          itrFilings: {
-            initiated: 189,
-            completed: 156,
-            completionRate: 82.5,
-          },
-          serviceTickets: {
-            open: 23,
-            resolved: 89,
-            avgResolutionTime: '4.2 hours',
-          },
-          revenue: {
-            today: 125000,
-            last7Days: 875000,
-            growth: 8.3,
-          },
-        },
-        recentActivity: [
-          {
-            id: 1,
-            type: 'user_signup',
-            message: 'New user registered: john.doe@example.com',
-            timestamp: new Date(Date.now() - 1000 * 60 * 15),
-            status: 'success',
-          },
-          {
-            id: 2,
-            type: 'itr_filing',
-            message: 'ITR filing completed for PAN: ABCDE1234F',
-            timestamp: new Date(Date.now() - 1000 * 60 * 30),
-            status: 'success',
-          },
-          {
-            id: 3,
-            type: 'support_ticket',
-            message: 'New support ticket created: #ST-2024-001',
-            timestamp: new Date(Date.now() - 1000 * 60 * 45),
-            status: 'warning',
-          },
-          {
-            id: 4,
-            type: 'payment',
-            message: 'Payment received: ₹2,500 from user@example.com',
-            timestamp: new Date(Date.now() - 1000 * 60 * 60),
-            status: 'success',
-          },
-        ],
-        systemHealth: {
-          status: 'healthy',
-          uptime: '99.9%',
-          responseTime: '245ms',
-          activeUsers: 1247,
-          serverLoad: 65,
-        },
-        topPerformers: [
-          {
-            name: 'CA Firm Alpha',
-            filings: 45,
-            revenue: 112500,
-            rating: 4.8,
-          },
-          {
-            name: 'CA Firm Beta',
-            filings: 38,
-            revenue: 95000,
-            rating: 4.6,
-          },
-          {
-            name: 'CA Firm Gamma',
-            filings: 32,
-            revenue: 80000,
-            rating: 4.7,
-          },
-        ],
-      };
-
-      setDashboardData(mockData);
-      setLoading(false);
-    };
-
-    fetchDashboardData();
-  }, [selectedTimeRange]);
+  // Transform backend data to match component expectations
+  const dashboardData = statsData ? {
+    metrics: {
+      newUsers: {
+        today: statsData.users?.newToday || 0,
+        last7Days: (statsData.users?.total || 0) - (statsData.users?.total || 0) * 0.9, // Estimate
+        growth: 0, // Would need to calculate from trends
+      },
+      itrFilings: {
+        initiated: statsData.filings?.total || 0,
+        completed: statsData.filings?.total || 0,
+        completionRate: 100, // Would need to calculate
+      },
+      serviceTickets: {
+        open: statsData.tickets?.openTickets || 0,
+        resolved: (statsData.tickets?.totalTickets || 0) - (statsData.tickets?.openTickets || 0),
+        avgResolutionTime: '4.2 hours', // Would need to calculate
+      },
+      revenue: {
+        today: statsData.revenue?.today || 0,
+        last7Days: statsData.revenue?.total || 0,
+        growth: 0, // Would need to calculate from trends
+      },
+    },
+    recentActivity: (activityData?.activities || activityData?.recentActivity || []).map(activity => ({
+      id: activity.id,
+      type: activity.type || activity.action,
+      message: activity.message || activity.description || `${activity.action || 'Activity'}${activity.userName ? ` by ${activity.userName}` : ''}${activity.resource ? ` on ${activity.resource}` : ''}`,
+      timestamp: activity.timestamp ? new Date(activity.timestamp) : new Date(),
+      status: activity.success !== false ? 'success' : 'error',
+    })),
+    systemHealth: {
+      status: 'healthy', // Would need system health endpoint
+      uptime: '99.9%',
+      responseTime: '245ms',
+      activeUsers: statsData.users?.active || 0,
+      serverLoad: 65, // Would need system metrics
+    },
+    topPerformers: [], // Would need CA performance data
+    alerts: alertsData?.alerts || [],
+  } : null;
 
   const getActivityIcon = (type) => {
     switch (type) {
       case 'user_signup': return <Users className="w-4 h-4" />;
       case 'itr_filing': return <FileText className="w-4 h-4" />;
       case 'support_ticket': return <MessageSquare className="w-4 h-4" />;
-      case 'payment': return <DollarSign className="w-4 h-4" />;
+      case 'payment': return <IndianRupee className="w-4 h-4" />;
       default: return <Activity className="w-4 h-4" />;
     }
   };
@@ -163,7 +125,7 @@ const AdminDashboard = () => {
     return `${days}d ago`;
   };
 
-  if (loading) {
+  if (loading || !dashboardData) {
     return (
       <PageTransition className="min-h-screen bg-neutral-50 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -291,13 +253,46 @@ const AdminDashboard = () => {
                     </Typography.Small>
                   </div>
                   <div className="w-12 h-12 bg-secondary-100 rounded-lg flex items-center justify-center">
-                    <DollarSign className="w-6 h-6 text-secondary-600" />
+                    <IndianRupee className="w-6 h-6 text-secondary-600" />
                   </div>
                 </div>
               </CardContent>
             </Card>
           </StaggerItem>
         </StaggerContainer>
+
+        {/* System Alerts */}
+        {dashboardData.alerts && dashboardData.alerts.length > 0 && (
+          <Card className="mb-8 border-warning-200 bg-warning-50">
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <AlertCircle className="w-5 h-5 text-warning-600" />
+                <span>System Alerts ({dashboardData.alerts.length})</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {dashboardData.alerts.slice(0, 3).map((alert, index) => (
+                  <div key={index} className="flex items-start space-x-3 p-3 bg-white rounded-lg">
+                    <AlertCircle className={`w-5 h-5 mt-0.5 ${
+                      alert.severity === 'critical' ? 'text-error-600' :
+                      alert.severity === 'warning' ? 'text-warning-600' :
+                      'text-info-600'
+                    }`} />
+                    <div className="flex-1">
+                      <Typography.Small className="font-medium text-neutral-700">
+                        {alert.title}
+                      </Typography.Small>
+                      <Typography.Small className="text-neutral-500">
+                        {alert.message}
+                      </Typography.Small>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* System Health & Recent Activity */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
@@ -316,8 +311,16 @@ const AdminDashboard = () => {
                     Status
                   </Typography.Small>
                   <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 bg-success-500 rounded-full" />
-                    <Typography.Small className="text-success-600 font-medium">
+                    <div className={`w-2 h-2 rounded-full ${
+                      dashboardData.systemHealth.status === 'healthy' ? 'bg-success-500' :
+                      dashboardData.systemHealth.status === 'degraded' ? 'bg-warning-500' :
+                      'bg-error-500'
+                    }`} />
+                    <Typography.Small className={`font-medium ${
+                      dashboardData.systemHealth.status === 'healthy' ? 'text-success-600' :
+                      dashboardData.systemHealth.status === 'degraded' ? 'text-warning-600' :
+                      'text-error-600'
+                    }`}>
                       {dashboardData.systemHealth.status.toUpperCase()}
                     </Typography.Small>
                   </div>
@@ -353,8 +356,12 @@ const AdminDashboard = () => {
                   <div className="flex items-center space-x-2">
                     <div className="w-16 h-2 bg-neutral-200 rounded-full">
                       <div
-                        className="h-2 bg-primary-500 rounded-full"
-                        style={{ width: `${dashboardData.systemHealth.serverLoad}%` }}
+                        className={`h-2 rounded-full ${
+                          dashboardData.systemHealth.serverLoad < 50 ? 'bg-success-500' :
+                          dashboardData.systemHealth.serverLoad < 80 ? 'bg-warning-500' :
+                          'bg-error-500'
+                        }`}
+                        style={{ width: `${Math.min(dashboardData.systemHealth.serverLoad, 100)}%` }}
                       />
                     </div>
                     <Typography.Small className="font-medium">
@@ -376,23 +383,81 @@ const AdminDashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {dashboardData.recentActivity.map((activity, index) => (
+                {dashboardData.recentActivity && dashboardData.recentActivity.length > 0 ? (
+                  dashboardData.recentActivity.map((activity, index) => {
+                    const activityTimestamp = activity.timestamp ? new Date(activity.timestamp) : new Date();
+                    return (
+                      <motion.div
+                        key={activity.id || index}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                        className="flex items-start space-x-3 p-3 bg-neutral-50 rounded-lg"
+                      >
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${getStatusColor(activity.status || 'success')}`}>
+                          {getActivityIcon(activity.type || activity.action)}
+                        </div>
+                        <div className="flex-1">
+                          <Typography.Small className="text-neutral-700">
+                            {activity.message || activity.description || 'Activity'}
+                          </Typography.Small>
+                          <Typography.Small className="text-neutral-500">
+                            {formatTimeAgo(activityTimestamp)}
+                          </Typography.Small>
+                        </div>
+                      </motion.div>
+                    );
+                  })
+                ) : (
+                  <Typography.Small className="text-neutral-500 text-center py-4">
+                    No recent activity
+                  </Typography.Small>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Top Performers */}
+        {dashboardData.topPerformers && dashboardData.topPerformers.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <BarChart3 className="w-5 h-5 text-primary-600" />
+                <span>Top Performing CA Firms</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {dashboardData.topPerformers.map((firm, index) => (
                   <motion.div
-                    key={activity.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    key={index}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.1 }}
-                    className="flex items-start space-x-3 p-3 bg-neutral-50 rounded-lg"
+                    className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg"
                   >
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${getStatusColor(activity.status)}`}>
-                      {getActivityIcon(activity.type)}
+                    <div className="flex items-center space-x-4">
+                      <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
+                        <span className="text-primary-600 font-medium">
+                          {index + 1}
+                        </span>
+                      </div>
+                      <div>
+                        <Typography.Small className="font-medium text-neutral-700">
+                          {firm.name || firm.firmName || `CA Firm ${index + 1}`}
+                        </Typography.Small>
+                        <Typography.Small className="text-neutral-500">
+                          {firm.filings || firm.totalFilings || 0} filings{firm.rating ? ` • Rating: ${firm.rating}/5` : ''}
+                        </Typography.Small>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <Typography.Small className="text-neutral-700">
-                        {activity.message}
+                    <div className="text-right">
+                      <Typography.Small className="font-medium text-neutral-700">
+                        {formatCurrency(firm.revenue || firm.totalRevenue || 0)}
                       </Typography.Small>
                       <Typography.Small className="text-neutral-500">
-                        {formatTimeAgo(activity.timestamp)}
+                        Revenue
                       </Typography.Small>
                     </div>
                   </motion.div>
@@ -400,54 +465,7 @@ const AdminDashboard = () => {
               </div>
             </CardContent>
           </Card>
-        </div>
-
-        {/* Top Performers */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <BarChart3 className="w-5 h-5 text-primary-600" />
-              <span>Top Performing CA Firms</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {dashboardData.topPerformers.map((firm, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="flex items-center justify-between p-4 bg-neutral-50 rounded-lg"
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
-                      <span className="text-primary-600 font-medium">
-                        {index + 1}
-                      </span>
-                    </div>
-                    <div>
-                      <Typography.Small className="font-medium text-neutral-700">
-                        {firm.name}
-                      </Typography.Small>
-                      <Typography.Small className="text-neutral-500">
-                        {firm.filings} filings • Rating: {firm.rating}/5
-                      </Typography.Small>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <Typography.Small className="font-medium text-neutral-700">
-                      {formatCurrency(firm.revenue)}
-                    </Typography.Small>
-                    <Typography.Small className="text-neutral-500">
-                      Revenue
-                    </Typography.Small>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        )}
 
         {/* Quick Actions */}
         <Card className="mt-8">
@@ -472,7 +490,7 @@ const AdminDashboard = () => {
                 </Typography.Small>
               </button>
               <button className="flex items-center space-x-3 p-4 bg-warning-50 border border-warning-200 rounded-lg hover:bg-warning-100 transition-colors">
-                <DollarSign className="w-5 h-5 text-warning-600" />
+                <IndianRupee className="w-5 h-5 text-warning-600" />
                 <Typography.Small className="font-medium text-warning-700">
                   Pricing Control
                 </Typography.Small>

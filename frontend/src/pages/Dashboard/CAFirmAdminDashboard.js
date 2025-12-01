@@ -11,7 +11,7 @@ import {
   Building2,
   Users,
   FileText,
-  DollarSign,
+  IndianRupee,
   Plus,
   Settings,
   TrendingUp,
@@ -139,7 +139,7 @@ const CAFirmAdminDashboard = () => {
               { id: 'staff', label: 'Staff', icon: Users },
               { id: 'clients', label: 'Clients', icon: Building2 },
               { id: 'filings', label: 'Filings', icon: FileText },
-              { id: 'billing', label: 'Billing', icon: DollarSign },
+              { id: 'billing', label: 'Billing', icon: IndianRupee },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -196,7 +196,7 @@ const CAFirmAdminDashboard = () => {
 
               <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex items-center">
-                  <DollarSign className="h-8 w-8 text-yellow-600" />
+                  <IndianRupee className="h-8 w-8 text-yellow-600" />
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Revenue</p>
                     <p className="text-2xl font-bold text-gray-900">₹0</p>
@@ -395,7 +395,7 @@ const CAFirmAdminDashboard = () => {
             </div>
             <div className="p-6">
               <div className="text-center py-12">
-                <DollarSign className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <IndianRupee className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Billing Coming Soon</h3>
                 <p className="text-gray-500">Billing and invoice management will be available in the next update.</p>
               </div>

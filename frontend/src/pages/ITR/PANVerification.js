@@ -3,7 +3,7 @@
 // Mobile-first PAN verification with SurePass integration
 // =====================================================
 
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import {
@@ -17,16 +17,76 @@ import {
   Loader,
 } from 'lucide-react';
 import api from '../../services/api';
+import apiClient from '../../services/core/APIClient';
 
 const PANVerification = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [panNumber, setPanNumber] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(true);
   const [verificationResult, setVerificationResult] = useState(null);
   const [error, setError] = useState(null);
+  const [alreadyVerified, setAlreadyVerified] = useState(false);
 
-  const selectedMember = location.state?.selectedMember;
+  const selectedPerson = location.state?.selectedPerson;
+  const selectedMember = selectedPerson || location.state?.selectedMember;
+
+  // Check PAN verification status on mount
+  useEffect(() => {
+    const checkPANStatus = async () => {
+      if (!selectedPerson?.panNumber) {
+        setIsCheckingStatus(false);
+        return;
+      }
+
+      try {
+        setIsCheckingStatus(true);
+        const response = await apiClient.get(`/itr/pan/status/${selectedPerson.panNumber}`);
+
+        if (response.data.success && response.data.data.verified) {
+          // PAN already verified, skip verification
+          setAlreadyVerified(true);
+          setPanNumber(selectedPerson.panNumber);
+          setVerificationResult({
+            isValid: true,
+            pan: selectedPerson.panNumber,
+            name: selectedPerson.name,
+            status: 'Active',
+            verifiedAt: response.data.data.verifiedAt,
+          });
+
+          // Auto-proceed after a short delay
+          setTimeout(() => {
+            navigate('/itr/recommend-form', {
+              state: {
+                selectedPerson,
+                verificationResult: {
+                  isValid: true,
+                  pan: selectedPerson.panNumber,
+                  name: selectedPerson.name,
+                  status: 'Active',
+                },
+                skipPANVerification: true,
+              },
+            });
+          }, 2000);
+        } else {
+          // PAN not verified, show verification form
+          setPanNumber(selectedPerson.panNumber || '');
+        }
+      } catch (error) {
+        // If status check fails, proceed with verification form
+        if (selectedPerson?.panNumber) {
+          setPanNumber(selectedPerson.panNumber);
+        }
+      } finally {
+        setIsCheckingStatus(false);
+      }
+    };
+
+    checkPANStatus();
+  }, [selectedPerson, navigate]);
 
   // PAN verification mutation
   const verifyPANMutation = useMutation({
@@ -64,8 +124,8 @@ const PANVerification = () => {
 
     verifyPANMutation.mutate({
       pan: panNumber,
-      memberId: selectedMember?.type === 'self' ? null : selectedMember?.id,
-      memberType: selectedMember?.type || 'self',
+      memberId: selectedPerson?.type === 'family' ? selectedPerson.id : (selectedMember?.type === 'family' ? selectedMember.id : null),
+      memberType: selectedPerson?.type || selectedMember?.type || 'self',
     });
   };
 
@@ -78,11 +138,10 @@ const PANVerification = () => {
   const handleProceedToITRSelection = () => {
     if (!verificationResult?.isValid) return;
 
-    navigate('/itr-selection', {
+    navigate('/itr/recommend-form', {
       state: {
-        selectedMember,
+        selectedPerson: selectedPerson || selectedMember,
         verificationResult,
-        step: 3,
       },
     });
   };
@@ -112,7 +171,7 @@ const PANVerification = () => {
             </div>
 
             <div className="flex items-center space-x-2">
-              <div className="flex items-center space-x-1 px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs">
+              <div className="flex items-center space-x-1 px-2 py-1 rounded-full bg-success-50 text-success-600 text-xs">
                 <Shield className="h-3 w-3" />
                 <span>Secure</span>
               </div>
@@ -128,11 +187,11 @@ const PANVerification = () => {
           <span>50% Complete</span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-2">
-          <div className="bg-blue-600 h-2 rounded-full transition-all duration-300" style={{ width: '50%' }}></div>
+          <div className="bg-orange-500 h-2 rounded-full transition-all duration-300" style={{ width: '50%' }}></div>
         </div>
         <div className="flex justify-between text-xs text-gray-600 mt-2">
           <span>Select Member</span>
-          <span className="font-medium text-blue-600">Verify PAN</span>
+          <span className="font-medium text-orange-600">Verify PAN</span>
           <span>Select ITR</span>
           <span>Start Filing</span>
         </div>
@@ -140,17 +199,58 @@ const PANVerification = () => {
 
       {/* Main Content */}
       <main className="px-4 py-6 space-y-6">
-        {/* Selected Member Info */}
-        {selectedMember && (
+        {/* Loading State */}
+        {isCheckingStatus && (
+          <div className="flex flex-col items-center justify-center py-12">
+            <Loader className="h-8 w-8 animate-spin text-orange-500 mb-4" />
+            <p className="text-gray-600">Checking PAN verification status...</p>
+          </div>
+        )}
+
+        {/* Already Verified State */}
+        {!isCheckingStatus && alreadyVerified && verificationResult && (
+          <div className="space-y-4">
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 bg-success-50">
+                <CheckCircle className="h-8 w-8 text-success-500" />
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                PAN Already Verified
+              </h2>
+              <p className="text-sm text-gray-600">
+                Your PAN was verified previously. Proceeding to ITR form selection...
+              </p>
+            </div>
+            <div className="bg-white rounded-xl p-4 border border-gray-200 space-y-3">
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <span className="text-sm text-gray-600">PAN Number</span>
+                <span className="text-sm font-mono font-semibold text-gray-900">
+                  {formatPAN(panNumber)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <span className="text-sm text-gray-600">Name</span>
+                <span className="text-sm font-semibold text-gray-900">
+                  {verificationResult.name}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Selected Person Info */}
+        {!isCheckingStatus && !alreadyVerified && (selectedPerson || selectedMember) && (
           <div className="bg-white rounded-xl p-4 border border-gray-200">
             <div className="flex items-center space-x-3">
-              <div className="p-2 rounded-lg bg-blue-100">
-                <User className="h-5 w-5 text-blue-600" />
+              <div className="p-2 rounded-lg bg-orange-50">
+                <User className="h-5 w-5 text-orange-500" />
               </div>
               <div className="flex-1">
-                <h3 className="font-semibold text-gray-900">{selectedMember.name}</h3>
+                <h3 className="font-semibold text-gray-900">
+                  {selectedPerson?.name || selectedMember?.name}
+                </h3>
                 <p className="text-sm text-gray-500">
-                  {selectedMember.type === 'self' ? 'Self' : selectedMember.relationship}
+                  {(selectedPerson?.type || selectedMember?.type) === 'self' ? 'Self' : selectedPerson?.member?.relationship || selectedMember?.relationship}
                 </p>
               </div>
             </div>
@@ -175,7 +275,7 @@ const PANVerification = () => {
                 onChange={handlePANChange}
                 placeholder="ABCDE1234F"
                 maxLength={10}
-                className="w-full p-3 border border-gray-300 rounded-xl text-center text-lg font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full p-3 border border-gray-300 rounded-xl text-center text-lg font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 disabled={isVerifying}
               />
               <p className="text-xs text-gray-500 text-center">
@@ -198,7 +298,7 @@ const PANVerification = () => {
             <button
               onClick={handleVerifyPAN}
               disabled={!panNumber || panNumber.length !== 10 || isVerifying}
-              className="w-full bg-blue-600 text-white py-3 px-4 rounded-xl hover:bg-blue-700 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-orange-500 text-white py-3 px-4 rounded-xl hover:bg-orange-600 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isVerifying ? (
                 <div className="flex items-center justify-center space-x-2">
@@ -220,12 +320,12 @@ const PANVerification = () => {
           <div className="space-y-4">
             <div className="text-center">
               <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${
-                verificationResult.isValid ? 'bg-green-100' : 'bg-red-100'
+                verificationResult.isValid ? 'bg-success-50' : 'bg-error-50'
               }`}>
                 {verificationResult.isValid ? (
-                  <CheckCircle className="h-8 w-8 text-green-600" />
+                  <CheckCircle className="h-8 w-8 text-success-500" />
                 ) : (
-                  <AlertCircle className="h-8 w-8 text-red-600" />
+                  <AlertCircle className="h-8 w-8 text-error-500" />
                 )}
               </div>
               <h2 className="text-xl font-semibold text-gray-900 mb-2">
@@ -289,12 +389,12 @@ const PANVerification = () => {
                 )}
 
                 {/* Security Badge */}
-                <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+                <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-200">
                   <div className="flex items-center space-x-3">
-                    <Shield className="h-5 w-5 text-blue-600" />
+                    <Shield className="h-5 w-5 text-emerald-600" />
                     <div>
-                      <h4 className="text-sm font-semibold text-blue-900 mb-1">Data Verified</h4>
-                      <p className="text-xs text-blue-700">
+                      <h4 className="text-sm font-semibold text-black mb-1">Data Verified</h4>
+                      <p className="text-xs text-gray-700">
                         Information verified directly with Income Tax Department
                       </p>
                     </div>
@@ -308,7 +408,7 @@ const PANVerification = () => {
               {verificationResult.isValid ? (
                 <button
                   onClick={handleProceedToITRSelection}
-                  className="w-full bg-blue-600 text-white py-3 px-4 rounded-xl hover:bg-blue-700 active:scale-95 transition-transform"
+                  className="w-full bg-orange-500 text-white py-3 px-4 rounded-xl hover:bg-orange-600 active:scale-95 transition-transform"
                 >
                   <div className="flex items-center justify-center space-x-2">
                     <span>Proceed to ITR Selection</span>

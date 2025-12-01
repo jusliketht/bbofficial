@@ -111,7 +111,7 @@ const MemberManagement = () => {
   };
 
   const handleFileITR = (memberId) => {
-    navigate(`/itr/filing?member=${memberId}`);
+    navigate('/itr/select-person', { state: { preSelectMemberId: memberId } });
   };
 
   const filteredMembers = members.filter(member => {

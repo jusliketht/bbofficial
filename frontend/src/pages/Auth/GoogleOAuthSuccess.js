@@ -16,19 +16,16 @@ const GoogleOAuthSuccess = () => {
         const user = JSON.parse(decodeURIComponent(userJson));
         loginWithOAuth(user, token, refreshToken).then((result) => {
           if (!result.success) {
-            console.error('OAuth login failed:', result.message);
-            window.location.href = '/login?error=oauth_failed';
+            window.location.href = `/login?error=oauth_failed&message=${encodeURIComponent(result.message || 'Authentication failed')}`;
           }
+        }).catch(() => {
+          window.location.href = '/login?error=oauth_failed';
         });
       } catch (error) {
-        console.error('Failed to parse user data:', error);
-        // Redirect to login with error
-        window.location.href = '/login?error=oauth_failed';
+        window.location.href = `/login?error=oauth_failed&message=${encodeURIComponent('Failed to process authentication data')}`;
       }
     } else {
-      console.error('Missing token or user data in OAuth callback');
-      // Redirect to login with error
-      window.location.href = '/login?error=oauth_failed';
+      window.location.href = '/login?error=oauth_failed&message=Missing authentication data';
     }
   }, [loginWithOAuth, searchParams]);
 

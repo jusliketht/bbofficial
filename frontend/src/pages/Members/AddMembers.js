@@ -2,16 +2,21 @@
 // ADD MEMBERS PAGE - MANAGE FAMILY MEMBERS
 // =====================================================
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
-import { Plus, Users, User, Edit, Trash2, Phone, Mail } from 'lucide-react';
+import { Plus, Users, User, Edit, Trash2, Phone, Mail, CheckCircle, AlertCircle, Shield } from 'lucide-react';
 import toast from 'react-hot-toast';
 import memberService from '../../services/memberService';
+import PANVerificationInline from '../../components/ITR/PANVerificationInline';
 
 const AddMembers = () => {
-  const { user } = useAuth();
+  const { user: _user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const returnTo = location.state?.returnTo;
 
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,7 +30,12 @@ const AddMembers = () => {
     relationship: '',
     phoneNumber: '',
     email: '',
+    panVerified: false,
+    panVerifiedAt: null,
   });
+  const [showPANVerification, setShowPANVerification] = useState(false);
+  const [panVerificationResult, setPanVerificationResult] = useState(null);
+  const [memberToDelete, setMemberToDelete] = useState(null);
 
   useEffect(() => {
     loadMembers();
@@ -37,8 +47,7 @@ const AddMembers = () => {
       const response = await memberService.getMembers();
       setMembers(response.data || []);
     } catch (error) {
-      console.error('Error loading members:', error);
-      toast.error('Failed to load family members');
+      toast.error(error.response?.data?.error || 'Failed to load family members');
     } finally {
       setLoading(false);
     }
@@ -50,6 +59,25 @@ const AddMembers = () => {
       ...prev,
       [name]: value,
     }));
+    // Reset PAN verification if PAN number changes
+    if (name === 'panNumber') {
+      setPanVerificationResult(null);
+      setFormData(prev => ({
+        ...prev,
+        panVerified: false,
+        panVerifiedAt: null,
+      }));
+    }
+  };
+
+  const handlePANVerified = (verificationResult) => {
+    setPanVerificationResult(verificationResult);
+    setFormData(prev => ({
+      ...prev,
+      panVerified: true,
+      panVerifiedAt: verificationResult.verifiedAt || new Date().toISOString(),
+    }));
+    setShowPANVerification(false);
   };
 
   const handleSubmit = async (e) => {
@@ -76,12 +104,22 @@ const AddMembers = () => {
         relationship: '',
         phoneNumber: '',
         email: '',
+        panVerified: false,
+        panVerifiedAt: null,
       });
+      setShowPANVerification(false);
+      setPanVerificationResult(null);
 
       loadMembers();
+
+      // Navigate back if came from FilingPersonSelector
+      if (returnTo) {
+        setTimeout(() => {
+          navigate(returnTo);
+        }, 1000);
+      }
     } catch (error) {
-      console.error('Error saving member:', error);
-      toast.error('Failed to save family member');
+      toast.error(error.response?.data?.error || 'Failed to save family member');
     }
   };
 
@@ -95,29 +133,41 @@ const AddMembers = () => {
       relationship: member.relationship || '',
       phoneNumber: member.phoneNumber || '',
       email: member.email || '',
+      panVerified: member.panVerified || false,
+      panVerifiedAt: member.panVerifiedAt || null,
     });
+    setPanVerificationResult(member.panVerified ? { name: `${member.firstName} ${member.lastName}` } : null);
     setShowAddForm(true);
+    setShowPANVerification(false);
   };
 
-  const handleDelete = async (memberId) => {
-    // eslint-disable-next-line no-alert
-    if (!window.confirm('Are you sure you want to delete this family member?')) {
-      return;
-    }
+  const handleDelete = (memberId) => {
+    setMemberToDelete(memberId);
+  };
+
+  const confirmDelete = async () => {
+    if (!memberToDelete) return;
 
     try {
-      await memberService.deleteMember(memberId);
+      await memberService.deleteMember(memberToDelete);
       toast.success('Family member deleted successfully');
+      setMemberToDelete(null);
       loadMembers();
     } catch (error) {
-      console.error('Error deleting member:', error);
-      toast.error('Failed to delete family member');
+      toast.error(error.response?.data?.error || 'Failed to delete family member');
+      setMemberToDelete(null);
     }
+  };
+
+  const cancelDelete = () => {
+    setMemberToDelete(null);
   };
 
   const handleCancel = () => {
     setShowAddForm(false);
     setEditingMember(null);
+    setShowPANVerification(false);
+    setPanVerificationResult(null);
     setFormData({
       firstName: '',
       lastName: '',
@@ -126,6 +176,8 @@ const AddMembers = () => {
       relationship: '',
       phoneNumber: '',
       email: '',
+      panVerified: false,
+      panVerifiedAt: null,
     });
   };
 
@@ -211,15 +263,41 @@ const AddMembers = () => {
                     <label className="block text-sm font-medium text-neutral-700 mb-1">
                       PAN Number *
                     </label>
-                    <input
-                      type="text"
-                      name="panNumber"
-                      value={formData.panNumber}
-                      onChange={handleInputChange}
-                      required
-                      maxLength="10"
-                      className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    />
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          name="panNumber"
+                          value={formData.panNumber}
+                          onChange={handleInputChange}
+                          required
+                          maxLength="10"
+                          placeholder="ABCDE1234F"
+                          className="flex-1 px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono uppercase"
+                        />
+                        {formData.panNumber && formData.panNumber.length === 10 && !formData.panVerified && (
+                          <button
+                            type="button"
+                            onClick={() => setShowPANVerification(true)}
+                            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-1"
+                          >
+                            <Shield className="w-4 h-4" />
+                            <span>Verify PAN</span>
+                          </button>
+                        )}
+                      </div>
+                      {formData.panVerified && panVerificationResult && (
+                        <div className="flex items-center space-x-2 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
+                          <CheckCircle className="w-4 h-4" />
+                          <span>PAN Verified: {panVerificationResult.name}</span>
+                        </div>
+                      )}
+                      {formData.panNumber && formData.panNumber.length === 10 && !formData.panVerified && (
+                        <p className="text-xs text-gray-500">
+                          Optional: Verify PAN to ensure accuracy
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   <div>
@@ -302,6 +380,20 @@ const AddMembers = () => {
                   </Button>
                 </div>
               </form>
+
+              {/* PAN Verification Section */}
+              {showPANVerification && formData.panNumber && formData.panNumber.length === 10 && (
+                <div className="mt-6 pt-6 border-t border-gray-200">
+                  <PANVerificationInline
+                    panNumber={formData.panNumber}
+                    onVerified={handlePANVerified}
+                    onCancel={() => setShowPANVerification(false)}
+                    memberType="family"
+                    memberId={editingMember?.id}
+                    compact={false}
+                  />
+                </div>
+              )}
             </div>
           </Card>
         )}
@@ -370,9 +462,40 @@ const AddMembers = () => {
                   </div>
 
                   <div className="space-y-2 text-sm text-neutral-600">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">PAN:</span>
-                      <span>{member.panNumber}</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">PAN:</span>
+                        <span className="font-mono">{member.panNumber}</span>
+                      </div>
+                      {member.panVerified ? (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Verified
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setEditingMember(member);
+                            setFormData({
+                              firstName: member.firstName || '',
+                              lastName: member.lastName || '',
+                              panNumber: member.panNumber || '',
+                              dateOfBirth: member.dateOfBirth || '',
+                              relationship: member.relationship || '',
+                              phoneNumber: member.phoneNumber || '',
+                              email: member.email || '',
+                              panVerified: member.panVerified || false,
+                              panVerifiedAt: member.panVerifiedAt || null,
+                            });
+                            setShowAddForm(true);
+                            setShowPANVerification(true);
+                          }}
+                          className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 hover:bg-yellow-200 transition-colors"
+                        >
+                          <AlertCircle className="w-3 h-3 mr-1" />
+                          Verify PAN
+                        </button>
+                      )}
                     </div>
 
                     {member.dateOfBirth && (
@@ -399,6 +522,35 @@ const AddMembers = () => {
                 </div>
               </Card>
             ))}
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {memberToDelete && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+              <div className="flex items-center mb-4">
+                <AlertCircle className="h-6 w-6 text-red-600 mr-3" />
+                <h3 className="text-lg font-semibold text-gray-900">Delete Family Member</h3>
+              </div>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to delete this family member? This action cannot be undone.
+              </p>
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={cancelDelete}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  className="px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -21,7 +21,7 @@ import {
   CheckCircle,
   AlertCircle,
   Clock,
-  DollarSign,
+  IndianRupee,
   Filter,
   Download,
   Star,
@@ -439,7 +439,7 @@ const PlatformCAFirms = () => {
                               <span>{firm.total_clients || 0} clients</span>
                             </div>
                             <div className="flex items-center space-x-2">
-                              <DollarSign className="h-4 w-4" />
+                              <IndianRupee className="h-4 w-4" />
                               <span>₹{firm.monthly_revenue || 0}/month</span>
                             </div>
                           </div>

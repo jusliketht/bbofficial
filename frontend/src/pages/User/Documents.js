@@ -89,20 +89,83 @@ const Documents = () => {
     },
   });
 
+  const [uploadProgress, setUploadProgress] = useState({});
+  const [uploadErrors, setUploadErrors] = useState({});
+
   const handleFileUpload = async (event) => {
     const files = Array.from(event.target.files);
     if (files.length === 0) return;
 
-    const formData = new FormData();
-    files.forEach((file, index) => {
-      formData.append('files', file);
-    });
+    // Reset progress and errors
+    setUploadProgress({});
+    setUploadErrors({});
 
-    try {
-      await uploadDocumentMutation.mutateAsync(formData);
-      // Show success message
-    } catch (error) {
-      console.error('Error uploading documents:', error);
+    // Upload files individually to track progress
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const fileId = `${file.name}-${Date.now()}-${i}`;
+
+      setUploadProgress(prev => ({ ...prev, [fileId]: { file: file.name, progress: 0, status: 'uploading' } }));
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Determine category based on file name or let user select
+      // For now, auto-detect from filename
+      let category = 'OTHER';
+      const fileName = file.name.toLowerCase();
+      if (fileName.includes('form16') || fileName.includes('form_16')) {
+        category = fileName.includes('part_a') || fileName.includes('parta') ? 'FORM_16_PART_A' :
+                   fileName.includes('part_b') || fileName.includes('partb') ? 'FORM_16_PART_B' : 'FORM_16';
+      } else if (fileName.includes('ais') || fileName.includes('annual information')) {
+        category = 'AIS';
+      } else if (fileName.includes('26as') || fileName.includes('26_as')) {
+        category = 'FORM_26AS';
+      } else if (fileName.includes('bank') || fileName.includes('statement')) {
+        category = 'BANK_STATEMENT';
+      } else if (fileName.includes('rent') || fileName.includes('receipt')) {
+        category = 'RENT_RECEIPT';
+      } else if (fileName.includes('investment') || fileName.includes('80c') || fileName.includes('80d')) {
+        category = 'INVESTMENT_PROOF';
+      } else if (fileName.includes('broker') || fileName.includes('zerodha') || fileName.includes('groww') || fileName.includes('upstox')) {
+        category = 'BROKER_STATEMENT';
+      } else if (fileName.includes('salary') || fileName.includes('payslip')) {
+        category = 'SALARY_SLIP';
+      }
+
+      formData.append('category', category);
+
+      try {
+        // Simulate progress (in real implementation, use XMLHttpRequest for progress tracking)
+        const progressInterval = setInterval(() => {
+          setUploadProgress(prev => {
+            const current = prev[fileId]?.progress || 0;
+            if (current < 90) {
+              return { ...prev, [fileId]: { ...prev[fileId], progress: current + 10 } };
+            }
+            return prev;
+          });
+        }, 200);
+
+        await uploadDocumentMutation.mutateAsync(formData);
+
+        clearInterval(progressInterval);
+        setUploadProgress(prev => ({ ...prev, [fileId]: { ...prev[fileId], progress: 100, status: 'completed' } }));
+        toast.success(`${file.name} uploaded successfully`);
+
+        // Clear progress after 2 seconds
+        setTimeout(() => {
+          setUploadProgress(prev => {
+            const newProgress = { ...prev };
+            delete newProgress[fileId];
+            return newProgress;
+          });
+        }, 2000);
+      } catch (error) {
+        setUploadProgress(prev => ({ ...prev, [fileId]: { ...prev[fileId], status: 'error' } }));
+        setUploadErrors(prev => ({ ...prev, [fileId]: error.message || 'Upload failed' }));
+        toast.error(`Failed to upload ${file.name}: ${error.message || 'Unknown error'}`);
+      }
     }
   };
 
@@ -123,7 +186,7 @@ const Documents = () => {
 
   const getFileIcon = (fileType) => {
     if (fileType.startsWith('image/')) {
-      return <Image className="h-4 w-4 text-blue-600" />;
+      return <Image className="h-4 w-4 text-info-500" />;
     } else if (fileType.includes('pdf')) {
       return <FileText className="h-4 w-4 text-red-600" />;
     } else {
@@ -308,10 +371,17 @@ const Documents = () => {
                   className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="all">All Categories</option>
-                  <option value="tax">Tax Documents</option>
-                  <option value="income">Income Proof</option>
-                  <option value="investment">Investment</option>
-                  <option value="other">Other</option>
+                  <option value="FORM_16">Form 16</option>
+                  <option value="FORM_16_PART_A">Form 16 Part A</option>
+                  <option value="FORM_16_PART_B">Form 16 Part B</option>
+                  <option value="AIS">AIS (Annual Information Statement)</option>
+                  <option value="FORM_26AS">Form 26AS</option>
+                  <option value="BANK_STATEMENT">Bank Statement</option>
+                  <option value="RENT_RECEIPT">Rent Receipt</option>
+                  <option value="INVESTMENT_PROOF">Investment Proof (80C, 80D, etc.)</option>
+                  <option value="BROKER_STATEMENT">Broker Statement</option>
+                  <option value="SALARY_SLIP">Salary Slip</option>
+                  <option value="OTHER">Other</option>
                 </select>
               </div>
 
@@ -365,7 +435,7 @@ const Documents = () => {
                 >
                   <div className="flex items-center space-x-3">
                     {expandedFolders.has(category) ? (
-                      <FolderOpen className="h-5 w-5 text-blue-600" />
+                      <FolderOpen className="h-5 w-5 text-orange-500" />
                     ) : (
                       <Folder className="h-5 w-5 text-gray-600" />
                     )}
@@ -401,18 +471,25 @@ const Documents = () => {
 
                         <div className="flex items-center space-x-1">
                           <button
-                            onClick={() => window.open(doc.url, '_blank')}
-                            className="p-1 rounded hover:bg-blue-100 active:scale-95 transition-transform"
-                            title="View"
+                            onClick={() => {
+                              if (doc.extractedData) {
+                                // Show extracted data preview modal
+                                toast.info('Extracted data preview coming soon');
+                              } else {
+                                window.open(doc.url, '_blank');
+                              }
+                            }}
+                            className="p-1 rounded hover:bg-info-50 active:scale-95 transition-transform"
+                            title={doc.extractedData ? 'View extracted data' : 'View'}
                           >
-                            <Eye className="h-4 w-4 text-blue-600" />
+                            <Eye className="h-4 w-4 text-info-500" />
                           </button>
                           <button
                             onClick={() => window.open(doc.url, '_blank')}
-                            className="p-1 rounded hover:bg-green-100 active:scale-95 transition-transform"
+                            className="p-1 rounded hover:bg-success-50 active:scale-95 transition-transform"
                             title="Download"
                           >
-                            <Download className="h-4 w-4 text-green-600" />
+                            <Download className="h-4 w-4 text-success-500" />
                           </button>
                           <button
                             onClick={() => handleDeleteDocument(doc.id)}
@@ -437,25 +514,25 @@ const Documents = () => {
         <div className="flex justify-around">
           <button
             onClick={() => navigate('/dashboard')}
-            className="flex flex-col items-center p-2 text-gray-600 hover:text-blue-600"
+            className="flex flex-col items-center p-2 text-gray-600 hover:text-orange-600"
           >
             <FileText className="h-5 w-5 mb-1" />
             <span className="text-xs">Dashboard</span>
           </button>
-          <button className="flex flex-col items-center p-2 text-blue-600">
+          <button className="flex flex-col items-center p-2 text-orange-600">
             <Folder className="h-5 w-5 mb-1" />
             <span className="text-xs font-medium">Documents</span>
           </button>
           <button
             onClick={() => navigate('/profile')}
-            className="flex flex-col items-center p-2 text-gray-600 hover:text-blue-600"
+            className="flex flex-col items-center p-2 text-gray-600 hover:text-orange-600"
           >
             <User className="h-5 w-5 mb-1" />
             <span className="text-xs">Profile</span>
           </button>
           <button
             onClick={() => navigate('/settings')}
-            className="flex flex-col items-center p-2 text-gray-600 hover:text-blue-600"
+            className="flex flex-col items-center p-2 text-gray-600 hover:text-orange-600"
           >
             <Settings className="h-5 w-5 mb-1" />
             <span className="text-xs">Settings</span>

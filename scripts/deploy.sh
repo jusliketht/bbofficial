@@ -147,12 +147,12 @@ deploy() {
     
     # Run database migrations
     log "Running database migrations..."
-    npx sequelize-cli db:migrate --env production
+    npm run db:migrate
     
     # Seed database if needed
     if [ "$1" == "--seed" ]; then
         log "Running database seeds..."
-        npx sequelize-cli db:seed:all --env production
+        npm run db:seed
     fi
     
     # Build frontend (if build directory doesn't exist)

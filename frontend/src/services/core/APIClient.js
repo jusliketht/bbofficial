@@ -15,11 +15,22 @@ class APIClient {
     this.defaultTimeout = 30000;
     this.cache = new Map();
     this.cacheExpiry = 5 * 60 * 1000; // 5 minutes
+    this.isRefreshing = false; // Flag to prevent multiple simultaneous refresh attempts
+    this.refreshPromise = null; // Store the refresh promise to reuse it
+    this.refreshAttempts = 0; // Track refresh attempts to prevent infinite loops
+    this.maxRefreshAttempts = 1; // Maximum refresh attempts before giving up
     this.retryConfig = {
-      retries: 3,
+      retries: 2, // Reduced from 3 to prevent excessive retries
       retryDelay: 1000,
       retryCondition: (error) => {
-        return !error.response || (error.response.status >= 500 && error.response.status <= 599);
+        // Only retry on network errors or 5xx errors (but not 500 specifically to avoid cascading failures)
+        // Don't retry on 500 errors as they usually indicate server-side bugs that won't be fixed by retrying
+        if (!error.response) {
+          return true; // Network error - retry
+        }
+        const status = error.response.status;
+        // Retry on 502, 503, 504 (temporary server issues) but not 500 (server errors)
+        return status >= 502 && status <= 504;
       },
     };
 
@@ -42,14 +53,17 @@ class APIClient {
         // Add correlation ID for tracking
         config.headers['X-Correlation-ID'] = this.generateCorrelationId();
 
-        // Add auth token
-        const token = this.getAuthToken();
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
+        // Add auth token (skip if _skipAuth flag is set)
+        if (!config._skipAuth) {
+          const token = this.getAuthToken();
+          if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+          }
         }
 
         // Log request in development
         if (process.env.NODE_ENV === 'development') {
+          // eslint-disable-next-line no-console
           console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`, {
             data: config.data,
             params: config.params,
@@ -59,6 +73,7 @@ class APIClient {
         return config;
       },
       (error) => {
+        // eslint-disable-next-line no-console
         console.error('❌ Request interceptor error:', error);
         return Promise.reject(error);
       },
@@ -69,6 +84,7 @@ class APIClient {
       (response) => {
         // Log response in development
         if (process.env.NODE_ENV === 'development') {
+          // eslint-disable-next-line no-console
           console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`, {
             status: response.status,
             data: response.data,
@@ -82,6 +98,7 @@ class APIClient {
 
         // Log error in development
         if (process.env.NODE_ENV === 'development') {
+          // eslint-disable-next-line no-console
           console.error(`❌ API Error: ${originalRequest?.method?.toUpperCase()} ${originalRequest?.url}`, {
             status: error.response?.status,
             message: error.message,
@@ -90,7 +107,8 @@ class APIClient {
         }
 
         // Handle 401 unauthorized - attempt token refresh
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        // Skip if this is already a refresh request or if we're already refreshing
+        if (error.response?.status === 401 && !originalRequest._retry && !originalRequest._isRefreshRequest) {
           return this.handleTokenRefresh(originalRequest);
         }
 
@@ -103,11 +121,59 @@ class APIClient {
   }
 
   async handleTokenRefresh(originalRequest) {
+    // Prevent infinite refresh loops
+    if (this.refreshAttempts >= this.maxRefreshAttempts) {
+      this.clearAuthTokens();
+      if (!window.location.pathname.includes('/login')) {
+        toast.error('Session expired. Please login again.');
+        window.location.href = '/login';
+      }
+      return Promise.reject(new Error('Max refresh attempts exceeded'));
+    }
+
+    // Prevent multiple simultaneous refresh attempts
+    if (this.isRefreshing) {
+      // Wait for the existing refresh to complete
+      try {
+        await this.refreshPromise;
+        // Retry original request after refresh completes
+        const token = this.getAuthToken();
+        if (token) {
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          return this.client(originalRequest);
+        }
+      } catch {
+        // Refresh failed, fall through to handle error
+      }
+    }
+
     originalRequest._retry = true;
+    this.isRefreshing = true;
+    this.refreshAttempts++;
 
     try {
-      // Attempt to refresh token
-      const refreshResponse = await this.post('/auth/refresh', {}, { _skipAuth: true });
+      // Get refresh token from localStorage or cookie
+      const refreshToken = this.getRefreshToken();
+
+      // Mark this request as a refresh request to prevent infinite loops
+      const refreshRequestConfig = {
+        _skipAuth: true,
+        _isRefreshRequest: true,
+      };
+
+      // Attempt to refresh token - try cookie-based first, then body-based
+      let refreshResponse;
+      try {
+        // Try cookie-based refresh (sends cookies automatically)
+        refreshResponse = await this.post('/auth/refresh', {}, refreshRequestConfig);
+      } catch (cookieError) {
+        // If cookie-based fails and we have a refresh token, try body-based
+        if (refreshToken && cookieError.response?.status === 401) {
+          refreshResponse = await this.post('/auth/refresh', { refreshToken }, refreshRequestConfig);
+        } else {
+          throw cookieError;
+        }
+      }
 
       if (refreshResponse.data.success && refreshResponse.data.accessToken) {
         // Update stored token
@@ -123,13 +189,26 @@ class APIClient {
         return this.client(originalRequest);
       }
     } catch (refreshError) {
-      // Refresh failed - clear auth and redirect
+      // Refresh failed - clear auth and stop retrying
+      this.isRefreshing = false;
+      this.refreshPromise = null;
+      this.refreshAttempts = 0; // Reset attempts
       this.clearAuthTokens();
-      toast.error('Session expired. Please login again.');
 
-      // Avoid redirect loops
+      // Only show toast and redirect if not already on login page
       if (!window.location.pathname.includes('/login')) {
+        toast.error('Session expired. Please login again.');
         window.location.href = '/login';
+      }
+
+      // Reject the original request
+      return Promise.reject(refreshError);
+    } finally {
+      this.isRefreshing = false;
+      this.refreshPromise = null;
+      // Reset attempts on successful refresh
+      if (this.refreshAttempts > 0) {
+        this.refreshAttempts = 0;
       }
     }
 
@@ -308,6 +387,10 @@ class APIClient {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
+    // Reset refresh state to prevent loops
+    this.isRefreshing = false;
+    this.refreshAttempts = 0;
+    this.refreshPromise = null;
   }
 
   // Utility methods

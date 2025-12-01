@@ -80,8 +80,19 @@ const Header = ({ onMenuClick, sidebarOpen }) => {
               className="flex items-center cursor-pointer"
               onClick={() => navigate('/dashboard')}
             >
-              <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center mr-1.5 sm:mr-2">
-                <span className="text-white font-bold text-xs sm:text-sm">BB</span>
+              <div className="w-7 h-7 sm:w-8 sm:h-8 bg-burn-gradient rounded-lg flex items-center justify-center mr-1.5 sm:mr-2 shadow-card relative">
+                <img
+                  src="/bb-logo.svg"
+                  alt="BurnBlack Logo"
+                  className="w-full h-full object-contain p-1"
+                  onError={(e) => {
+                    // Fallback to text if logo fails to load
+                    e.target.style.display = 'none';
+                    const fallback = e.target.parentElement.querySelector('.logo-fallback');
+                    if (fallback) fallback.style.display = 'block';
+                  }}
+                />
+                <span className="text-white font-bold text-xs sm:text-sm hidden logo-fallback absolute">BB</span>
               </div>
               <span className="text-lg sm:text-xl font-bold text-gray-900 hidden sm:block">
                 BurnBlack
@@ -97,7 +108,7 @@ const Header = ({ onMenuClick, sidebarOpen }) => {
                 <input
                   type="text"
                   placeholder="Search..."
-                  className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 />
                 <button
                   onClick={() => setShowSearch(false)}
@@ -148,7 +159,7 @@ const Header = ({ onMenuClick, sidebarOpen }) => {
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="flex items-center space-x-1.5 sm:space-x-2 p-1 sm:p-1.5 lg:p-2 rounded-lg hover:bg-gray-100 transition-colors"
               >
-                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-burn-gradient rounded-full flex items-center justify-center shadow-card">
                   <span className="text-white text-xs sm:text-sm font-medium">
                     {getUserInitials()}
                   </span>

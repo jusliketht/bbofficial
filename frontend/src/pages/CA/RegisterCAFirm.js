@@ -23,7 +23,7 @@ import {
   Star,
   Clock,
   Users,
-  DollarSign,
+  IndianRupee,
 } from 'lucide-react';
 import { Button, Card, Alert } from '../../components/UI';
 import api from '../../services/api';

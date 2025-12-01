@@ -15,7 +15,7 @@ import {
   Mail,
   Eye,
   Calendar,
-  DollarSign,
+  IndianRupee,
   CheckCircle,
   Clock,
   AlertCircle,
@@ -353,7 +353,7 @@ const InvoiceManagement = () => {
                   </Typography.H3>
                 </div>
                 <div className="w-12 h-12 bg-secondary-100 rounded-lg flex items-center justify-center">
-                  <DollarSign className="w-6 h-6 text-secondary-600" />
+                  <IndianRupee className="w-6 h-6 text-secondary-600" />
                 </div>
               </div>
             </CardContent>

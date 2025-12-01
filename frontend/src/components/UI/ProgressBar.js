@@ -67,9 +67,9 @@ const ProgressBar = ({
   const getStepColor = (status) => {
     switch (status) {
       case 'completed':
-        return 'bg-green-500 border-green-500';
+        return 'bg-success-500 border-success-500';
       case 'current':
-        return 'bg-blue-500 border-blue-500';
+        return 'bg-orange-500 border-orange-500';
       default:
         return 'bg-gray-300 border-gray-300';
     }
@@ -86,7 +86,7 @@ const ProgressBar = ({
             variants={progressVariants}
             initial="initial"
             animate="animate"
-            className="h-2 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"
+            className="h-2 bg-burn-gradient rounded-full"
           />
         </div>
 
@@ -132,8 +132,8 @@ const ProgressBar = ({
                 {showLabels && (
                   <div className="text-center">
                     <p className={`text-xs font-medium ${
-                      isCompleted ? 'text-green-600' :
-                      isCurrent ? 'text-blue-600' : 'text-gray-500'
+                      isCompleted ? 'text-success-600' :
+                      isCurrent ? 'text-orange-600' : 'text-gray-500'
                     }`}>
                       {step.title || `Step ${index + 1}`}
                     </p>
@@ -192,8 +192,8 @@ const ProgressBar = ({
                 {/* Step Label */}
                 {showLabels && (
                   <p className={`text-xs font-medium ${
-                    isCompleted ? 'text-green-600' :
-                    isCurrent ? 'text-blue-600' : 'text-gray-500'
+                    isCompleted ? 'text-success-600' :
+                    isCurrent ? 'text-orange-600' : 'text-gray-500'
                   }`}>
                     Step {index + 1}
                   </p>

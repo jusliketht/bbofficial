@@ -89,7 +89,7 @@ const ValidatedSelect = ({
     }
 
     if (!validationState.isTouched) {
-      return `${baseClasses} border-gray-300 focus:ring-blue-500 focus:border-blue-500`;
+      return `${baseClasses} border-gray-300 focus:ring-orange-500 focus:border-orange-500`;
     }
 
     if (validationState.errors.length > 0) {
@@ -104,12 +104,12 @@ const ValidatedSelect = ({
       return `${baseClasses} border-green-300 focus:ring-green-500 focus:border-green-500`;
     }
 
-    return `${baseClasses} border-gray-300 focus:ring-blue-500 focus:border-blue-500`;
+    return `${baseClasses} border-gray-300 focus:ring-orange-500 focus:border-orange-500`;
   };
 
   const getValidationIcon = () => {
     if (isValidating) {
-      return <RefreshCw className="w-4 h-4 text-blue-500 animate-spin" />;
+      return <RefreshCw className="w-4 h-4 text-orange-500 animate-spin" />;
     }
 
     if (!validationState.isTouched || !value) {
@@ -227,7 +227,7 @@ const ValidatedSelect = ({
                     onClick={() => handleChange(option.value)}
                     className={`w-full px-3 py-2 text-left hover:bg-gray-50 focus:bg-gray-50 focus:outline-none transition-colors ${
                       value === option.value
-                        ? 'bg-blue-50 text-blue-700 font-medium'
+                        ? 'bg-orange-50 text-orange-700 font-medium'
                         : 'text-gray-900'
                     }`}
                   >
@@ -254,12 +254,12 @@ const ValidatedSelect = ({
 
       {/* Suggestions */}
       {showSuggestions && validationState.suggestions.length > 0 && (isFocused || validationState.errors.length > 0) && (
-        <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="mt-2 p-3 bg-info-50 border border-info-200 rounded-lg">
           <div className="flex items-start space-x-2">
-            <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+            <Info className="w-4 h-4 text-info-600 mt-0.5 flex-shrink-0" />
             <div>
-              <p className="text-sm font-medium text-blue-900 mb-1">Suggestions:</p>
-              <ul className="text-xs text-blue-800 space-y-1">
+              <p className="text-sm font-medium text-info-900 mb-1">Suggestions:</p>
+              <ul className="text-xs text-info-800 space-y-1">
                 {validationState.suggestions.slice(0, 3).map((suggestion, index) => (
                   <li key={index} className="flex items-start">
                     <span className="mr-2">•</span>

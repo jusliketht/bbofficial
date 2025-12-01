@@ -26,7 +26,7 @@ import {
   MoreVertical,
   Eye,
   FileText,
-  DollarSign,
+  IndianRupee,
   Star,
   MessageCircle,
   Download,

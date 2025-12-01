@@ -33,7 +33,7 @@ import {
   Crown,
   Star,
   Activity,
-  DollarSign,
+  IndianRupee,
 } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
@@ -468,7 +468,7 @@ const CAFirmStaffManagement = () => {
                               <span>Activity Score: {member.activity_score || 0}</span>
                             </div>
                             <div className="flex items-center space-x-2">
-                              <DollarSign className="h-4 w-4" />
+                              <IndianRupee className="h-4 w-4" />
                               <span>Revenue: ₹{member.monthly_revenue || 0}</span>
                             </div>
                           </div>

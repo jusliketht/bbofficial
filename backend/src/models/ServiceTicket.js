@@ -52,9 +52,17 @@ const ServiceTicket = sequelize.define('ServiceTicket', {
       'PAYMENT_ISSUE',
       'REFUND_REQUEST',
       'GENERAL_INQUIRY',
+      'CA_REVIEW',
+      'EXPERT_REVIEW',
+      'RTR_REVIEW',
     ),
     allowNull: false,
     field: 'ticket_type',
+  },
+  category: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    comment: 'Ticket category for filtering (ca_review, expert_review, rtr_review, etc.)',
   },
   priority: {
     type: DataTypes.ENUM(

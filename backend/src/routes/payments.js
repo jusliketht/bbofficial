@@ -115,4 +115,72 @@ router.get('/history',
   paymentController.getPaymentHistory,
 );
 
+// Tax Payment Routes
+const createTaxPaymentOrderSchema = Joi.object({
+  filingId: Joi.string().uuid().required(),
+  paymentId: Joi.string().uuid().required(),
+});
+
+const verifyTaxPaymentSchema = Joi.object({
+  paymentId: Joi.string().uuid().required(),
+  razorpay_order_id: Joi.string().optional(),
+  razorpay_payment_id: Joi.string().optional(),
+  razorpay_signature: Joi.string().optional(),
+  transaction_id: Joi.string().optional(),
+  status: Joi.string().optional(),
+  amount: Joi.number().optional(),
+});
+
+const initiateITDPaymentSchema = Joi.object({
+  filingId: Joi.string().uuid().required(),
+  paymentId: Joi.string().uuid().required(),
+});
+
+const uploadProofSchema = Joi.object({
+  proofUrl: Joi.string().uri().required(),
+});
+
+router.post('/tax/create-order',
+  authenticateToken,
+  validateRequest(createTaxPaymentOrderSchema),
+  paymentController.createTaxPaymentOrder,
+);
+
+router.post('/tax/verify',
+  authenticateToken,
+  validateRequest(verifyTaxPaymentSchema),
+  paymentController.verifyTaxPayment,
+);
+
+router.post('/tax/itd/initiate',
+  authenticateToken,
+  validateRequest(initiateITDPaymentSchema),
+  paymentController.initiateITDPayment,
+);
+
+router.post('/tax/itd/callback',
+  paymentController.handleITDCallback, // No auth - webhook
+);
+
+router.post('/tax/:paymentId/proof',
+  authenticateToken,
+  validateRequest(uploadProofSchema),
+  paymentController.uploadPaymentProof,
+);
+
+router.post('/tax/:paymentId/verify-26as',
+  authenticateToken,
+  paymentController.verifyVia26AS,
+);
+
+router.get('/tax/:paymentId/status',
+  authenticateToken,
+  paymentController.getTaxPaymentStatus,
+);
+
+router.get('/tax/filing/:filingId/history',
+  authenticateToken,
+  paymentController.getTaxPaymentHistory,
+);
+
 module.exports = router;

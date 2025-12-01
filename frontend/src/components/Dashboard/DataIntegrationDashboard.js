@@ -12,7 +12,7 @@ import {
   TrendingUp,
   Shield,
   FileText,
-  DollarSign,
+  IndianRupee,
   PieChart,
   Activity,
   CheckCircle,

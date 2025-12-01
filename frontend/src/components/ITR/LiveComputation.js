@@ -4,7 +4,7 @@ import {
   Calculator,
   TrendingUp,
   TrendingDown,
-  DollarSign,
+  IndianRupee,
   ChevronDown,
   ChevronUp,
   Info,
@@ -171,7 +171,7 @@ const LiveComputation = ({ taxCalculation, filingData, isLoading }) => {
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  <DollarSign className="h-5 w-5 text-gray-600" />
+                  <IndianRupee className="h-5 w-5 text-gray-600" />
                   <span className="text-sm font-medium text-gray-800">No Tax Due</span>
                 </div>
                 <span className="text-xl font-bold text-gray-600">₹0</span>

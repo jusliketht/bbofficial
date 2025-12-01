@@ -4,8 +4,8 @@
 // =====================================================
 
 const Tesseract = require('tesseract.js');
-const enterpriseLogger = require('../utils/logger');
-const { AppError } = require('../middleware/errorHandler');
+const enterpriseLogger = require('../../utils/logger');
+const { AppError } = require('../../middleware/errorHandler');
 
 class DeductionTypeDetectionService {
   constructor() {

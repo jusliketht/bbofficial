@@ -47,9 +47,27 @@ const ITRFiling = sequelize.define('ITRFiling', {
     comment: 'ITD schema compliant JSON',
   },
   status: {
-    type: DataTypes.ENUM('draft', 'submitted', 'acknowledged', 'processed', 'rejected'),
+    type: DataTypes.ENUM('draft', 'paused', 'submitted', 'acknowledged', 'processed', 'rejected'),
     defaultValue: 'draft',
     allowNull: false,
+  },
+  pausedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'paused_at',
+    comment: 'Timestamp when filing was paused',
+  },
+  resumedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'resumed_at',
+    comment: 'Timestamp when filing was resumed',
+  },
+  pauseReason: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    field: 'pause_reason',
+    comment: 'Optional reason for pausing the filing',
   },
   ackNumber: {
     type: DataTypes.STRING,
@@ -98,6 +116,86 @@ const ITRFiling = sequelize.define('ITRFiling', {
     field: 'service_ticket_id',
     comment: 'Auto-created service ticket for filing',
   },
+  firmId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'ca_firms',
+      key: 'id',
+    },
+    field: 'firm_id',
+    comment: 'CA firm context (derived from User.caFirmId or explicit)',
+  },
+  assignedTo: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'users',
+      key: 'id',
+    },
+    field: 'assigned_to',
+    comment: 'Assigned preparer/reviewer user ID',
+  },
+  reviewStatus: {
+    type: DataTypes.ENUM('pending', 'in_review', 'approved', 'rejected'),
+    allowNull: true,
+    field: 'review_status',
+    comment: 'CA review status',
+  },
+  verificationMethod: {
+    type: DataTypes.ENUM('AADHAAR_OTP', 'NETBANKING', 'DSC'),
+    allowNull: true,
+    field: 'verification_method',
+    comment: 'E-verification method used',
+  },
+  verificationStatus: {
+    type: DataTypes.ENUM('pending', 'verified', 'failed'),
+    allowNull: true,
+    defaultValue: 'pending',
+    field: 'verification_status',
+    comment: 'E-verification status',
+  },
+  verificationDate: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'verification_date',
+    comment: 'Date when verification was completed',
+  },
+  verificationDetails: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    field: 'verification_details',
+    comment: 'Additional verification details (token, source, etc.)',
+  },
+  regime: {
+    type: DataTypes.ENUM('old', 'new'),
+    allowNull: true,
+    field: 'regime',
+    comment: 'Tax regime selected: old or new',
+  },
+  previousYearFilingId: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    field: 'previous_year_filing_id',
+    references: {
+      model: 'itr_filings',
+      key: 'id',
+    },
+    comment: 'Reference to previous year filing for copy feature',
+  },
+  sharedWith: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    defaultValue: [],
+    field: 'shared_with',
+    comment: 'Array of draft sharing records: [{email, token, permissions, sharedAt}]',
+  },
+  taxComputation: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    field: 'tax_computation',
+    comment: 'Stored tax computation result with breakdown',
+  },
   createdAt: {
     type: DataTypes.DATE,
     allowNull: false,
@@ -139,6 +237,17 @@ const ITRFiling = sequelize.define('ITRFiling', {
       fields: ['user_id', 'member_id', 'itr_type', 'assessment_year'],
       name: 'unique_filing_per_member',
     },
+    {
+      fields: ['user_id', 'assessment_year', 'status'],
+      name: 'idx_previous_year_queries',
+      comment: 'Index for efficient previous year filing queries',
+    },
+    {
+      fields: ['regime'],
+    },
+    {
+      fields: ['previous_year_filing_id'],
+    },
   ],
 });
 
@@ -157,6 +266,9 @@ ITRFiling.prototype.updateStatus = async function(newStatus, additionalData = {}
       break;
     case 'processed':
       updateData.processedAt = new Date();
+      break;
+    case 'paused':
+      updateData.pausedAt = new Date();
       break;
     }
 
@@ -188,7 +300,143 @@ ITRFiling.prototype.canBeSubmitted = function() {
 };
 
 ITRFiling.prototype.canBeModified = function() {
-  return ['draft', 'rejected'].includes(this.status);
+  return ['draft', 'paused', 'rejected'].includes(this.status);
+};
+
+ITRFiling.prototype.pause = async function(reason = null) {
+  try {
+    await this.update({
+      status: 'paused',
+      pausedAt: new Date(),
+      pauseReason: reason,
+    });
+
+    enterpriseLogger.info('ITR filing paused', {
+      filingId: this.id,
+      reason,
+      pausedAt: this.pausedAt,
+    });
+
+    return this;
+  } catch (error) {
+    enterpriseLogger.error('Pause filing error', {
+      filingId: this.id,
+      error: error.message,
+    });
+    throw error;
+  }
+};
+
+ITRFiling.prototype.resume = async function() {
+  try {
+    await this.update({
+      status: 'draft',
+      resumedAt: new Date(),
+    });
+
+    enterpriseLogger.info('ITR filing resumed', {
+      filingId: this.id,
+      resumedAt: this.resumedAt,
+    });
+
+    return this;
+  } catch (error) {
+    enterpriseLogger.error('Resume filing error', {
+      filingId: this.id,
+      error: error.message,
+    });
+    throw error;
+  }
+};
+
+ITRFiling.prototype.assignTo = async function(userId) {
+  try {
+    await this.update({
+      assignedTo: userId,
+      jsonPayload: {
+        ...(this.jsonPayload || {}),
+        metadata: {
+          ...((this.jsonPayload || {}).metadata || {}),
+          assignedAt: new Date().toISOString(),
+          assignedBy: userId,
+        },
+      },
+    });
+    
+    enterpriseLogger.info('ITR filing assigned', {
+      filingId: this.id,
+      assignedTo: userId,
+    });
+    
+    return this;
+  } catch (error) {
+    enterpriseLogger.error('Assign filing error', {
+      filingId: this.id,
+      userId,
+      error: error.message,
+    });
+    throw error;
+  }
+};
+
+ITRFiling.prototype.requestReview = async function(reason = null) {
+  try {
+    await this.update({
+      reviewStatus: 'pending',
+      jsonPayload: {
+        ...(this.jsonPayload || {}),
+        metadata: {
+          ...((this.jsonPayload || {}).metadata || {}),
+          reviewRequestedAt: new Date().toISOString(),
+          reviewReason: reason,
+        },
+      },
+    });
+    
+    enterpriseLogger.info('ITR filing review requested', {
+      filingId: this.id,
+      reason,
+    });
+    
+    return this;
+  } catch (error) {
+    enterpriseLogger.error('Request review error', {
+      filingId: this.id,
+      error: error.message,
+    });
+    throw error;
+  }
+};
+
+ITRFiling.prototype.approveReview = async function(reviewerId, comments = null) {
+  try {
+    await this.update({
+      reviewStatus: 'approved',
+      jsonPayload: {
+        ...(this.jsonPayload || {}),
+        metadata: {
+          ...((this.jsonPayload || {}).metadata || {}),
+          reviewedAt: new Date().toISOString(),
+          reviewerId,
+          reviewComments: comments,
+        },
+      },
+    });
+    
+    enterpriseLogger.info('ITR filing review approved', {
+      filingId: this.id,
+      reviewerId,
+    });
+    
+    return this;
+  } catch (error) {
+    enterpriseLogger.error('Approve review error', {
+      filingId: this.id,
+      reviewerId,
+      error: error.message,
+    });
+    throw error;
+  }
 };
 
 // Class methods
@@ -263,7 +511,8 @@ ITRFiling.beforeCreate(async (filing) => {
 ITRFiling.beforeUpdate(async (filing) => {
   // Validate status transitions
   const validTransitions = {
-    'draft': ['submitted', 'rejected'],
+    'draft': ['paused', 'submitted', 'rejected'],
+    'paused': ['draft', 'rejected'],
     'submitted': ['acknowledged', 'rejected'],
     'acknowledged': ['processed', 'rejected'],
     'processed': [],
@@ -281,6 +530,14 @@ ITRFiling.beforeUpdate(async (filing) => {
 });
 
 // Associations will be defined in a separate file
+// Associations
+ITRFiling.associate = (models) => {
+  ITRFiling.hasMany(models.ReturnVersion, {
+    foreignKey: 'returnId',
+    as: 'versions',
+  });
+};
+
 // ITRFiling.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 // ITRFiling.hasMany(ITRDraft, { foreignKey: 'filingId', as: 'drafts' });
 

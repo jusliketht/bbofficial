@@ -51,12 +51,12 @@ const FilingStatusTracker = ({ filing }) => {
       <div className="bg-gradient-to-r from-green-500 to-blue-500 p-6 text-white">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold mb-2">Filing Status</h2>
-            <p className="text-green-100">Assessment Year {mockFiling.assessmentYear}</p>
+            <h2 className="text-heading-lg font-semibold mb-2">Filing Status</h2>
+            <p className="text-white text-opacity-90 text-body-sm">Assessment Year {mockFiling.assessmentYear}</p>
           </div>
           <div className="text-right">
-            <div className="text-3xl font-bold">₹{mockFiling.refundAmount.toLocaleString()}</div>
-            <div className="text-green-100 text-sm">Expected Refund</div>
+            <div className="text-number-lg font-semibold tabular-nums">₹{mockFiling.refundAmount.toLocaleString('en-IN')}</div>
+            <div className="text-white text-opacity-90 text-body-sm">Expected Refund</div>
           </div>
         </div>
       </div>
@@ -67,8 +67,8 @@ const FilingStatusTracker = ({ filing }) => {
           <div className="flex items-center">
             <Hash className="w-5 h-5 text-gray-400 mr-3" />
             <div>
-              <p className="text-sm text-gray-500">Acknowledgement Number</p>
-              <p className="font-mono text-sm font-medium text-gray-900">
+              <p className="text-label-sm text-gray-500">Acknowledgement Number</p>
+              <p className="font-mono text-body-sm font-medium text-gray-900">
                 {mockFiling.acknowledgementNumber}
               </p>
             </div>
@@ -76,8 +76,8 @@ const FilingStatusTracker = ({ filing }) => {
           <div className="flex items-center">
             <Calendar className="w-5 h-5 text-gray-400 mr-3" />
             <div>
-              <p className="text-sm text-gray-500">Filing Date</p>
-              <p className="text-sm font-medium text-gray-900">
+              <p className="text-label-sm text-gray-500">Filing Date</p>
+              <p className="text-body-sm font-medium text-gray-900">
                 {new Date(mockFiling.filingDate).toLocaleDateString('en-IN', {
                   day: 'numeric',
                   month: 'long',
@@ -119,14 +119,14 @@ const FilingStatusTracker = ({ filing }) => {
                 {/* Content */}
                 <div className="flex-1 pb-6">
                   <div className="flex items-center justify-between mb-1">
-                    <h3 className={`font-semibold ${
-                      step.completed ? 'text-green-700' : step.current ? 'text-blue-700' : 'text-gray-500'
+                    <h3 className={`text-heading-sm font-semibold ${
+                      step.completed ? 'text-success-600' : step.current ? 'text-info-600' : 'text-gray-500'
                     }`}>
                       {step.title}
                     </h3>
-                    <span className="text-sm text-gray-500">{step.date}</span>
+                    <span className="text-body-sm text-gray-500">{step.date}</span>
                   </div>
-                  <p className="text-gray-600 text-sm">{step.description}</p>
+                  <p className="text-gray-600 text-body-sm">{step.description}</p>
                 </div>
               </div>
             );

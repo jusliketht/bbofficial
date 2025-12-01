@@ -109,10 +109,23 @@ class AuthService {
     }
   }
 
+  // Set password for OAuth users (first time)
+  async setPassword(newPassword) {
+    try {
+      const response = await apiClient.put('/users/set-password', {
+        newPassword,
+      });
+      return response.data;
+    } catch (error) {
+      errorHandler.handleValidationError(error);
+      throw error;
+    }
+  }
+
   // Change password
   async changePassword(currentPassword, newPassword) {
     try {
-      const response = await apiClient.post('/auth/change-password', {
+      const response = await apiClient.put('/users/password', {
         currentPassword,
         newPassword,
       });

@@ -5,9 +5,12 @@
 
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
-const { ITRFiling, User, Invoice, CAFirm } = require('../models');
+const { ITRFiling, User, Invoice, CAFirm, TaxPayment } = require('../models');
 const ExpertReviewService = require('../services/business/ExpertReviewService');
 const InvoiceService = require('../services/business/InvoiceService');
+const TaxPaymentService = require('../services/business/TaxPaymentService');
+const ITDPaymentGatewayService = require('../services/integration/ITDPaymentGatewayService');
+const Form26ASService = require('../services/integration/Form26ASService');
 const enterpriseLogger = require('../utils/logger');
 
 // Initialize Razorpay (conditional on environment variables)
@@ -529,6 +532,302 @@ class PaymentController {
       res.status(500).json({
         success: false,
         message: 'Failed to get payment history',
+      });
+    }
+  }
+
+  // =====================================================
+  // TAX PAYMENT METHODS
+  // =====================================================
+
+  /**
+   * Create tax payment order (Razorpay)
+   * POST /api/payments/tax/create-order
+   */
+  async createTaxPaymentOrder(req, res) {
+    try {
+      const userId = req.user.userId || req.user.id;
+      const { filingId, paymentId } = req.body;
+
+      enterpriseLogger.info('Creating tax payment order', {
+        userId,
+        filingId,
+        paymentId,
+      });
+
+      const result = await TaxPaymentService.createPaymentOrder(filingId, paymentId, req.body);
+
+      res.json({
+        success: true,
+        ...result,
+      });
+    } catch (error) {
+      enterpriseLogger.error('Failed to create tax payment order', {
+        error: error.message,
+        userId: req.user?.userId || req.user?.id,
+      });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        error: error.message || 'Failed to create tax payment order',
+      });
+    }
+  }
+
+  /**
+   * Verify tax payment
+   * POST /api/payments/tax/verify
+   */
+  async verifyTaxPayment(req, res) {
+    try {
+      const userId = req.user.userId || req.user.id;
+      const { paymentId, ...verificationData } = req.body;
+
+      enterpriseLogger.info('Verifying tax payment', {
+        userId,
+        paymentId,
+      });
+
+      const result = await TaxPaymentService.verifyPayment(paymentId, verificationData);
+
+      res.json({
+        success: true,
+        ...result,
+      });
+    } catch (error) {
+      enterpriseLogger.error('Failed to verify tax payment', {
+        error: error.message,
+        userId: req.user?.userId || req.user?.id,
+      });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        error: error.message || 'Failed to verify tax payment',
+      });
+    }
+  }
+
+  /**
+   * Initiate ITD payment
+   * POST /api/payments/tax/itd/initiate
+   */
+  async initiateITDPayment(req, res) {
+    try {
+      const userId = req.user.userId || req.user.id;
+      const { filingId, paymentId } = req.body;
+
+      enterpriseLogger.info('Initiating ITD payment', {
+        userId,
+        filingId,
+        paymentId,
+      });
+
+      const result = await TaxPaymentService.initiateITDPayment(filingId, paymentId);
+
+      res.json({
+        success: true,
+        ...result,
+      });
+    } catch (error) {
+      enterpriseLogger.error('Failed to initiate ITD payment', {
+        error: error.message,
+        userId: req.user?.userId || req.user?.id,
+      });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        error: error.message || 'Failed to initiate ITD payment',
+      });
+    }
+  }
+
+  /**
+   * Handle ITD payment callback/webhook
+   * POST /api/payments/tax/itd/callback
+   */
+  async handleITDCallback(req, res) {
+    try {
+      enterpriseLogger.info('Handling ITD payment callback', {
+        callbackData: req.body,
+      });
+
+      // Process callback
+      const callbackData = await ITDPaymentGatewayService.handleCallback(req.body);
+
+      // Find payment by challan number
+      const taxPayment = await TaxPayment.findByChallanNumber(callbackData.challanNumber);
+      
+      if (!taxPayment) {
+        enterpriseLogger.warn('Tax payment not found for ITD callback', {
+          challanNumber: callbackData.challanNumber,
+        });
+        return res.status(404).json({
+          success: false,
+          error: 'Tax payment not found',
+        });
+      }
+
+      // Verify payment
+      const result = await TaxPaymentService.verifyPayment(taxPayment.id, {
+        transaction_id: callbackData.transactionId,
+        status: callbackData.status,
+        amount: callbackData.amount,
+      });
+
+      res.json({
+        success: true,
+        ...result,
+      });
+    } catch (error) {
+      enterpriseLogger.error('Failed to handle ITD callback', {
+        error: error.message,
+      });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        error: error.message || 'Failed to handle ITD callback',
+      });
+    }
+  }
+
+  /**
+   * Upload payment proof
+   * POST /api/payments/tax/:paymentId/proof
+   */
+  async uploadPaymentProof(req, res) {
+    try {
+      const userId = req.user.userId || req.user.id;
+      const { paymentId } = req.params;
+      const { proofUrl } = req.body;
+
+      enterpriseLogger.info('Uploading payment proof', {
+        userId,
+        paymentId,
+      });
+
+      // Verify user owns this payment
+      const taxPayment = await TaxPayment.findByPk(paymentId);
+      if (!taxPayment || taxPayment.userId !== userId) {
+        return res.status(403).json({
+          success: false,
+          error: 'Unauthorized access to payment',
+        });
+      }
+
+      const result = await TaxPaymentService.uploadPaymentProof(paymentId, proofUrl);
+
+      res.json({
+        success: true,
+        ...result,
+      });
+    } catch (error) {
+      enterpriseLogger.error('Failed to upload payment proof', {
+        error: error.message,
+        userId: req.user?.userId || req.user?.id,
+      });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        error: error.message || 'Failed to upload payment proof',
+      });
+    }
+  }
+
+  /**
+   * Verify payment via Form 26AS
+   * POST /api/payments/tax/:paymentId/verify-26as
+   */
+  async verifyVia26AS(req, res) {
+    try {
+      const userId = req.user.userId || req.user.id;
+      const { paymentId } = req.params;
+
+      enterpriseLogger.info('Verifying payment via 26AS', {
+        userId,
+        paymentId,
+      });
+
+      const result = await TaxPaymentService.verifyVia26AS(paymentId);
+
+      res.json({
+        success: true,
+        ...result,
+      });
+    } catch (error) {
+      enterpriseLogger.error('Failed to verify payment via 26AS', {
+        error: error.message,
+        userId: req.user?.userId || req.user?.id,
+      });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        error: error.message || 'Failed to verify payment via 26AS',
+      });
+    }
+  }
+
+  /**
+   * Get tax payment status
+   * GET /api/payments/tax/:paymentId/status
+   */
+  async getTaxPaymentStatus(req, res) {
+    try {
+      const userId = req.user.userId || req.user.id;
+      const { paymentId } = req.params;
+
+      const result = await TaxPaymentService.getPaymentStatus(paymentId);
+
+      // Verify user owns this payment
+      const taxPayment = await TaxPayment.findByPk(paymentId);
+      if (!taxPayment || taxPayment.userId !== userId) {
+        return res.status(403).json({
+          success: false,
+          error: 'Unauthorized access to payment',
+        });
+      }
+
+      res.json({
+        success: true,
+        ...result,
+      });
+    } catch (error) {
+      enterpriseLogger.error('Failed to get tax payment status', {
+        error: error.message,
+        userId: req.user?.userId || req.user?.id,
+      });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        error: error.message || 'Failed to get tax payment status',
+      });
+    }
+  }
+
+  /**
+   * Get tax payment history for a filing
+   * GET /api/payments/tax/filing/:filingId/history
+   */
+  async getTaxPaymentHistory(req, res) {
+    try {
+      const userId = req.user.userId || req.user.id;
+      const { filingId } = req.params;
+
+      // Verify user owns this filing
+      const filing = await ITRFiling.findByPk(filingId);
+      if (!filing || filing.userId !== userId) {
+        return res.status(403).json({
+          success: false,
+          error: 'Unauthorized access to filing',
+        });
+      }
+
+      const result = await TaxPaymentService.getPaymentHistory(filingId);
+
+      res.json({
+        success: true,
+        ...result,
+      });
+    } catch (error) {
+      enterpriseLogger.error('Failed to get tax payment history', {
+        error: error.message,
+        userId: req.user?.userId || req.user?.id,
+      });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        error: error.message || 'Failed to get tax payment history',
       });
     }
   }

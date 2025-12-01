@@ -17,7 +17,12 @@ import {
   Plus,
   Search,
   Filter,
+  IndianRupee,
+  TrendingUp,
 } from 'lucide-react';
+import itrService from '../../services/api/itrService';
+import FilingStatusBadge from '../../components/ITR/FilingStatusBadge';
+import InvoiceBadge from '../../components/ITR/InvoiceBadge';
 
 const CAStaffDashboard = () => {
   const { user } = useAuth();
@@ -27,6 +32,12 @@ const CAStaffDashboard = () => {
   const [tickets, setTickets] = useState([]);
   const [activeTab, setActiveTab] = useState('clients');
   const [searchTerm, setSearchTerm] = useState('');
+  const [billingStats, setBillingStats] = useState({
+    totalRevenue: 0,
+    paidRevenue: 0,
+    pendingInvoices: 0,
+    overdueInvoices: 0,
+  });
 
   useEffect(() => {
     loadDashboardData();
@@ -42,10 +53,41 @@ const CAStaffDashboard = () => {
         setAssignedClients(clientsResponse.data.data.users || []);
       }
 
-      // Load filings assigned to this CA
-      const filingsResponse = await apiClient.get(`/itr?assignedTo=${user.id}&limit=20`);
-      if (filingsResponse.data.success) {
-        setFilings(filingsResponse.data.data.filings || []);
+      // Load filings assigned to this CA (with role-based data including invoices)
+      const filingsResponse = await itrService.getUserITRs({ status: undefined });
+      const filings = filingsResponse.data?.filings || filingsResponse.filings || [];
+      if (filings.length > 0) {
+        setFilings(filings);
+
+        // Calculate billing stats from filings
+        const stats = {
+          totalRevenue: 0,
+          paidRevenue: 0,
+          pendingInvoices: 0,
+          overdueInvoices: 0,
+        };
+
+        filings.forEach(filing => {
+          if (filing.invoice) {
+            const invoiceAmount = parseFloat(filing.invoice.totalAmount || filing.invoice.amount || 0);
+            stats.totalRevenue += invoiceAmount;
+            if (filing.invoice.paymentStatus === 'paid') {
+              stats.paidRevenue += invoiceAmount;
+            }
+            if (filing.invoice.status === 'sent' && filing.invoice.paymentStatus === 'pending') {
+              stats.pendingInvoices++;
+              // Check if overdue
+              if (filing.invoice.dueDate) {
+                const dueDate = new Date(filing.invoice.dueDate);
+                if (dueDate < new Date()) {
+                  stats.overdueInvoices++;
+                }
+              }
+            }
+          }
+        });
+
+        setBillingStats(stats);
       }
 
       // Load service tickets
@@ -92,11 +134,15 @@ const CAStaffDashboard = () => {
   );
 
   const pendingFilings = filings.filter(filing =>
-    ['draft', 'in_progress', 'under_review'].includes(filing.status),
+    ['draft', 'paused', 'in_progress', 'under_review'].includes(filing.status),
   );
 
   const completedFilings = filings.filter(filing =>
-    filing.status === 'completed',
+    ['submitted', 'acknowledged', 'processed'].includes(filing.status),
+  );
+
+  const reviewQueue = filings.filter(filing =>
+    filing.reviewStatus === 'pending' || filing.reviewStatus === 'in_review',
   );
 
   if (loading) {
@@ -126,9 +172,9 @@ const CAStaffDashboard = () => {
         </div>
       </div>
 
-      {/* Stats Cards */}
+        {/* Stats Cards */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center">
               <Users className="h-8 w-8 text-blue-600" />
@@ -169,6 +215,53 @@ const CAStaffDashboard = () => {
             </div>
           </div>
         </div>
+
+        {/* Billing Overview Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg shadow p-6 border border-green-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-green-700">Total Revenue</p>
+                <p className="text-2xl font-bold text-green-900">
+                  ₹{billingStats.totalRevenue.toLocaleString('en-IN')}
+                </p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-green-600" />
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg shadow p-6 border border-blue-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-blue-700">Paid Revenue</p>
+                <p className="text-2xl font-bold text-blue-900">
+                  ₹{billingStats.paidRevenue.toLocaleString('en-IN')}
+                </p>
+              </div>
+              <CheckCircle className="h-8 w-8 text-blue-600" />
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg shadow p-6 border border-yellow-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-yellow-700">Pending Invoices</p>
+                <p className="text-2xl font-bold text-yellow-900">{billingStats.pendingInvoices}</p>
+              </div>
+              <Clock className="h-8 w-8 text-yellow-600" />
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg shadow p-6 border border-red-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-red-700">Overdue Invoices</p>
+                <p className="text-2xl font-bold text-red-900">{billingStats.overdueInvoices}</p>
+              </div>
+              <AlertCircle className="h-8 w-8 text-red-600" />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Navigation Tabs */}
@@ -178,6 +271,7 @@ const CAStaffDashboard = () => {
             {[
               { id: 'clients', label: 'Assigned Clients', icon: Users },
               { id: 'filings', label: 'Filings', icon: FileText },
+              { id: 'billing', label: 'Billing', icon: IndianRupee },
               { id: 'tickets', label: 'Support Tickets', icon: MessageSquare },
             ].map((tab) => (
               <button
@@ -285,6 +379,114 @@ const CAStaffDashboard = () => {
 
         {activeTab === 'filings' && (
           <div className="space-y-6">
+            {/* Review Queue */}
+            {reviewQueue.length > 0 && (
+              <div className="bg-white rounded-lg shadow">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h3 className="text-lg font-medium text-gray-900">Review Queue</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Client
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          ITR Type
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Audit Status
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Review Status
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Invoice
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {reviewQueue.map((filing) => (
+                        <tr key={filing.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">
+                              {filing.client?.name || filing.user?.name || 'Unknown'}
+                            </div>
+                            {filing.client?.pan && (
+                              <div className="text-xs text-gray-500">{filing.client.pan}</div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <div className={`text-sm font-medium ${
+                                filing.itrType === 'ITR-3' || filing.itrType === 'ITR3'
+                                  ? 'text-blue-700 font-semibold'
+                                  : 'text-gray-500'
+                              }`}>
+                                {filing.itrType}
+                              </div>
+                              {(filing.itrType === 'ITR-3' || filing.itrType === 'ITR3') && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                  Business
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {(filing.itrType === 'ITR-3' || filing.itrType === 'ITR3') ? (
+                              filing.auditInfo?.isAuditApplicable ? (
+                                <div className="flex flex-col gap-1">
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                    Audit Required
+                                  </span>
+                                  {filing.auditInfo?.auditReportNumber ? (
+                                    <span className="text-xs text-green-600">Report Filed</span>
+                                  ) : (
+                                    <span className="text-xs text-yellow-600">Report Pending</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  No Audit
+                                </span>
+                              )
+                            ) : (
+                              <span className="text-xs text-gray-400">N/A</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              filing.reviewStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                              filing.reviewStatus === 'in_review' ? 'bg-blue-100 text-blue-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {filing.reviewStatus || 'pending'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {filing.invoice ? (
+                              <InvoiceBadge invoice={filing.invoice} showNumber={false} />
+                            ) : (
+                              <span className="text-xs text-gray-400">No invoice</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <button className="text-blue-600 hover:text-blue-900 mr-4">
+                              Review
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {/* Pending Filings */}
             <div className="bg-white rounded-lg shadow">
               <div className="px-6 py-4 border-b border-gray-200">
@@ -301,7 +503,13 @@ const CAStaffDashboard = () => {
                         ITR Type
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Audit Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Invoice
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Created
@@ -313,23 +521,62 @@ const CAStaffDashboard = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {pendingFilings.map((filing) => (
-                      <tr key={filing.id}>
+                      <tr key={filing.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">
-                            {filing.user?.fullName || 'Unknown'}
+                            {filing.client?.name || filing.user?.name || 'Unknown'}
+                          </div>
+                          {filing.client?.pan && (
+                            <div className="text-xs text-gray-500">{filing.client.pan}</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <div className={`text-sm font-medium ${
+                              filing.itrType === 'ITR-3' || filing.itrType === 'ITR3'
+                                ? 'text-blue-700 font-semibold'
+                                : 'text-gray-500'
+                            }`}>
+                              {filing.itrType}
+                            </div>
+                            {(filing.itrType === 'ITR-3' || filing.itrType === 'ITR3') && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                Business
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-500">ITR-{filing.itrType}</div>
+                          {(filing.itrType === 'ITR-3' || filing.itrType === 'ITR3') ? (
+                            filing.auditInfo?.isAuditApplicable ? (
+                              <div className="flex flex-col gap-1">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                  Audit Required
+                                </span>
+                                {filing.auditInfo?.auditReportNumber ? (
+                                  <span className="text-xs text-green-600">Report Filed</span>
+                                ) : (
+                                  <span className="text-xs text-yellow-600">Report Pending</span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                No Audit
+                              </span>
+                            )
+                          ) : (
+                            <span className="text-xs text-gray-400">N/A</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            filing.status === 'draft' ? 'bg-gray-100 text-gray-800' :
-                            filing.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-blue-100 text-blue-800'
-                          }`}>
-                            {filing.status}
-                          </span>
+                          <FilingStatusBadge filing={filing} showInvoice={false} />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {filing.invoice ? (
+                            <InvoiceBadge invoice={filing.invoice} showNumber={false} />
+                          ) : (
+                            <span className="text-xs text-gray-400">No invoice</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-500">
@@ -339,12 +586,6 @@ const CAStaffDashboard = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <button className="text-blue-600 hover:text-blue-900 mr-4">
                             Review
-                          </button>
-                          <button
-                            onClick={() => handleUpdateFilingStatus(filing.id, 'completed')}
-                            className="text-green-600 hover:text-green-900"
-                          >
-                            Complete
                           </button>
                         </td>
                       </tr>
@@ -389,6 +630,124 @@ const CAStaffDashboard = () => {
                           <div className="text-sm text-gray-500">
                             {new Date(filing.updatedAt).toLocaleDateString()}
                           </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'billing' && (
+          <div className="space-y-6">
+            {/* Billing Overview */}
+            <div className="bg-white rounded-lg shadow">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900">Billing Overview</h3>
+              </div>
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 mb-4">Revenue Summary</h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Total Revenue</span>
+                        <span className="text-lg font-bold text-gray-900">
+                          ₹{billingStats.totalRevenue.toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Paid Revenue</span>
+                        <span className="text-lg font-bold text-green-600">
+                          ₹{billingStats.paidRevenue.toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Outstanding</span>
+                        <span className="text-lg font-bold text-yellow-600">
+                          ₹{(billingStats.totalRevenue - billingStats.paidRevenue).toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-700 mb-4">Invoice Status</h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Pending Invoices</span>
+                        <span className="text-lg font-bold text-yellow-600">{billingStats.pendingInvoices}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Overdue Invoices</span>
+                        <span className="text-lg font-bold text-red-600">{billingStats.overdueInvoices}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Client Filings with Invoices */}
+            <div className="bg-white rounded-lg shadow">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900">Client Filings & Invoices</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Client
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        ITR Type
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Invoice
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Amount
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Payment Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filings.filter(f => f.invoice).slice(0, 10).map((filing) => (
+                      <tr key={filing.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">
+                            {filing.client?.name || filing.user?.name || 'Unknown'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-500">{filing.itrType}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <FilingStatusBadge filing={filing} showInvoice={false} />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {filing.invoice?.invoiceNumber ? (
+                            <span className="text-sm text-gray-900">#{filing.invoice.invoiceNumber}</span>
+                          ) : (
+                            <span className="text-xs text-gray-400">No invoice</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">
+                            ₹{parseFloat(filing.invoice?.totalAmount || filing.invoice?.amount || 0).toLocaleString('en-IN')}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {filing.invoice && (
+                            <InvoiceBadge invoice={filing.invoice} showNumber={false} />
+                          )}
                         </td>
                       </tr>
                     ))}

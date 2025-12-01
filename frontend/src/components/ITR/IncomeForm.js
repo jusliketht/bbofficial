@@ -3,6 +3,7 @@
 // =====================================================
 
 import React, { useState, useEffect } from 'react';
+import { AlertCircle } from 'lucide-react';
 import Button from '../UI/Button';
 import Card from '../common/Card';
 import Tooltip from '../common/Tooltip';
@@ -85,15 +86,21 @@ const IncomeForm = ({ data = {}, onChange, onNext, onPrevious, itrType = 'ITR1' 
 
   const validateForm = () => {
     const newErrors = {};
+    const totalIncome = calculateTotalIncome();
 
     // ITR-specific validations
-    if (itrType === 'ITR1') {
+    if (itrType === 'ITR1' || itrType === 'ITR-1') {
       // ITR1: Only salary and house property allowed
       if (formData.capitalGains.shortTerm || formData.capitalGains.longTerm) {
         newErrors.capitalGains = 'Capital gains not allowed in ITR-1. Please use ITR-2.';
       }
-      if (formData.businessIncome.grossReceipts || formData.businessIncome.expenses) {
+      if (formData.businessIncome.grossReceipts || formData.businessIncome.expenses || formData.businessIncome.netProfit) {
         newErrors.businessIncome = 'Business income not allowed in ITR-1. Please use ITR-3.';
+      }
+
+      // ITR-1 income limit: Max ₹50 lakhs
+      if (totalIncome > 5000000) {
+        newErrors.incomeLimit = `Total income (₹${totalIncome.toLocaleString('en-IN')}) exceeds ITR-1 limit of ₹50 lakhs. Please use ITR-2.`;
       }
     }
 
@@ -104,14 +111,63 @@ const IncomeForm = ({ data = {}, onChange, onNext, onPrevious, itrType = 'ITR1' 
       }
     }
 
+    // ITR-2 specific validations
+    if (itrType === 'ITR2' || itrType === 'ITR-2') {
+      // ITR-2: Capital gains should have details if hasCapitalGains is true
+      if (formData.capitalGains?.hasCapitalGains &&
+          (!formData.capitalGains.stcgDetails || formData.capitalGains.stcgDetails.length === 0) &&
+          (!formData.capitalGains.ltcgDetails || formData.capitalGains.ltcgDetails.length === 0)) {
+        newErrors.capitalGains = 'Please add capital gains details if you have capital gains.';
+      }
+
+      // ITR-2: Multiple house properties validation (max 2 self-occupied)
+      if (formData.houseProperty?.properties) {
+        const selfOccupiedCount = formData.houseProperty.properties.filter(
+          prop => prop.propertyType === 'self_occupied',
+        ).length;
+        if (selfOccupiedCount > 2) {
+          newErrors.houseProperty = 'Maximum 2 self-occupied properties allowed.';
+        }
+      }
+
+      // ITR-2: Foreign income validation - currency conversion required
+      if (formData.foreignIncome?.hasForeignIncome && formData.foreignIncome.foreignIncomeDetails) {
+        formData.foreignIncome.foreignIncomeDetails.forEach((entry, index) => {
+          if (entry.amount > 0 && (!entry.exchangeRate || entry.exchangeRate <= 0)) {
+            newErrors[`foreignIncome_${index}`] = 'Exchange rate is required for foreign income.';
+          }
+          if (entry.amount > 0 && entry.dtaaApplicable && !entry.taxPaidAbroad) {
+            newErrors[`foreignIncome_tax_${index}`] = 'Tax paid abroad is required if DTAA is applicable.';
+          }
+        });
+      }
+
+      // ITR-2: Director/Partner income validation
+      if (formData.directorPartner?.isDirector && (!formData.directorPartner.directorIncome || formData.directorPartner.directorIncome <= 0)) {
+        newErrors.directorPartner = 'Director income amount is required if you are a director.';
+      }
+      if (formData.directorPartner?.isPartner && (!formData.directorPartner.partnerIncome || formData.directorPartner.partnerIncome <= 0)) {
+        newErrors.directorPartner = 'Partner income amount is required if you are a partner.';
+      }
+    }
+
     // Required field validations based on ITR type
-    if (itrType === 'ITR1' && !formData.salary.totalSalary && !formData.houseProperty.netRentalIncome) {
+    if ((itrType === 'ITR1' || itrType === 'ITR-1') && !formData.salary.totalSalary && !formData.houseProperty.netRentalIncome) {
       newErrors.general = 'Please provide at least salary or house property income for ITR-1.';
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
+
+  // Real-time validation on input change
+  useEffect(() => {
+    // Debounce validation
+    const timeoutId = setTimeout(() => {
+      validateForm();
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [formData, itrType]);
 
   const handleInputChange = (category, field, value) => {
     setFormData(prev => ({
@@ -481,16 +537,23 @@ const IncomeForm = ({ data = {}, onChange, onNext, onPrevious, itrType = 'ITR1' 
           {renderSalarySection()}
           {renderHousePropertySection()}
 
-          {(itrType === 'ITR2' || itrType === 'ITR3') && renderCapitalGainsSection()}
-          {(itrType === 'ITR3') && renderBusinessIncomeSection()}
+          {/* Capital Gains - Only for ITR-2 and ITR-3, NOT for ITR-1 */}
+          {(itrType === 'ITR-2' || itrType === 'ITR2' || itrType === 'ITR-3' || itrType === 'ITR3') && renderCapitalGainsSection()}
+
+          {/* Business Income - Only for ITR-3, NOT for ITR-1 */}
+          {(itrType === 'ITR-3' || itrType === 'ITR3') && renderBusinessIncomeSection()}
 
           {renderOtherIncomeSection()}
         </div>
 
         {Object.keys(errors).length > 0 && (
-          <div className="validation-errors">
+          <div className="validation-errors bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
+            <h4 className="font-semibold text-red-800 mb-2">Validation Errors:</h4>
             {Object.entries(errors).map(([key, error]) => (
-              <div key={key} className="error-message">{error}</div>
+              <div key={key} className="error-message text-red-700 text-sm mb-1 flex items-start">
+                <AlertCircle className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
             ))}
           </div>
         )}

@@ -248,8 +248,10 @@ secrets.json
 # docs/
 # facts/
 
-# Markdown documentation files
-*.md
+# Markdown documentation files (keep docs/ and README files)
+# *.md
+# Exclude root-level status reports (moved to docs/changelog/)
+# Keep: README.md, DEMO_CREDENTIALS.md, docs/**/*.md
 
 # Temporary files
 tmp/

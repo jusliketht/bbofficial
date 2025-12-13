@@ -449,7 +449,7 @@ const ITRComputation = () => {
         // 2. Get previous year data if available
         if (dataSource === 'previous-year' || copiedFromPreviousYear) {
           try {
-            const previousYearService = (await import('../../services/business/PreviousYearCopyService')).default;
+            const previousYearService = (await import('../../features/itr/services/previous-year.service')).default;
             const previousYearData = await previousYearService.getPreviousYearData(location.state?.copyFilingId);
             if (previousYearData) {
               sources.previousYear = {

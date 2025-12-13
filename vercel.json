@@ -43,7 +43,8 @@
   ],
   "regions": ["bom1"],
   "env": {
-    "NODE_ENV": "production"
+    "NODE_ENV": "production",
+    "CI": "false"
   },
   "installCommand": "npm install --legacy-peer-deps --prefix backend && npm install --legacy-peer-deps --prefix frontend"
 }

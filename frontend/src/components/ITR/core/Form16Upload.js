@@ -75,7 +75,7 @@ const Form16Upload = ({ onExtractionComplete, onAutoPopulate, className = '' }) 
       }
 
     } catch (err) {
-      console.error('Form16 extraction error:', err);
+      console.error('Form16 extraction error', { error: err });
       setError(err.message || 'Failed to extract Form 16 data');
     } finally {
       setIsUploading(false);

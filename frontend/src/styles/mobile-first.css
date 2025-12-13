@@ -5,6 +5,15 @@
    ===================================================== */
 
 /* =====================================================
+   CSS CUSTOM PROPERTIES FOR DYNAMIC HEIGHTS
+   ===================================================== */
+:root {
+  --header-height: 48px; /* Header is h-12 (3rem = 48px) */
+  --tax-bar-height-desktop: 56px;
+  --tax-bar-height-mobile: 48px;
+}
+
+/* =====================================================
    MOBILE-FIRST BREAKPOINTS
    ===================================================== */
 
@@ -12,8 +21,8 @@
 /* Base styles are for mobile (320px+) */
 /* Then progressively enhance for larger screens */
 
-/* Small Mobile: 320px - 479px */
-@media (min-width: 320px) {
+/* Mobile: < 768px (Basic fields only, progressive disclosure) */
+@media (min-width: 320px) and (max-width: 767px) {
   .container {
     padding: var(--space-4);
   }
@@ -30,6 +39,36 @@
   .form-input,
   .form-select {
     font-size: 16px; /* Prevents zoom on iOS */
+  }
+
+  /* ITR Computation - Mobile: Progressive disclosure */
+  .itr-computation-container {
+    padding-top: var(--tax-bar-height-mobile); /* Account for fixed top tax bar */
+  }
+
+  /* Main content height adjustment for mobile */
+  .itr-computation-main {
+    height: calc(100vh - var(--header-height) - var(--tax-bar-height-mobile)) !important;
+  }
+
+  .itr-computation-section {
+    margin-bottom: var(--space-4);
+  }
+
+  .itr-computation-section .section-header {
+    min-height: 44px; /* Touch target ≥ 44px */
+    padding: var(--space-3);
+  }
+
+  .itr-computation-content {
+    padding: var(--space-4);
+  }
+
+  /* Ensure proper line length on mobile */
+  .itr-computation-content p,
+  .itr-computation-content .text-content {
+    max-width: 100%;
+    line-height: 1.6;
   }
 }
 
@@ -54,7 +93,7 @@
   }
 }
 
-/* Tablet: 768px - 1023px */
+/* Tablet: 768px - 1023px (All fields, compact) */
 @media (min-width: 768px) {
   .container {
     padding: var(--space-8);
@@ -78,9 +117,18 @@
     flex: 1;
     min-width: 300px;
   }
+
+  /* ITR Computation - Tablet: Collapsible subsections */
+  .itr-computation-section {
+    padding: var(--space-4);
+  }
+
+  .itr-computation-section .section-content {
+    max-width: 100%;
+  }
 }
 
-/* Desktop: 1024px - 1439px */
+/* Desktop: 1024px+ (Full form with side-by-side sections) */
 @media (min-width: 1024px) {
   .container {
     max-width: 1200px;
@@ -100,6 +148,32 @@
     flex-direction: row;
     gap: var(--space-4);
   }
+
+  /* ITR Computation - Desktop: Side-by-side layout */
+  .itr-computation-container {
+    display: flex;
+    gap: var(--space-6);
+    padding-top: var(--tax-bar-height-desktop); /* Account for fixed top tax bar */
+  }
+
+  .itr-computation-sidebar {
+    width: 280px;
+    flex-shrink: 0;
+  }
+
+  .itr-computation-content {
+    flex: 1;
+    max-width: 720px; /* Optimal line length (65-75 characters) */
+  }
+
+  .itr-computation-section {
+    padding: var(--space-6);
+  }
+
+  /* Main content height adjustment for desktop */
+  .itr-computation-main {
+    height: calc(100vh - var(--header-height) - var(--tax-bar-height-desktop)) !important;
+  }
 }
 
 /* Large Desktop: 1440px+ */
@@ -117,14 +191,22 @@
    TOUCH-FRIENDLY INTERFACE
    ===================================================== */
 
-/* Minimum touch target size: 44px x 44px */
+/* Minimum touch target size: 44px x 44px (per docs/reference/UI.md) */
 .btn,
 .form-input,
 .form-select,
 .form-textarea,
 .filing-card,
 .status-item,
-.filter-select {
+.filter-select,
+.responsive-section-toggle {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* ITR Computation specific touch targets */
+.tax-computation-bar-mobile button,
+.responsive-section button[aria-expanded] {
   min-height: 44px;
   min-width: 44px;
 }

@@ -51,30 +51,32 @@ router.post('/rent-receipt', authenticateToken, upload.single('file'), async (re
       fileSize: req.file.size,
     });
 
-    // Import OCR service (can be Tesseract.js, Google Vision API, etc.)
-    // For now, return mock data structure
-    // In production, integrate with actual OCR service
+    // Use RentReceiptOCRService for actual OCR processing
+    const RentReceiptOCRService = require('../services/business/RentReceiptOCRService');
+    const result = await RentReceiptOCRService.processDocument(
+      req.file.buffer,
+      req.file.originalname
+    );
 
-    const mockExtractedData = {
-      text: req.file.originalname, // Placeholder
-      landlord: 'Extracted Landlord Name',
-      address: 'Extracted Property Address',
-      rent: '25000',
-      period: 'January 2024',
-      date: '01-01-2024',
-      receipt_no: 'R001',
-      tds: '0',
-    };
-
-    // Simulate OCR processing delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    res.json({
-      success: true,
-      extractedData: mockExtractedData,
-      confidence: 0.85,
-      message: 'Rent receipt processed successfully',
-    });
+    if (result.success) {
+      res.json({
+        success: true,
+        extractedData: {
+          text: result.extractedData.rawText,
+          landlord: result.extractedData.landlordName,
+          address: result.extractedData.propertyAddress,
+          rent: result.extractedData.rentAmount?.toString() || '0',
+          period: result.extractedData.period || null,
+          date: result.extractedData.receiptDate || null,
+          receipt_no: result.extractedData.receiptNumber || null,
+          tds: result.extractedData.tdsDeducted?.toString() || '0',
+        },
+        confidence: result.confidence,
+        message: 'Rent receipt processed successfully',
+      });
+    } else {
+      throw new Error('OCR processing failed');
+    }
 
   } catch (error) {
     enterpriseLogger.error('Rent receipt OCR failed', {
@@ -156,30 +158,24 @@ router.post('/property-document', authenticateToken, upload.single('file'), asyn
       documentType,
     });
 
-    // Mock extracted data structure
-    // In production, integrate with actual OCR service
-    const mockExtractedData = {
-      text: req.file.originalname,
-      propertyAddress: 'Extracted Property Address',
-      ownerName: 'Extracted Owner Name',
-      registrationNumber: 'REG-12345',
-      registrationDate: '01-01-2020',
-      propertyType: 'Residential',
-      area: '1200 sq ft',
-      purchasePrice: '5000000',
-      sellerName: 'Extracted Seller Name',
-      sellerPAN: 'ABCDE1234F',
-    };
+    // Use PropertyDocumentOCRService for actual OCR processing
+    const PropertyDocumentOCRService = require('../services/business/PropertyDocumentOCRService');
+    const result = await PropertyDocumentOCRService.processDocument(
+      req.file.buffer,
+      req.file.originalname,
+      documentType || 'sale_deed'
+    );
 
-    // Simulate OCR processing delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    res.json({
-      success: true,
-      extractedData: mockExtractedData,
-      confidence: 0.82,
-      message: 'Property document processed successfully',
-    });
+    if (result.success) {
+      res.json({
+        success: true,
+        extractedData: result.extractedData,
+        confidence: result.confidence,
+        message: 'Property document processed successfully',
+      });
+    } else {
+      throw new Error('OCR processing failed');
+    }
 
   } catch (error) {
     enterpriseLogger.error('Property document OCR failed', {
@@ -217,31 +213,41 @@ router.post('/rent-receipts-batch', authenticateToken, upload.array('files', 10)
       propertyId,
     });
 
-    // Process each file
+    // Process each file using real OCR service
+    const RentReceiptOCRService = require('../services/business/RentReceiptOCRService');
     const results = [];
+    
     for (const file of req.files) {
       try {
-        // Mock processing - in production, use actual OCR service
-        const mockExtractedData = {
-          text: file.originalname,
-          landlord: 'Extracted Landlord Name',
-          address: 'Extracted Property Address',
-          rent: '25000',
-          period: 'January 2024',
-          date: '01-01-2024',
-          receipt_no: `R${Math.floor(Math.random() * 1000)}`,
-          tds: '0',
-        };
+        const result = await RentReceiptOCRService.processDocument(
+          file.buffer,
+          file.originalname
+        );
 
-        await new Promise(resolve => setTimeout(resolve, 800));
-
-        results.push({
-          fileName: file.originalname,
-          success: true,
-          extractedData: mockExtractedData,
-          confidence: 0.85,
-        });
+        if (result.success) {
+          results.push({
+            fileName: file.originalname,
+            success: true,
+            extractedData: {
+              text: result.extractedData.rawText,
+              landlord: result.extractedData.landlordName,
+              address: result.extractedData.propertyAddress,
+              rent: result.extractedData.rentAmount?.toString() || '0',
+              period: result.extractedData.period || null,
+              date: result.extractedData.receiptDate || null,
+              receipt_no: result.extractedData.receiptNumber || null,
+              tds: result.extractedData.tdsDeducted?.toString() || '0',
+            },
+            confidence: result.confidence,
+          });
+        } else {
+          throw new Error('OCR processing failed');
+        }
       } catch (fileError) {
+        enterpriseLogger.error('Rent receipt OCR failed for file', {
+          fileName: file.originalname,
+          error: fileError.message,
+        });
         results.push({
           fileName: file.originalname,
           success: false,

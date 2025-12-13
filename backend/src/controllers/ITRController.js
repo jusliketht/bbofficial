@@ -15,6 +15,11 @@ const {
   paginatedResponse,
 } = require('../utils/responseFormatter');
 const {
+  DEFAULT_ASSESSMENT_YEAR,
+  getDefaultAssessmentYear,
+  isValidAssessmentYear,
+} = require('../constants/assessmentYears');
+const {
   validateITRType,
   validateRequiredFields,
   validatePagination,
@@ -41,13 +46,15 @@ class ITRController {
   // =====================================================
 
   async createDraft(req, res) {
+    const transaction = await sequelize.transaction();
     try {
       const userId = req.user.userId;
-      const { itrType, formData } = req.body;
+      const { itrType, formData, assessmentYear } = req.body;
 
       // Validate ITR type
       const itrTypeValidation = validateITRType(itrType);
       if (!itrTypeValidation.isValid) {
+        await transaction.rollback();
         return validationErrorResponse(res, {
           itrType: itrTypeValidation.error.message,
         });
@@ -56,8 +63,12 @@ class ITRController {
       // Validate form data
       const validation = this.validationEngine.validate(itrType.replace('-', '').toLowerCase(), formData);
       if (!validation.isValid) {
+        await transaction.rollback();
         return validationErrorResponse(res, validation.errors);
       }
+
+      // Use provided assessment year or default to current year
+      const finalAssessmentYear = assessmentYear || getDefaultAssessmentYear();
 
       // Create filing first
       const createFilingQuery = `
@@ -66,11 +77,11 @@ class ITRController {
         RETURNING id
       `;
 
-      const filing = await dbQuery(createFilingQuery, [
-        userId,
-        itrType,
-        '2024-25', // Default assessment year
-      ]);
+      const filing = await sequelize.query(createFilingQuery, {
+        replacements: [userId, itrType, finalAssessmentYear],
+        type: QueryTypes.SELECT,
+        transaction,
+      });
 
       // Create draft
       const createDraftQuery = `
@@ -79,23 +90,26 @@ class ITRController {
         RETURNING id, step, created_at
       `;
 
-      const draft = await dbQuery(createDraftQuery, [
-        filing.rows[0].id,
-        'personal_info', // Default step
-        JSON.stringify(formData),
-      ]);
+      const draft = await sequelize.query(createDraftQuery, {
+        replacements: [filing[0].id, 'personal_info', JSON.stringify(formData)],
+        type: QueryTypes.SELECT,
+        transaction,
+      });
+
+      // Commit transaction
+      await transaction.commit();
 
       enterpriseLogger.info('ITR draft created', {
         userId,
         itrType,
-        draftId: draft.rows[0].id,
-        filingId: filing.rows[0].id,
+        draftId: draft[0].id,
+        filingId: filing[0].id,
       });
 
-      // Auto-create service ticket for filing support
+      // Auto-create service ticket for filing support (outside transaction - non-critical)
       try {
         const filingData = {
-          id: filing.rows[0].id,
+          id: filing[0].id,
           userId,
           itrType,
           memberId: null, // Will be set if filing for family member
@@ -104,7 +118,7 @@ class ITRController {
         await serviceTicketService.autoCreateFilingTicket(filingData);
 
         enterpriseLogger.info('Auto-generated service ticket created for filing', {
-          filingId: filing.rows[0].id,
+          filingId: filing[0].id,
           userId,
           itrType,
         });
@@ -112,20 +126,34 @@ class ITRController {
         // Don't fail the draft creation if ticket creation fails
         enterpriseLogger.error('Failed to auto-create service ticket', {
           error: ticketError.message,
-          filingId: filing.rows[0].id,
+          filingId: filing[0].id,
           userId,
         });
       }
 
       return successResponse(res, {
-        id: draft.rows[0].id,
-        filingId: filing.rows[0].id,
-        step: draft.rows[0].step,
+        id: draft[0].id,
+        filingId: filing[0].id,
+        step: draft[0].step,
         itrType: itrType,
         status: 'draft',
-        createdAt: draft.rows[0].created_at,
+        createdAt: draft[0].created_at,
       }, 'Draft created successfully', 201);
     } catch (error) {
+      // Rollback transaction on error
+      if (transaction && !transaction.finished) {
+        await transaction.rollback().catch(rollbackError => {
+          enterpriseLogger.error('Failed to rollback transaction', {
+            error: rollbackError.message,
+            originalError: error.message,
+          });
+        });
+      }
+      enterpriseLogger.error('Failed to create draft', {
+        error: error.message,
+        stack: error.stack,
+        userId: req.user?.userId,
+      });
       return errorResponse(res, error, 500);
     }
   }
@@ -312,7 +340,7 @@ class ITRController {
         return errorResponse(res, parseError, 500);
       }
       const itrType = draftRow.itr_type;
-      const assessmentYear = draftRow.assessment_year || '2024-25';
+      const assessmentYear = draftRow.assessment_year || getDefaultAssessmentYear();
 
       // Compute tax
       // Prepare filing data with itrType
@@ -341,6 +369,7 @@ class ITRController {
     try {
       const userId = req.user.userId;
       const { draftId } = req.params;
+      const { verificationMethod, verificationToken } = req.body;
 
       // Get draft (join with itr_filings to verify user_id)
       const getDraftQuery = `
@@ -431,7 +460,7 @@ class ITRController {
       // Compute final tax
       // Prepare filing data with itrType
       const filingData = { ...formData, itrType };
-      const taxComputation = await this.taxComputationEngine.computeTax(filingData, formData.assessmentYear || '2024-25');
+      const taxComputation = await this.taxComputationEngine.computeTax(filingData, formData.assessmentYear || getDefaultAssessmentYear());
 
       // Create ITR filing record
       const createFilingQuery = `
@@ -440,7 +469,7 @@ class ITRController {
         RETURNING id, itr_type, status, submitted_at, assessment_year
       `;
 
-      const assessmentYear = formData.assessmentYear || '2024-25';
+      const assessmentYear = formData.assessmentYear || getDefaultAssessmentYear();
       const filing = await dbQuery(createFilingQuery, [
         userId,
         itrType,
@@ -575,6 +604,7 @@ class ITRController {
       // Send submission confirmation email
       try {
         const EmailService = require('../services/integration/EmailService');
+        const ERIIntegrationService = require('../services/business/ERIIntegrationService');
         
         // Get user email
         const getUserQuery = `SELECT email, full_name FROM users WHERE id = $1`;
@@ -583,13 +613,55 @@ class ITRController {
         if (userResult.rows.length > 0 && userResult.rows[0].email) {
           const userEmail = userResult.rows[0].email;
           
-          // Generate acknowledgment number (mock for now - would come from ERI in production)
-          const acknowledgmentNumber = `ACK-${filingId}-${Date.now().toString().slice(-6)}`;
+          // Get acknowledgment number from ERI service
+          // ERI service will return real ackNumber if FEATURE_ERI_LIVE=true, otherwise mock
+          let acknowledgmentNumber;
+          try {
+            // Get filing JSON payload for ERI submission
+            const filingQuery = `SELECT json_payload, itr_type, assessment_year FROM itr_filings WHERE id = $1`;
+            const filingResult = await dbQuery(filingQuery, [filingId]);
+            
+            if (filingResult.rows.length > 0) {
+              // Submit to ERI to get acknowledgment number
+              const eriResult = await ERIIntegrationService.uploadFiling(
+                filingResult.rows[0].json_payload,
+                null // digitalSignature - would be provided if available
+              );
+              acknowledgmentNumber = eriResult.ackNumber || eriResult.acknowledgementNumber;
+            } else {
+              // Fallback if filing not found
+              acknowledgmentNumber = `ACK-${filingId}-${Date.now().toString().slice(-6)}`;
+              enterpriseLogger.warn('Filing not found for ERI submission, using fallback ack number', { filingId });
+            }
+          } catch (eriError) {
+            // Fallback to generated ack number if ERI fails
+            acknowledgmentNumber = `ACK-${filingId}-${Date.now().toString().slice(-6)}`;
+            enterpriseLogger.error('ERI submission failed, using fallback ack number', {
+              filingId,
+              error: eriError.message,
+            });
+          }
           
-          // Update filing with acknowledgment number
+          // Store verification data if provided
+          const verificationData = verificationMethod && verificationToken ? {
+            method: verificationMethod,
+            token: verificationToken,
+            verifiedAt: new Date().toISOString(),
+          } : null;
+
+          // Update filing with acknowledgment number and verification data
           await dbQuery(
-            `UPDATE itr_filings SET acknowledgment_number = $1 WHERE id = $2`,
-            [acknowledgmentNumber, filingId]
+            `UPDATE itr_filings 
+             SET acknowledgment_number = $1, 
+                 verification_method = $2,
+                 verification_data = $3
+             WHERE id = $4`,
+            [
+              acknowledgmentNumber,
+              verificationMethod || null,
+              verificationData ? JSON.stringify(verificationData) : null,
+              filingId
+            ]
           );
           
           // Generate download URL
@@ -618,27 +690,33 @@ class ITRController {
         });
       }
 
-      res.status(201).json({
-        message: 'ITR submitted successfully',
+      // Get acknowledgment number from filing
+      const getAckQuery = `SELECT acknowledgment_number, verification_method FROM itr_filings WHERE id = $1`;
+      const ackResult = await dbQuery(getAckQuery, [filingId]);
+      const acknowledgmentNumber = ackResult.rows[0]?.acknowledgment_number || null;
+      const storedVerificationMethod = ackResult.rows[0]?.verification_method || verificationMethod || null;
+
+      return successResponse(res, {
         filing: {
           id: filingId,
           itrType: filing.rows[0].itr_type,
           status: filing.rows[0].status,
           submittedAt: filing.rows[0].submitted_at,
           assessmentYear: filing.rows[0].assessment_year,
+          acknowledgmentNumber,
+          verificationMethod: storedVerificationMethod,
           invoiceId,
         },
         taxComputation,
-      });
+      }, 'ITR submitted successfully', 201);
     } catch (error) {
       enterpriseLogger.error('ITR submission failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         draftId: req.params.draftId,
       });
-      res.status(500).json({
-        error: 'Internal server error',
-      });
+      return errorResponse(res, error, 500);
     }
   }
 
@@ -663,35 +741,29 @@ class ITRController {
       const draft = await dbQuery(getDraftQuery, [draftId, userId]);
 
       if (draft.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Draft not found',
-        });
+        return notFoundResponse(res, 'Draft');
       }
 
       const formData = JSON.parse(draft.rows[0].json_payload || '{}');
       const pan = formData.personal_info?.pan || formData.personalInfo?.pan;
 
       if (!pan) {
-        return res.status(400).json({
-          error: 'PAN not found in filing data',
+        return validationErrorResponse(res, {
+          pan: 'PAN not found in filing data',
         });
       }
 
       const result = await eVerificationService.sendAadhaarOTP(pan, aadhaarNumber);
 
-      res.json({
-        success: true,
-        ...result,
-      });
+      return successResponse(res, result, 'Aadhaar OTP sent successfully');
     } catch (error) {
       enterpriseLogger.error('Send Aadhaar OTP failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         draftId: req.params.draftId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to send Aadhaar OTP',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -702,8 +774,8 @@ class ITRController {
       const { aadhaarNumber, otp } = req.body;
 
       if (!otp || otp.length !== 6) {
-        return res.status(400).json({
-          error: 'Invalid OTP format. OTP must be 6 digits',
+        return validationErrorResponse(res, {
+          otp: 'Invalid OTP format. OTP must be 6 digits',
         });
       }
 
@@ -718,9 +790,7 @@ class ITRController {
       const draft = await dbQuery(getDraftQuery, [draftId, userId]);
 
       if (draft.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Draft not found',
-        });
+        return notFoundResponse(res, 'Draft');
       }
 
       const formData = JSON.parse(draft.rows[0].json_payload || '{}');
@@ -728,8 +798,8 @@ class ITRController {
       const filingId = draft.rows[0].filing_id;
 
       if (!pan) {
-        return res.status(400).json({
-          error: 'PAN not found in filing data',
+        return validationErrorResponse(res, {
+          pan: 'PAN not found in filing data',
         });
       }
 
@@ -743,19 +813,15 @@ class ITRController {
         );
       }
 
-      res.json({
-        success: true,
-        ...result,
-      });
+      return successResponse(res, result, 'Aadhaar OTP verified successfully');
     } catch (error) {
       enterpriseLogger.error('Verify Aadhaar OTP failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         draftId: req.params.draftId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Aadhaar OTP verification failed',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -766,9 +832,10 @@ class ITRController {
       const { bankDetails, credentials } = req.body;
 
       if (!bankDetails || !credentials) {
-        return res.status(400).json({
-          error: 'Bank details and credentials are required',
-        });
+        return validationErrorResponse(res, {
+          bankDetails: 'Bank details are required',
+          credentials: 'Credentials are required',
+        }, 'Bank details and credentials are required');
       }
 
       // Get draft and filing info
@@ -782,9 +849,7 @@ class ITRController {
       const draft = await dbQuery(getDraftQuery, [draftId, userId]);
 
       if (draft.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Draft not found',
-        });
+        return notFoundResponse(res, 'Draft');
       }
 
       const formData = JSON.parse(draft.rows[0].json_payload || '{}');
@@ -792,8 +857,8 @@ class ITRController {
       const filingId = draft.rows[0].filing_id;
 
       if (!pan) {
-        return res.status(400).json({
-          error: 'PAN not found in filing data',
+        return validationErrorResponse(res, {
+          pan: 'PAN not found in filing data',
         });
       }
 
@@ -807,19 +872,15 @@ class ITRController {
         );
       }
 
-      res.json({
-        success: true,
-        ...result,
-      });
+      return successResponse(res, result, 'Net Banking verification completed');
     } catch (error) {
       enterpriseLogger.error('Net Banking verification failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         draftId: req.params.draftId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Net Banking verification failed',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -830,8 +891,8 @@ class ITRController {
       const { dscDetails } = req.body;
 
       if (!dscDetails) {
-        return res.status(400).json({
-          error: 'DSC details are required',
+        return validationErrorResponse(res, {
+          dscDetails: 'DSC details are required',
         });
       }
 
@@ -846,9 +907,7 @@ class ITRController {
       const draft = await dbQuery(getDraftQuery, [draftId, userId]);
 
       if (draft.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Draft not found',
-        });
+        return notFoundResponse(res, 'Draft');
       }
 
       const formData = JSON.parse(draft.rows[0].json_payload || '{}');
@@ -856,8 +915,8 @@ class ITRController {
       const filingId = draft.rows[0].filing_id;
 
       if (!pan) {
-        return res.status(400).json({
-          error: 'PAN not found in filing data',
+        return validationErrorResponse(res, {
+          pan: 'PAN not found in filing data',
         });
       }
 
@@ -871,19 +930,15 @@ class ITRController {
         );
       }
 
-      res.json({
-        success: true,
-        ...result,
-      });
+      return successResponse(res, result, 'DSC verification completed');
     } catch (error) {
       enterpriseLogger.error('DSC verification failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         draftId: req.params.draftId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'DSC verification failed',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -894,9 +949,10 @@ class ITRController {
       const { dematCredentials } = req.body;
 
       if (!dematCredentials || !dematCredentials.dpId || !dematCredentials.clientId) {
-        return res.status(400).json({
-          error: 'DP ID and Client ID are required',
-        });
+        return validationErrorResponse(res, {
+          dpId: 'DP ID is required',
+          clientId: 'Client ID is required',
+        }, 'DP ID and Client ID are required');
       }
 
       // Get draft and filing info
@@ -910,9 +966,7 @@ class ITRController {
       const draft = await dbQuery(getDraftQuery, [draftId, userId]);
 
       if (draft.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Draft not found',
-        });
+        return notFoundResponse(res, 'Draft');
       }
 
       const formData = JSON.parse(draft.rows[0].json_payload || '{}');
@@ -920,8 +974,8 @@ class ITRController {
       const filingId = draft.rows[0].filing_id;
 
       if (!pan) {
-        return res.status(400).json({
-          error: 'PAN not found in filing data',
+        return validationErrorResponse(res, {
+          pan: 'PAN not found in filing data',
         });
       }
 
@@ -935,19 +989,15 @@ class ITRController {
         );
       }
 
-      res.json({
-        success: true,
-        ...result,
-      });
+      return successResponse(res, result, 'Demat verification completed');
     } catch (error) {
       enterpriseLogger.error('Demat verification failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         draftId: req.params.draftId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Demat verification failed',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -958,9 +1008,10 @@ class ITRController {
       const { bankDetails } = req.body;
 
       if (!bankDetails || !bankDetails.accountNumber || !bankDetails.ifsc) {
-        return res.status(400).json({
-          error: 'Account number and IFSC code are required',
-        });
+        return validationErrorResponse(res, {
+          accountNumber: 'Account number is required',
+          ifsc: 'IFSC code is required',
+        }, 'Account number and IFSC code are required');
       }
 
       // Get draft and filing info
@@ -974,35 +1025,29 @@ class ITRController {
       const draft = await dbQuery(getDraftQuery, [draftId, userId]);
 
       if (draft.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Draft not found',
-        });
+        return notFoundResponse(res, 'Draft');
       }
 
       const formData = JSON.parse(draft.rows[0].json_payload || '{}');
       const pan = formData.personal_info?.pan || formData.personalInfo?.pan;
 
       if (!pan) {
-        return res.status(400).json({
-          error: 'PAN not found in filing data',
+        return validationErrorResponse(res, {
+          pan: 'PAN not found in filing data',
         });
       }
 
       const result = await eVerificationService.sendBankEVC(pan, bankDetails);
 
-      res.json({
-        success: true,
-        ...result,
-      });
+      return successResponse(res, result, 'Bank EVC sent successfully');
     } catch (error) {
       enterpriseLogger.error('Send Bank EVC failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         draftId: req.params.draftId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to send Bank EVC',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -1013,15 +1058,16 @@ class ITRController {
       const { bankDetails, evc } = req.body;
 
       if (!evc || evc.length !== 6) {
-        return res.status(400).json({
-          error: 'Invalid EVC format. EVC must be 6 digits',
+        return validationErrorResponse(res, {
+          evc: 'Invalid EVC format. EVC must be 6 digits',
         });
       }
 
       if (!bankDetails || !bankDetails.accountNumber || !bankDetails.ifsc) {
-        return res.status(400).json({
-          error: 'Account number and IFSC code are required',
-        });
+        return validationErrorResponse(res, {
+          accountNumber: 'Account number is required',
+          ifsc: 'IFSC code is required',
+        }, 'Account number and IFSC code are required');
       }
 
       // Get draft and filing info
@@ -1035,9 +1081,7 @@ class ITRController {
       const draft = await dbQuery(getDraftQuery, [draftId, userId]);
 
       if (draft.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Draft not found',
-        });
+        return notFoundResponse(res, 'Draft');
       }
 
       const formData = JSON.parse(draft.rows[0].json_payload || '{}');
@@ -1045,8 +1089,8 @@ class ITRController {
       const filingId = draft.rows[0].filing_id;
 
       if (!pan) {
-        return res.status(400).json({
-          error: 'PAN not found in filing data',
+        return validationErrorResponse(res, {
+          pan: 'PAN not found in filing data',
         });
       }
 
@@ -1060,19 +1104,15 @@ class ITRController {
         );
       }
 
-      res.json({
-        success: true,
-        ...result,
-      });
+      return successResponse(res, result, 'Bank EVC verification completed');
     } catch (error) {
       enterpriseLogger.error('Bank EVC verification failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         draftId: req.params.draftId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Bank EVC verification failed',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -1088,26 +1128,20 @@ class ITRController {
       const verify = await dbQuery(verifyQuery, [filingId, userId]);
 
       if (verify.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       const status = await eVerificationService.getVerificationStatus(filingId);
 
-      res.json({
-        success: true,
-        verification: status,
-      });
+      return successResponse(res, { verification: status }, 'Verification status retrieved successfully');
     } catch (error) {
       enterpriseLogger.error('Get verification status failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to get verification status',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -1283,10 +1317,15 @@ class ITRController {
       }
 
       // Get total count for pagination
-      const countQuery = query.replace(
+      // Remove ORDER BY and LIMIT/OFFSET from count query
+      let countQuery = query.replace(
         /SELECT[\s\S]*?FROM/,
         'SELECT COUNT(*) as total FROM'
       );
+      // Remove ORDER BY clause from count query
+      countQuery = countQuery.replace(/\s+ORDER BY[\s\S]*$/i, '');
+      // Remove LIMIT and OFFSET clauses if present
+      countQuery = countQuery.replace(/\s+LIMIT[\s\S]*$/i, '');
       const countResult = await dbQuery(countQuery, params);
       const total = parseInt(countResult.rows[0].total, 10);
 
@@ -1400,17 +1439,15 @@ class ITRController {
       const filing = await dbQuery(getFilingQuery, [filingId, userId]);
 
       if (filing.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       const filingData = filing.rows[0];
 
       // Check if filing can be paused
       if (!['draft'].includes(filingData.status)) {
-        return res.status(400).json({
-          error: `Filing cannot be paused. Current status: ${filingData.status}`,
+        return validationErrorResponse(res, {
+          status: `Filing cannot be paused. Current status: ${filingData.status}`,
         });
       }
 
@@ -1440,16 +1477,14 @@ class ITRController {
         pausedAt: result.rows[0].paused_at,
       });
 
-      res.json({
-        success: true,
-        message: 'Filing paused successfully',
+      return successResponse(res, {
         filing: {
           id: result.rows[0].id,
           status: result.rows[0].status,
           pausedAt: result.rows[0].paused_at,
           pauseReason: result.rows[0].pause_reason,
         },
-      });
+      }, 'Filing paused successfully');
     } catch (error) {
       enterpriseLogger.error('Pause filing failed', {
         error: error.message,
@@ -1457,9 +1492,7 @@ class ITRController {
         filingId: req.params.filingId,
         stack: error.stack,
       });
-      res.status(500).json({
-        error: 'Internal server error',
-      });
+      return errorResponse(res, error, 500);
     }
   }
 
@@ -1482,17 +1515,15 @@ class ITRController {
       const filing = await dbQuery(getFilingQuery, [filingId, userId]);
 
       if (filing.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       const filingData = filing.rows[0];
 
       // Check if filing can be resumed
       if (filingData.status !== 'paused') {
-        return res.status(400).json({
-          error: `Filing cannot be resumed. Current status: ${filingData.status}`,
+        return validationErrorResponse(res, {
+          status: `Filing cannot be resumed. Current status: ${filingData.status}`,
         });
       }
 
@@ -1512,26 +1543,22 @@ class ITRController {
         resumedAt: result.rows[0].resumed_at,
       });
 
-      res.json({
-        success: true,
-        message: 'Filing resumed successfully',
+      return successResponse(res, {
         filing: {
           id: result.rows[0].id,
           status: result.rows[0].status,
           resumedAt: result.rows[0].resumed_at,
           formData: filingData.json_payload ? JSON.parse(filingData.json_payload) : null,
         },
-      });
+      }, 'Filing resumed successfully');
     } catch (error) {
       enterpriseLogger.error('Resume filing failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
-        stack: error.stack,
       });
-      res.status(500).json({
-        error: 'Internal server error',
-      });
+      return errorResponse(res, error, 500);
     }
   }
 
@@ -1551,26 +1578,20 @@ class ITRController {
       const verify = await dbQuery(verifyQuery, [filingId, userId]);
 
       if (verify.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       const refundStatus = await refundTrackingService.getRefundStatus(filingId);
 
-      res.json({
-        success: true,
-        refund: refundStatus,
-      });
+      return successResponse(res, { refund: refundStatus }, 'Refund status retrieved successfully');
     } catch (error) {
       enterpriseLogger.error('Get refund status failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to get refund status',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -1581,10 +1602,7 @@ class ITRController {
 
       const refundHistory = await refundTrackingService.getRefundHistory(userId, assessmentYear);
 
-      res.json({
-        success: true,
-        refunds: refundHistory,
-      });
+      return successResponse(res, { refunds: refundHistory }, 'Refund history retrieved successfully');
     } catch (error) {
       // If table doesn't exist, return empty array instead of error
       if (error.message && (
@@ -1595,19 +1613,15 @@ class ITRController {
         enterpriseLogger.warn('Refund tracking table does not exist, returning empty array', {
           userId: req.user?.userId,
         });
-        return res.json({
-          success: true,
-          refunds: [],
-        });
+        return successResponse(res, { refunds: [] }, 'Refund history retrieved successfully');
       }
 
       enterpriseLogger.error('Get refund history failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to get refund history',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -1618,8 +1632,8 @@ class ITRController {
       const { bankAccount } = req.body;
 
       if (!bankAccount) {
-        return res.status(400).json({
-          error: 'Bank account details are required',
+        return validationErrorResponse(res, {
+          bankAccount: 'Bank account details are required',
         });
       }
 
@@ -1630,26 +1644,20 @@ class ITRController {
       const verify = await dbQuery(verifyQuery, [filingId, userId]);
 
       if (verify.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       const refundStatus = await refundTrackingService.updateRefundBankAccount(filingId, bankAccount);
 
-      res.json({
-        success: true,
-        refund: refundStatus,
-      });
+      return successResponse(res, { refund: refundStatus }, 'Refund bank account updated successfully');
     } catch (error) {
       enterpriseLogger.error('Update refund bank account failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to update refund bank account',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -1666,9 +1674,7 @@ class ITRController {
       const verify = await dbQuery(verifyQuery, [filingId, userId]);
 
       if (verify.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       // Update bank account if provided
@@ -1687,20 +1693,15 @@ class ITRController {
         reason,
       });
 
-      res.json({
-        success: true,
-        message: 'Refund re-issue request submitted successfully',
-        refund: refundStatus,
-      });
+      return successResponse(res, { refund: refundStatus }, 'Refund re-issue request submitted successfully');
     } catch (error) {
       enterpriseLogger.error('Request refund reissue failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to request refund reissue',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -1720,9 +1721,7 @@ class ITRController {
       const verify = await dbQuery(verifyQuery, [filingId, userId]);
 
       if (verify.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       const formData = JSON.parse(verify.rows[0].json_payload || '{}');
@@ -1736,8 +1735,7 @@ class ITRController {
       // Group discrepancies
       const grouped = dataMatchingService.groupDiscrepancies(discrepancies);
 
-      res.json({
-        success: true,
+      return successResponse(res, {
         discrepancies,
         grouped,
         summary: {
@@ -1746,16 +1744,15 @@ class ITRController {
           warning: discrepancies.filter(d => d.severity === 'warning').length,
           info: discrepancies.filter(d => d.severity === 'info').length,
         },
-      });
+      }, 'Discrepancies retrieved successfully');
     } catch (error) {
       enterpriseLogger.error('Get discrepancies failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to get discrepancies',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -1772,9 +1769,7 @@ class ITRController {
       const verify = await dbQuery(verifyQuery, [filingId, userId]);
 
       if (verify.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       // Get discrepancy details (would be passed in request or fetched)
@@ -1800,19 +1795,15 @@ class ITRController {
         resolvedBy: userId,
       });
 
-      res.json({
-        success: true,
-        resolution,
-      });
+      return successResponse(res, { resolution }, 'Discrepancy resolved successfully');
     } catch (error) {
       enterpriseLogger.error('Resolve discrepancy failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to resolve discrepancy',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -1829,9 +1820,7 @@ class ITRController {
       const verify = await dbQuery(verifyQuery, [filingId, userId]);
 
       if (verify.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       // Bulk resolve
@@ -1858,21 +1847,19 @@ class ITRController {
         resolvedBy: userId,
       });
 
-      res.json({
-        success: true,
+      return successResponse(res, {
         resolved: resolutions,
         failed: result.failed,
         totalResolved: result.totalResolved,
-      });
+      }, 'Discrepancies resolved successfully');
     } catch (error) {
       enterpriseLogger.error('Bulk resolve discrepancies failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to bulk resolve discrepancies',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -1888,9 +1875,7 @@ class ITRController {
       const verify = await dbQuery(verifyQuery, [filingId, userId]);
 
       if (verify.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       const formData = JSON.parse(verify.rows[0].json_payload || '{}');
@@ -1905,19 +1890,15 @@ class ITRController {
         suggestion: dataMatchingService.suggestResolution(discrepancy, formData),
       }));
 
-      res.json({
-        success: true,
-        suggestions,
-      });
+      return successResponse(res, { suggestions }, 'Discrepancy suggestions retrieved successfully');
     } catch (error) {
       enterpriseLogger.error('Get discrepancy suggestions failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to get discrepancy suggestions',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -1933,26 +1914,20 @@ class ITRController {
       const verify = await dbQuery(verifyQuery, [filingId, userId]);
 
       if (verify.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       const history = await dataMatchingService.getDiscrepancyHistory(filingId);
 
-      res.json({
-        success: true,
-        history,
-      });
+      return successResponse(res, { history }, 'Discrepancy history retrieved successfully');
     } catch (error) {
       enterpriseLogger.error('Get discrepancy history failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to get discrepancy history',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -1974,22 +1949,20 @@ class ITRController {
       const previousYears = await previousYearCopyService.getAvailablePreviousYears(
         userId,
         memberId || null,
-        currentAssessmentYear || '2024-25'
+        currentAssessmentYear || getDefaultAssessmentYear()
       );
 
-      res.status(200).json({
-        success: true,
+      return successResponse(res, {
         previousYears,
         count: previousYears.length,
-      });
+      }, 'Available previous years retrieved successfully');
     } catch (error) {
       enterpriseLogger.error('Get available previous years failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to get available previous years',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -2011,32 +1984,24 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Previous year filing not found',
-        });
+        return notFoundResponse(res, 'Previous year filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to this filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to this filing');
       }
 
       const previousYearData = await previousYearCopyService.getPreviousYearData(filingId);
 
-      res.status(200).json({
-        success: true,
-        data: previousYearData,
-      });
+      return successResponse(res, previousYearData, 'Previous year data retrieved successfully');
     } catch (error) {
       enterpriseLogger.error('Get previous year data failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to get previous year data',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -2052,9 +2017,10 @@ class ITRController {
 
       // Validate required fields
       if (!sourceFilingId || !sections || !Array.isArray(sections)) {
-        return res.status(400).json({
-          error: 'Missing required fields: sourceFilingId and sections array',
-        });
+        return validationErrorResponse(res, {
+          sourceFilingId: 'Source filing ID is required',
+          sections: 'Sections array is required',
+        }, 'Missing required fields: sourceFilingId and sections array');
       }
 
       // Verify user owns target filing
@@ -2064,22 +2030,18 @@ class ITRController {
       const verifyTargetResult = await dbQuery(verifyTargetQuery, [filingId]);
 
       if (verifyTargetResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Target filing not found',
-        });
+        return notFoundResponse(res, 'Target filing');
       }
 
       if (verifyTargetResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to target filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to target filing');
       }
 
       // Check if target filing can be modified
       const targetStatus = verifyTargetResult.rows[0].status;
       if (!['draft', 'paused', 'rejected'].includes(targetStatus)) {
-        return res.status(400).json({
-          error: 'Cannot copy to a filing that is already submitted',
+        return validationErrorResponse(res, {
+          status: 'Cannot copy to a filing that is already submitted',
         });
       }
 
@@ -2091,15 +2053,11 @@ class ITRController {
         const verifySourceResult = await dbQuery(verifySourceQuery, [sourceFilingId]);
 
         if (verifySourceResult.rows.length === 0) {
-          return res.status(404).json({
-            error: 'Source filing not found',
-          });
+          return notFoundResponse(res, 'Source filing');
         }
 
         if (verifySourceResult.rows[0].user_id !== userId) {
-          return res.status(403).json({
-            error: 'Unauthorized access to source filing',
-          });
+          return unauthorizedResponse(res, 'Unauthorized access to source filing');
         }
       }
 
@@ -2112,20 +2070,15 @@ class ITRController {
         reviewData || null
       );
 
-      res.status(200).json({
-        success: true,
-        message: 'Data copied successfully',
-        ...result,
-      });
+      return successResponse(res, result, 'Data copied successfully');
     } catch (error) {
       enterpriseLogger.error('Copy from previous year failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to copy from previous year',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -2152,32 +2105,24 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       const result = await taxPaymentService.generateChallan(filingId, challanData);
 
-      res.status(200).json({
-        success: true,
-        ...result,
-      });
+      return successResponse(res, result, 'Challan generated successfully');
     } catch (error) {
       enterpriseLogger.error('Generate challan failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to generate challan',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -2203,40 +2148,32 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Validate ITR type - Foreign Assets are allowed for ITR-2 and ITR-3
       const itrType = verifyResult.rows[0].itr_type;
       if (itrType !== 'ITR-2' && itrType !== 'ITR2' && itrType !== 'ITR-3' && itrType !== 'ITR3') {
-        return res.status(400).json({
-          error: `Foreign assets are not applicable for ${itrType}. This feature is only available for ITR-2 and ITR-3.`,
+        return validationErrorResponse(res, {
+          itrType: `Foreign assets are not applicable for ${itrType}. This feature is only available for ITR-2 and ITR-3.`,
         });
       }
 
       const result = await ForeignAssetsService.getForeignAssets(filingId);
 
-      res.status(200).json({
-        success: true,
-        ...result,
-      });
+      return successResponse(res, result, 'Foreign assets retrieved successfully');
     } catch (error) {
       enterpriseLogger.error('Get foreign assets failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to get foreign assets',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -2259,40 +2196,31 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Validate ITR type - Foreign Assets are allowed for ITR-2 and ITR-3
       const itrType = verifyResult.rows[0].itr_type;
       if (itrType !== 'ITR-2' && itrType !== 'ITR2' && itrType !== 'ITR-3' && itrType !== 'ITR3') {
-        return res.status(400).json({
-          error: `Foreign assets are not applicable for ${itrType}. This feature is only available for ITR-2 and ITR-3.`,
+        return validationErrorResponse(res, {
+          itrType: `Foreign assets are not applicable for ${itrType}. This feature is only available for ITR-2 and ITR-3.`,
         });
       }
 
       const result = await ForeignAssetsService.addForeignAsset(filingId, userId, assetData);
 
-      res.status(201).json({
-        success: true,
-        ...result,
-      });
+      return successResponse(res, result, 'Foreign asset added successfully', 201);
     } catch (error) {
       enterpriseLogger.error('Add foreign asset failed', {
         error: error.message,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to add foreign asset',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -2315,41 +2243,33 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Validate ITR type - Foreign Assets are allowed for ITR-2 and ITR-3
       const itrType = verifyResult.rows[0].itr_type;
       if (itrType !== 'ITR-2' && itrType !== 'ITR2' && itrType !== 'ITR-3' && itrType !== 'ITR3') {
-        return res.status(400).json({
-          error: `Foreign assets are not applicable for ${itrType}. This feature is only available for ITR-2 and ITR-3.`,
+        return validationErrorResponse(res, {
+          itrType: `Foreign assets are not applicable for ${itrType}. This feature is only available for ITR-2 and ITR-3.`,
         });
       }
 
       const result = await ForeignAssetsService.updateForeignAsset(assetId, userId, assetData);
 
-      res.status(200).json({
-        success: true,
-        ...result,
-      });
+      return successResponse(res, result, 'Foreign asset updated successfully');
     } catch (error) {
       enterpriseLogger.error('Update foreign asset failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
         assetId: req.params.assetId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to update foreign asset',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -2371,41 +2291,33 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Validate ITR type - Foreign Assets are allowed for ITR-2 and ITR-3
       const itrType = verifyResult.rows[0].itr_type;
       if (itrType !== 'ITR-2' && itrType !== 'ITR2' && itrType !== 'ITR-3' && itrType !== 'ITR3') {
-        return res.status(400).json({
-          error: `Foreign assets are not applicable for ${itrType}. This feature is only available for ITR-2 and ITR-3.`,
+        return validationErrorResponse(res, {
+          itrType: `Foreign assets are not applicable for ${itrType}. This feature is only available for ITR-2 and ITR-3.`,
         });
       }
 
       const result = await ForeignAssetsService.deleteForeignAsset(assetId, userId);
 
-      res.status(200).json({
-        success: true,
-        ...result,
-      });
+      return successResponse(res, result, 'Foreign asset deleted successfully');
     } catch (error) {
       enterpriseLogger.error('Delete foreign asset failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
         assetId: req.params.assetId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to delete foreign asset',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -2428,52 +2340,41 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Get asset and verify ownership
       const asset = await ForeignAsset.findByPk(assetId);
       if (!asset || asset.filingId !== filingId) {
-        return res.status(404).json({
-          error: 'Foreign asset not found',
-        });
+        return notFoundResponse(res, 'Foreign asset');
       }
 
       if (asset.userId !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to asset',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to asset');
       }
 
       // Add document
       await asset.addDocument(documentUrl, documentType);
 
-      res.status(200).json({
-        success: true,
-        message: 'Document uploaded successfully',
+      return successResponse(res, {
         asset: {
           id: asset.id,
           supportingDocuments: asset.supportingDocuments,
         },
-      });
+      }, 'Document uploaded successfully');
     } catch (error) {
       enterpriseLogger.error('Upload foreign asset document failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
         assetId: req.params.assetId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to upload document',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -2500,32 +2401,24 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       const result = await TaxSimulationService.simulateScenario(filingId, scenario);
 
-      res.status(200).json({
-        success: true,
-        ...result,
-      });
+      return successResponse(res, result, 'Tax scenario simulated successfully');
     } catch (error) {
       enterpriseLogger.error('Simulate tax scenario failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to simulate scenario',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -2548,32 +2441,24 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       const result = await TaxSimulationService.compareScenarios(filingId, scenarios);
 
-      res.status(200).json({
-        success: true,
-        ...result,
-      });
+      return successResponse(res, result, 'Scenarios compared successfully');
     } catch (error) {
       enterpriseLogger.error('Compare scenarios failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to compare scenarios',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -2596,32 +2481,24 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       const result = await TaxSimulationService.applySimulation(filingId, scenarioId, changes);
 
-      res.status(200).json({
-        success: true,
-        ...result,
-      });
+      return successResponse(res, result, 'Simulation applied successfully');
     } catch (error) {
       enterpriseLogger.error('Apply simulation failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to apply simulation',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -2644,15 +2521,11 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Get filing data
@@ -2662,19 +2535,15 @@ class ITRController {
 
       const result = await TaxSimulationService.getOptimizationOpportunities(formData, itrType);
 
-      res.status(200).json({
-        success: true,
-        ...result,
-      });
+      return successResponse(res, result, 'Optimization opportunities retrieved successfully');
     } catch (error) {
       enterpriseLogger.error('Get optimization opportunities failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to get optimization opportunities',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -2698,17 +2567,13 @@ class ITRController {
       // Get draft
       const draft = await Draft.findByPk(draftId);
       if (!draft) {
-        return res.status(404).json({
-          error: 'Draft not found',
-        });
+        return notFoundResponse(res, 'Draft');
       }
 
       // Verify user owns this draft
       const filing = await ITRFiling.findByPk(draft.filingId);
       if (!filing || filing.userId !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to draft',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to draft');
       }
 
       const formData = draft.formData || draft.data || {};
@@ -2721,8 +2586,8 @@ class ITRController {
         const filingData = { ...formData, itrType };
         taxComputation = await TaxComputationEngine.computeTax(
           filingData,
-          formData.assessmentYear || '2024-25',
-          filing.assessmentYear || '2024-25'
+          formData.assessmentYear || getDefaultAssessmentYear(),
+          filing.assessmentYear || getDefaultAssessmentYear()
         );
       } catch (error) {
         enterpriseLogger.warn('Could not compute tax for PDF', { error: error.message });
@@ -2744,12 +2609,11 @@ class ITRController {
     } catch (error) {
       enterpriseLogger.error('Export draft PDF failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         draftId: req.params.draftId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to export PDF',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -2773,22 +2637,18 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Get filing data
       const filing = await ITRFiling.findByPk(filingId);
       const formData = filing.jsonPayload || {};
       const itrType = filing.itrType || 'ITR-1';
-      const assessmentYear = filing.assessmentYear || '2024-25';
+      const assessmentYear = filing.assessmentYear || getDefaultAssessmentYear();
 
       // Compute tax
       const filingData = { ...formData, itrType };
@@ -2812,12 +2672,11 @@ class ITRController {
     } catch (error) {
       enterpriseLogger.error('Export tax computation PDF failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to export PDF',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -2840,15 +2699,11 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Get discrepancies
@@ -2869,12 +2724,11 @@ class ITRController {
     } catch (error) {
       enterpriseLogger.error('Export discrepancy PDF failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to export PDF',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -2889,8 +2743,8 @@ class ITRController {
       const { email } = req.body;
 
       if (!email) {
-        return res.status(400).json({
-          error: 'Email address is required',
+        return validationErrorResponse(res, {
+          email: 'Email address is required',
         });
       }
 
@@ -2904,15 +2758,11 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Get discrepancies
@@ -2932,19 +2782,15 @@ class ITRController {
         discrepancyCount: discrepancyList.length,
       });
 
-      res.json({
-        success: true,
-        message: 'Discrepancy report email sent successfully',
-      });
+      return successResponse(res, null, 'Discrepancy report email sent successfully');
     } catch (error) {
       enterpriseLogger.error('Send discrepancy report email failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to send email',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -2960,8 +2806,8 @@ class ITRController {
       const email = recipientEmail || caEmail; // Support both field names
 
       if (!email) {
-        return res.status(400).json({
-          error: 'Recipient email is required',
+        return validationErrorResponse(res, {
+          email: 'Recipient email is required',
         });
       }
 
@@ -2975,27 +2821,23 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Get sharer details
       const sharer = await User.findByPk(userId);
       if (!sharer) {
-        return res.status(404).json({
-          error: 'User not found',
-        });
+        return notFoundResponse(res, 'User');
       }
 
-      // Generate share link (in production, this would be a secure, temporary token)
-      const shareLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/filing/${filingId}/review?token=TEMP_SHARE_TOKEN`;
+      // Generate secure share token
+      const { generateShareToken } = require('../utils/tokenGenerator');
+      const shareToken = generateShareToken(filingId, userId, 168); // 7 days expiration
+      const shareLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/filing/${filingId}/review?token=${shareToken}`;
 
       // Send email notification
       await EmailService.sendDraftSharingEmail(
@@ -3012,20 +2854,15 @@ class ITRController {
         shareLink,
       });
 
-      res.json({
-        success: true,
-        message: 'Draft shared successfully',
-        shareLink,
-      });
+      return successResponse(res, { shareLink }, 'Draft shared successfully');
     } catch (error) {
       enterpriseLogger.error('Share draft failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to share draft',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -3046,33 +2883,32 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Filing not found' });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({ error: 'Unauthorized' });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Validate ITR type - House Property is allowed for ITR-1 and ITR-2
       const itrType = verifyResult.rows[0].itr_type;
       if (itrType !== 'ITR-1' && itrType !== 'ITR1' && itrType !== 'ITR-2' && itrType !== 'ITR2') {
-        return res.status(400).json({
-          error: `House property income is not applicable for ${itrType}. This income type is only available for ITR-1 and ITR-2.`,
+        return validationErrorResponse(res, {
+          itrType: `House property income is not applicable for ${itrType}. This income type is only available for ITR-1 and ITR-2.`,
         });
       }
 
       const jsonPayload = verifyResult.rows[0].json_payload || {};
       const houseProperty = jsonPayload.income?.houseProperty || { properties: [] };
 
-      res.json({
-        success: true,
+      return successResponse(res, {
         properties: houseProperty.properties || [],
         totalIncome: houseProperty.totalIncome || 0,
         totalLoss: houseProperty.totalLoss || 0,
-      });
+      }, 'House property retrieved successfully');
     } catch (error) {
       enterpriseLogger.error('Get house property failed', { error: error.message, stack: error.stack });
-      res.status(500).json({ error: 'Internal server error' });
+      return errorResponse(res, error, 500);
     }
   }
 
@@ -3090,18 +2926,18 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Filing not found' });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({ error: 'Unauthorized' });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Validate ITR type - House Property is allowed for ITR-1 and ITR-2
       const itrType = verifyResult.rows[0].itr_type;
       if (itrType !== 'ITR-1' && itrType !== 'ITR1' && itrType !== 'ITR-2' && itrType !== 'ITR2') {
-        return res.status(400).json({
-          error: `House property income is not applicable for ${itrType}. This income type is only available for ITR-1 and ITR-2.`,
+        return validationErrorResponse(res, {
+          itrType: `House property income is not applicable for ${itrType}. This income type is only available for ITR-1 and ITR-2.`,
         });
       }
 
@@ -3112,10 +2948,10 @@ class ITRController {
       const updateQuery = `UPDATE itr_filings SET json_payload = $1, updated_at = NOW() WHERE id = $2`;
       await dbQuery(updateQuery, [JSON.stringify(jsonPayload), filingId]);
 
-      res.json({ success: true, message: 'House property updated successfully' });
+      return successResponse(res, null, 'House property updated successfully');
     } catch (error) {
       enterpriseLogger.error('Update house property failed', { error: error.message, stack: error.stack });
-      res.status(500).json({ error: 'Internal server error' });
+      return errorResponse(res, error, 500);
     }
   }
 
@@ -3132,18 +2968,18 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Filing not found' });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({ error: 'Unauthorized' });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Validate ITR type - Capital Gains is only allowed for ITR-2
       const itrType = verifyResult.rows[0].itr_type;
       if (itrType !== 'ITR-2' && itrType !== 'ITR2') {
-        return res.status(400).json({
-          error: `Capital gains income is not applicable for ${itrType}. This income type is only available for ITR-2.`,
+        return validationErrorResponse(res, {
+          itrType: `Capital gains income is not applicable for ${itrType}. This income type is only available for ITR-2.`,
         });
       }
 
@@ -3154,15 +2990,14 @@ class ITRController {
         ltcgDetails: [],
       };
 
-      res.json({
-        success: true,
+      return successResponse(res, {
         ...capitalGains,
         totalSTCG: capitalGains.stcgDetails?.reduce((sum, e) => sum + (e.gainAmount || 0), 0) || 0,
         totalLTCG: capitalGains.ltcgDetails?.reduce((sum, e) => sum + (e.gainAmount || 0), 0) || 0,
-      });
+      }, 'Capital gains retrieved successfully');
     } catch (error) {
       enterpriseLogger.error('Get capital gains failed', { error: error.message, stack: error.stack });
-      res.status(500).json({ error: 'Internal server error' });
+      return errorResponse(res, error, 500);
     }
   }
 
@@ -3180,18 +3015,18 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Filing not found' });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({ error: 'Unauthorized' });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Validate ITR type - Capital Gains is only allowed for ITR-2
       const itrType = verifyResult.rows[0].itr_type;
       if (itrType !== 'ITR-2' && itrType !== 'ITR2') {
-        return res.status(400).json({
-          error: `Capital gains income is not applicable for ${itrType}. This income type is only available for ITR-2.`,
+        return validationErrorResponse(res, {
+          itrType: `Capital gains income is not applicable for ${itrType}. This income type is only available for ITR-2.`,
         });
       }
 
@@ -3202,10 +3037,10 @@ class ITRController {
       const updateQuery = `UPDATE itr_filings SET json_payload = $1, updated_at = NOW() WHERE id = $2`;
       await dbQuery(updateQuery, [JSON.stringify(jsonPayload), filingId]);
 
-      res.json({ success: true, message: 'Capital gains updated successfully' });
+      return successResponse(res, null, 'Capital gains updated successfully');
     } catch (error) {
       enterpriseLogger.error('Update capital gains failed', { error: error.message, stack: error.stack });
-      res.status(500).json({ error: 'Internal server error' });
+      return errorResponse(res, error, 500);
     }
   }
 
@@ -3217,37 +3052,64 @@ class ITRController {
     try {
       const userId = req.user.userId;
       const { filingId } = req.params;
-      const { assessmentYear = '2024-25' } = req.query;
+      const { assessmentYear = getDefaultAssessmentYear() } = req.query;
 
-      const verifyQuery = `SELECT user_id, json_payload FROM itr_filings WHERE id = $1`;
+      const verifyQuery = `SELECT user_id, json_payload, assessment_year FROM itr_filings WHERE id = $1`;
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Filing not found' });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({ error: 'Unauthorized' });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
-      // TODO: Integrate with actual AIS service to fetch rental income
-      // For now, return structure that can be populated
+      // Get user PAN from personal info
       const jsonPayload = verifyResult.rows[0].json_payload || {};
-      const aisData = jsonPayload.aisData || {};
+      const personalInfo = jsonPayload.personalInfo || {};
+      const pan = personalInfo.panNumber || personalInfo.pan;
 
-      res.json({
-        success: true,
-        rentalIncome: aisData.rentalIncome || [],
+      if (!pan) {
+        return validationErrorResponse(res, {
+          pan: 'PAN number is required to fetch AIS data. Please complete personal information first.',
+        });
+      }
+
+      // Get assessment year from filing (use database value if available, otherwise use query param)
+      const filingAssessmentYear = verifyResult.rows[0].assessment_year || assessmentYear;
+
+      // Fetch AIS rental income using AIS service
+      const AISService = require('../services/integration/AISService');
+      let rentalIncome = [];
+      let source = 'manual';
+
+      try {
+        rentalIncome = await AISService.getRentalIncome(pan, filingAssessmentYear);
+        source = 'ais';
+      } catch (error) {
+        enterpriseLogger.warn('AIS rental income fetch failed, using stored data', {
+          filingId,
+          error: error.message,
+        });
+        // Fallback to stored AIS data if available
+        const aisData = jsonPayload.aisData || {};
+        rentalIncome = aisData.rentalIncome || [];
+        source = 'stored_ais';
+      }
+
+      return successResponse(res, {
+        rentalIncome: rentalIncome,
         summary: {
-          totalRentalIncome: (aisData.rentalIncome || []).reduce((sum, r) => sum + (r.amount || 0), 0),
-          properties: (aisData.rentalIncome || []).length,
+          totalRentalIncome: rentalIncome.reduce((sum, r) => sum + (r.amount || 0), 0),
+          properties: rentalIncome.length,
         },
-        source: 'ais',
+        source: source,
         fetchedAt: new Date().toISOString(),
-      });
+      }, 'AIS rental income retrieved successfully');
     } catch (error) {
       enterpriseLogger.error('Get AIS rental income failed', { error: error.message, stack: error.stack });
-      res.status(500).json({ error: 'Internal server error' });
+      return errorResponse(res, error, 500);
     }
   }
 
@@ -3265,11 +3127,11 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Filing not found' });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({ error: 'Unauthorized' });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       const jsonPayload = verifyResult.rows[0].json_payload || {};
@@ -3285,14 +3147,12 @@ class ITRController {
       const updateQuery = `UPDATE itr_filings SET json_payload = $1, updated_at = NOW() WHERE id = $2`;
       await dbQuery(updateQuery, [JSON.stringify(jsonPayload), filingId]);
 
-      res.json({
-        success: true,
-        message: 'AIS rental income data applied successfully',
+      return successResponse(res, {
         propertiesAdded: properties.length,
-      });
+      }, 'AIS rental income data applied successfully');
     } catch (error) {
       enterpriseLogger.error('Apply AIS rental income failed', { error: error.message, stack: error.stack });
-      res.status(500).json({ error: 'Internal server error' });
+      return errorResponse(res, error, 500);
     }
   }
 
@@ -3307,9 +3167,8 @@ class ITRController {
       const { receipts, propertyId } = req.body;
 
       if (!receipts || !Array.isArray(receipts) || receipts.length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: 'Receipts array is required',
+        return validationErrorResponse(res, {
+          receipts: 'Receipts array is required',
         });
       }
 
@@ -3318,32 +3177,77 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Filing not found' });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({ error: 'Unauthorized' });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
-      // Process receipts (in production, this would call OCR service)
-      const processedReceipts = receipts.map((receipt, index) => {
-        // Mock processing - in production, integrate with actual OCR service
-        return {
-          receiptId: receipt.receiptId || `receipt-${index}`,
-          fileName: receipt.fileName || `receipt-${index}.pdf`,
-          success: true,
-          extractedData: {
-            landlordName: receipt.extractedData?.landlordName || 'Extracted Landlord Name',
-            propertyAddress: receipt.extractedData?.propertyAddress || 'Extracted Property Address',
-            rentAmount: receipt.extractedData?.rentAmount || 25000,
-            period: receipt.extractedData?.period || 'January 2024',
-            receiptDate: receipt.extractedData?.receiptDate || new Date().toISOString().split('T')[0],
-            receiptNumber: receipt.extractedData?.receiptNumber || `R${index + 1}`,
-            tdsDeducted: receipt.extractedData?.tdsDeducted || 0,
-          },
-          confidence: receipt.confidence || 0.85,
-        };
-      });
+      // Process receipts using real OCR service
+      const RentReceiptOCRService = require('../services/business/RentReceiptOCRService');
+      const processedReceipts = [];
+      
+      for (const receipt of receipts) {
+        try {
+          // If receipt has file buffer, process it
+          if (receipt.fileBuffer) {
+            const ocrResult = await RentReceiptOCRService.processDocument(
+              receipt.fileBuffer,
+              receipt.fileName || `receipt-${receipts.indexOf(receipt)}.pdf`
+            );
+
+            if (ocrResult.success) {
+              processedReceipts.push({
+                receiptId: receipt.receiptId || `receipt-${receipts.indexOf(receipt)}`,
+                fileName: receipt.fileName || `receipt-${receipts.indexOf(receipt)}.pdf`,
+                success: true,
+                extractedData: {
+                  landlordName: ocrResult.extractedData.landlordName,
+                  propertyAddress: ocrResult.extractedData.propertyAddress,
+                  rentAmount: ocrResult.extractedData.rentAmount || 0,
+                  period: ocrResult.extractedData.period,
+                  receiptDate: ocrResult.extractedData.receiptDate,
+                  receiptNumber: ocrResult.extractedData.receiptNumber,
+                  tdsDeducted: ocrResult.extractedData.tdsDeducted || 0,
+                },
+                confidence: ocrResult.confidence,
+              });
+            } else {
+              // Fallback to provided data if OCR fails
+              processedReceipts.push({
+                receiptId: receipt.receiptId || `receipt-${receipts.indexOf(receipt)}`,
+                fileName: receipt.fileName || `receipt-${receipts.indexOf(receipt)}.pdf`,
+                success: true,
+                extractedData: receipt.extractedData || {},
+                confidence: receipt.confidence || 0.5,
+              });
+            }
+          } else {
+            // If no file buffer, use provided extracted data
+            processedReceipts.push({
+              receiptId: receipt.receiptId || `receipt-${receipts.indexOf(receipt)}`,
+              fileName: receipt.fileName || `receipt-${receipts.indexOf(receipt)}.pdf`,
+              success: true,
+              extractedData: receipt.extractedData || {},
+              confidence: receipt.confidence || 0.85,
+            });
+          }
+        } catch (ocrError) {
+          enterpriseLogger.error('Failed to process rent receipt OCR', {
+            receiptId: receipt.receiptId,
+            error: ocrError.message,
+          });
+          // Fallback to provided data on error
+          processedReceipts.push({
+            receiptId: receipt.receiptId || `receipt-${receipts.indexOf(receipt)}`,
+            fileName: receipt.fileName || `receipt-${receipts.indexOf(receipt)}.pdf`,
+            success: true,
+            extractedData: receipt.extractedData || {},
+            confidence: 0.5,
+          });
+        }
+      }
 
       // Update filing with processed receipts
       const jsonPayload = verifyResult.rows[0].json_payload || {};
@@ -3373,12 +3277,10 @@ class ITRController {
         propertyId,
       });
 
-      res.json({
-        success: true,
-        message: `${processedReceipts.length} rent receipt(s) processed successfully`,
+      return successResponse(res, {
         receipts: processedReceipts,
         totalProcessed: processedReceipts.length,
-      });
+      }, `${processedReceipts.length} rent receipt(s) processed successfully`);
 
     } catch (error) {
       enterpriseLogger.error('Process rent receipts OCR failed', {
@@ -3387,10 +3289,7 @@ class ITRController {
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(500).json({
-        success: false,
-        error: 'Internal server error',
-      });
+      return errorResponse(res, error, 500);
     }
   }
 
@@ -3402,38 +3301,72 @@ class ITRController {
     try {
       const userId = req.user.userId;
       const { filingId } = req.params;
-      const { assessmentYear = '2024-25' } = req.query;
+      const { assessmentYear = getDefaultAssessmentYear() } = req.query;
 
-      const verifyQuery = `SELECT user_id, json_payload FROM itr_filings WHERE id = $1`;
+      const verifyQuery = `SELECT user_id, json_payload, assessment_year FROM itr_filings WHERE id = $1`;
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Filing not found' });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({ error: 'Unauthorized' });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
-      // TODO: Integrate with actual AIS service to fetch capital gains
-      // For now, return structure that can be populated
+      // Get user PAN from personal info
       const jsonPayload = verifyResult.rows[0].json_payload || {};
-      const aisData = jsonPayload.aisData || {};
+      const personalInfo = jsonPayload.personalInfo || {};
+      const pan = personalInfo.panNumber || personalInfo.pan;
 
-      res.json({
-        success: true,
-        capitalGains: aisData.capitalGains || [],
+      if (!pan) {
+        return validationErrorResponse(res, {
+          pan: 'PAN number is required to fetch AIS data. Please complete personal information first.',
+        });
+      }
+
+      // Get assessment year from filing (use database value if available, otherwise use query param)
+      const filingAssessmentYear = verifyResult.rows[0].assessment_year || assessmentYear;
+
+      // Fetch AIS capital gains using AIS service
+      const AISService = require('../services/integration/AISService');
+      let capitalGainsData = { stcgEntries: [], ltcgEntries: [], allGains: [] };
+      let source = 'manual';
+
+      try {
+        capitalGainsData = await AISService.getCapitalGains(pan, filingAssessmentYear);
+        source = 'ais';
+      } catch (error) {
+        enterpriseLogger.warn('AIS capital gains fetch failed, using stored data', {
+          filingId,
+          error: error.message,
+        });
+        // Fallback to stored AIS data if available
+        const aisData = jsonPayload.aisData || {};
+        const allGains = aisData.capitalGains || [];
+        capitalGainsData = {
+          stcgEntries: allGains.filter((g) => (g.holdingPeriod || 0) < 365),
+          ltcgEntries: allGains.filter((g) => (g.holdingPeriod || 0) >= 365),
+          allGains: allGains,
+        };
+        source = 'stored_ais';
+      }
+
+      return successResponse(res, {
+        capitalGains: capitalGainsData.allGains,
+        stcgEntries: capitalGainsData.stcgEntries,
+        ltcgEntries: capitalGainsData.ltcgEntries,
         summary: {
-          totalSTCG: (aisData.capitalGains || []).filter((g) => g.holdingPeriod < 365).reduce((sum, g) => sum + (g.gainAmount || 0), 0),
-          totalLTCG: (aisData.capitalGains || []).filter((g) => g.holdingPeriod >= 365).reduce((sum, g) => sum + (g.gainAmount || 0), 0),
-          transactions: (aisData.capitalGains || []).length,
+          totalSTCG: capitalGainsData.stcgEntries.reduce((sum, g) => sum + (g.gainAmount || 0), 0),
+          totalLTCG: capitalGainsData.ltcgEntries.reduce((sum, g) => sum + (g.gainAmount || 0), 0),
+          transactions: capitalGainsData.allGains.length,
         },
-        source: 'ais',
+        source: source,
         fetchedAt: new Date().toISOString(),
-      });
+      }, 'AIS capital gains retrieved successfully');
     } catch (error) {
       enterpriseLogger.error('Get AIS capital gains failed', { error: error.message, stack: error.stack });
-      res.status(500).json({ error: 'Internal server error' });
+      return errorResponse(res, error, 500);
     }
   }
 
@@ -3451,11 +3384,11 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Filing not found' });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({ error: 'Unauthorized' });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       const jsonPayload = verifyResult.rows[0].json_payload || {};
@@ -3481,15 +3414,13 @@ class ITRController {
       const updateQuery = `UPDATE itr_filings SET json_payload = $1, updated_at = NOW() WHERE id = $2`;
       await dbQuery(updateQuery, [JSON.stringify(jsonPayload), filingId]);
 
-      res.json({
-        success: true,
-        message: 'AIS capital gains data applied successfully',
+      return successResponse(res, {
         stcgEntriesAdded: (stcgEntries || []).length,
         ltcgEntriesAdded: (ltcgEntries || []).length,
-      });
+      }, 'AIS capital gains data applied successfully');
     } catch (error) {
       enterpriseLogger.error('Apply AIS capital gains failed', { error: error.message, stack: error.stack });
-      res.status(500).json({ error: 'Internal server error' });
+      return errorResponse(res, error, 500);
     }
   }
 
@@ -3501,42 +3432,68 @@ class ITRController {
     try {
       const userId = req.user.userId;
       const { filingId } = req.params;
-      const { assessmentYear = '2024-25' } = req.query;
+      const { assessmentYear = getDefaultAssessmentYear() } = req.query;
 
-      const verifyQuery = `SELECT user_id, json_payload FROM itr_filings WHERE id = $1`;
+      const verifyQuery = `SELECT user_id, json_payload, assessment_year FROM itr_filings WHERE id = $1`;
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Filing not found' });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({ error: 'Unauthorized' });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
-      // TODO: Integrate with actual AIS service to fetch business income
-      // For now, return structure that can be populated
+      // Get user PAN from personal info
       const jsonPayload = verifyResult.rows[0].json_payload || {};
-      const aisData = jsonPayload.aisData || {};
-      const businessIncome = aisData.businessIncome || [];
+      const personalInfo = jsonPayload.personalInfo || {};
+      const pan = personalInfo.panNumber || personalInfo.pan;
 
-      const totalGrossReceipts = businessIncome.reduce((sum, b) => sum + (b.pnl?.grossReceipts || 0), 0);
-      const totalTDS = businessIncome.reduce((sum, b) => sum + (b.pnl?.tdsDeducted || 0), 0);
+      if (!pan) {
+        return validationErrorResponse(res, {
+          pan: 'PAN number is required to fetch AIS data. Please complete personal information first.',
+        });
+      }
 
-      res.json({
-        success: true,
+      // Get assessment year from filing (use database value if available, otherwise use query param)
+      const filingAssessmentYear = verifyResult.rows[0].assessment_year || assessmentYear;
+
+      // Fetch AIS business income using AIS service
+      const AISService = require('../services/integration/AISService');
+      let businessIncome = [];
+      let source = 'manual';
+
+      try {
+        businessIncome = await AISService.getBusinessIncome(pan, filingAssessmentYear);
+        source = 'ais';
+      } catch (error) {
+        enterpriseLogger.warn('AIS business income fetch failed, using stored data', {
+          filingId,
+          error: error.message,
+        });
+        // Fallback to stored AIS data if available
+        const aisData = jsonPayload.aisData || {};
+        businessIncome = aisData.businessIncome || [];
+        source = 'stored_ais';
+      }
+
+      const totalGrossReceipts = businessIncome.reduce((sum, b) => sum + (b.grossReceipts || b.pnl?.grossReceipts || 0), 0);
+      const totalTDS = businessIncome.reduce((sum, b) => sum + (b.tdsDeducted || b.pnl?.tdsDeducted || 0), 0);
+
+      return successResponse(res, {
         businessIncome: businessIncome,
         summary: {
           totalGrossReceipts: totalGrossReceipts,
           totalTDS: totalTDS,
           businesses: businessIncome.length,
         },
-        source: 'ais',
+        source: source,
         fetchedAt: new Date().toISOString(),
-      });
+      }, 'AIS business income retrieved successfully');
     } catch (error) {
       enterpriseLogger.error('Get AIS business income failed', { error: error.message, stack: error.stack });
-      res.status(500).json({ error: 'Internal server error' });
+      return errorResponse(res, error, 500);
     }
   }
 
@@ -3554,11 +3511,11 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Filing not found' });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({ error: 'Unauthorized' });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       const jsonPayload = verifyResult.rows[0].json_payload || {};
@@ -3574,14 +3531,12 @@ class ITRController {
       const updateQuery = `UPDATE itr_filings SET json_payload = $1, updated_at = NOW() WHERE id = $2`;
       await dbQuery(updateQuery, [JSON.stringify(jsonPayload), filingId]);
 
-      res.json({
-        success: true,
-        message: 'AIS business income data applied successfully',
+      return successResponse(res, {
         businessesAdded: (businesses || []).length,
-      });
+      }, 'AIS business income data applied successfully');
     } catch (error) {
       enterpriseLogger.error('Apply AIS business income failed', { error: error.message, stack: error.stack });
-      res.status(500).json({ error: 'Internal server error' });
+      return errorResponse(res, error, 500);
     }
   }
 
@@ -3593,42 +3548,68 @@ class ITRController {
     try {
       const userId = req.user.userId;
       const { filingId } = req.params;
-      const { assessmentYear = '2024-25' } = req.query;
+      const { assessmentYear = getDefaultAssessmentYear() } = req.query;
 
-      const verifyQuery = `SELECT user_id, json_payload FROM itr_filings WHERE id = $1`;
+      const verifyQuery = `SELECT user_id, json_payload, assessment_year FROM itr_filings WHERE id = $1`;
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Filing not found' });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({ error: 'Unauthorized' });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
-      // TODO: Integrate with actual AIS service to fetch professional income
-      // For now, return structure that can be populated
+      // Get user PAN from personal info
       const jsonPayload = verifyResult.rows[0].json_payload || {};
-      const aisData = jsonPayload.aisData || {};
-      const professionalIncome = aisData.professionalIncome || [];
+      const personalInfo = jsonPayload.personalInfo || {};
+      const pan = personalInfo.panNumber || personalInfo.pan;
 
-      const totalProfessionalFees = professionalIncome.reduce((sum, p) => sum + (p.pnl?.professionalFees || 0), 0);
-      const totalTDS = professionalIncome.reduce((sum, p) => sum + (p.pnl?.tdsDeducted || 0), 0);
+      if (!pan) {
+        return validationErrorResponse(res, {
+          pan: 'PAN number is required to fetch AIS data. Please complete personal information first.',
+        });
+      }
 
-      res.json({
-        success: true,
+      // Get assessment year from filing (use database value if available, otherwise use query param)
+      const filingAssessmentYear = verifyResult.rows[0].assessment_year || assessmentYear;
+
+      // Fetch AIS professional income using AIS service
+      const AISService = require('../services/integration/AISService');
+      let professionalIncome = [];
+      let source = 'manual';
+
+      try {
+        professionalIncome = await AISService.getProfessionalIncome(pan, filingAssessmentYear);
+        source = 'ais';
+      } catch (error) {
+        enterpriseLogger.warn('AIS professional income fetch failed, using stored data', {
+          filingId,
+          error: error.message,
+        });
+        // Fallback to stored AIS data if available
+        const aisData = jsonPayload.aisData || {};
+        professionalIncome = aisData.professionalIncome || [];
+        source = 'stored_ais';
+      }
+
+      const totalProfessionalFees = professionalIncome.reduce((sum, p) => sum + (p.professionalFees || p.pnl?.professionalFees || 0), 0);
+      const totalTDS = professionalIncome.reduce((sum, p) => sum + (p.tdsDeducted || p.pnl?.tdsDeducted || 0), 0);
+
+      return successResponse(res, {
         professionalIncome: professionalIncome,
         summary: {
           totalProfessionalFees: totalProfessionalFees,
           totalTDS: totalTDS,
           professions: professionalIncome.length,
         },
-        source: 'ais',
+        source: source,
         fetchedAt: new Date().toISOString(),
-      });
+      }, 'AIS professional income retrieved successfully');
     } catch (error) {
       enterpriseLogger.error('Get AIS professional income failed', { error: error.message, stack: error.stack });
-      res.status(500).json({ error: 'Internal server error' });
+      return errorResponse(res, error, 500);
     }
   }
 
@@ -3646,11 +3627,11 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Filing not found' });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({ error: 'Unauthorized' });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       const jsonPayload = verifyResult.rows[0].json_payload || {};
@@ -3670,14 +3651,12 @@ class ITRController {
       const updateQuery = `UPDATE itr_filings SET json_payload = $1, updated_at = NOW() WHERE id = $2`;
       await dbQuery(updateQuery, [JSON.stringify(jsonPayload), filingId]);
 
-      res.json({
-        success: true,
-        message: 'AIS professional income data applied successfully',
+      return successResponse(res, {
         professionsAdded: (professions || []).length,
-      });
+      }, 'AIS professional income data applied successfully');
     } catch (error) {
       enterpriseLogger.error('Apply AIS professional income failed', { error: error.message, stack: error.stack });
-      res.status(500).json({ error: 'Internal server error' });
+      return errorResponse(res, error, 500);
     }
   }
 
@@ -3694,32 +3673,31 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Filing not found' });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({ error: 'Unauthorized' });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Validate ITR type - Business Income is allowed for ITR-3 and ITR-4
       const itrType = verifyResult.rows[0].itr_type;
       if (itrType !== 'ITR-3' && itrType !== 'ITR3' && itrType !== 'ITR-4' && itrType !== 'ITR4') {
-        return res.status(400).json({
-          error: `Business income is not applicable for ${itrType}. This income type is only available for ITR-3 and ITR-4.`,
+        return validationErrorResponse(res, {
+          itrType: `Business income is not applicable for ${itrType}. This income type is only available for ITR-3 and ITR-4.`,
         });
       }
 
       const jsonPayload = verifyResult.rows[0].json_payload || {};
       const businessIncome = jsonPayload.income?.business || { businesses: [] };
 
-      res.json({
-        success: true,
+      return successResponse(res, {
         businesses: businessIncome.businesses || [],
         totalIncome: businessIncome.totalIncome || 0,
-      });
+      }, 'Business income retrieved successfully');
     } catch (error) {
       enterpriseLogger.error('Get business income failed', { error: error.message, stack: error.stack });
-      res.status(500).json({ error: 'Internal server error' });
+      return errorResponse(res, error, 500);
     }
   }
 
@@ -3737,18 +3715,18 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Filing not found' });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({ error: 'Unauthorized' });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Validate ITR type - Business Income is allowed for ITR-3 and ITR-4
       const itrType = verifyResult.rows[0].itr_type;
       if (itrType !== 'ITR-3' && itrType !== 'ITR3' && itrType !== 'ITR-4' && itrType !== 'ITR4') {
-        return res.status(400).json({
-          error: `Business income is not applicable for ${itrType}. This income type is only available for ITR-3 and ITR-4.`,
+        return validationErrorResponse(res, {
+          itrType: `Business income is not applicable for ${itrType}. This income type is only available for ITR-3 and ITR-4.`,
         });
       }
 
@@ -3759,10 +3737,10 @@ class ITRController {
       const updateQuery = `UPDATE itr_filings SET json_payload = $1, updated_at = NOW() WHERE id = $2`;
       await dbQuery(updateQuery, [JSON.stringify(jsonPayload), filingId]);
 
-      res.json({ success: true, message: 'Business income updated successfully' });
+      return successResponse(res, null, 'Business income updated successfully');
     } catch (error) {
       enterpriseLogger.error('Update business income failed', { error: error.message, stack: error.stack });
-      res.status(500).json({ error: 'Internal server error' });
+      return errorResponse(res, error, 500);
     }
   }
 
@@ -3779,32 +3757,31 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Filing not found' });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({ error: 'Unauthorized' });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Validate ITR type - Professional Income is only allowed for ITR-3
       const itrType = verifyResult.rows[0].itr_type;
       if (itrType !== 'ITR-3' && itrType !== 'ITR3') {
-        return res.status(400).json({
-          error: `Professional income is not applicable for ${itrType}. This income type is only available for ITR-3.`,
+        return validationErrorResponse(res, {
+          itrType: `Professional income is not applicable for ${itrType}. This income type is only available for ITR-3.`,
         });
       }
 
       const jsonPayload = verifyResult.rows[0].json_payload || {};
       const professionalIncome = jsonPayload.income?.professional || { activities: [] };
 
-      res.json({
-        success: true,
+      return successResponse(res, {
         activities: professionalIncome.activities || [],
         totalIncome: professionalIncome.totalIncome || 0,
-      });
+      }, 'Professional income retrieved successfully');
     } catch (error) {
       enterpriseLogger.error('Get professional income failed', { error: error.message, stack: error.stack });
-      res.status(500).json({ error: 'Internal server error' });
+      return errorResponse(res, error, 500);
     }
   }
 
@@ -3822,18 +3799,18 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Filing not found' });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({ error: 'Unauthorized' });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Validate ITR type - Professional Income is only allowed for ITR-3
       const itrType = verifyResult.rows[0].itr_type;
       if (itrType !== 'ITR-3' && itrType !== 'ITR3') {
-        return res.status(400).json({
-          error: `Professional income is not applicable for ${itrType}. This income type is only available for ITR-3.`,
+        return validationErrorResponse(res, {
+          itrType: `Professional income is not applicable for ${itrType}. This income type is only available for ITR-3.`,
         });
       }
 
@@ -3844,10 +3821,10 @@ class ITRController {
       const updateQuery = `UPDATE itr_filings SET json_payload = $1, updated_at = NOW() WHERE id = $2`;
       await dbQuery(updateQuery, [JSON.stringify(jsonPayload), filingId]);
 
-      res.json({ success: true, message: 'Professional income updated successfully' });
+      return successResponse(res, null, 'Professional income updated successfully');
     } catch (error) {
       enterpriseLogger.error('Update professional income failed', { error: error.message, stack: error.stack });
-      res.status(500).json({ error: 'Internal server error' });
+      return errorResponse(res, error, 500);
     }
   }
 
@@ -3869,40 +3846,32 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Validate ITR type - Balance Sheet is only allowed for ITR-3
       const itrType = verifyResult.rows[0].itr_type;
       if (itrType !== 'ITR-3' && itrType !== 'ITR3') {
-        return res.status(400).json({
-          error: `Balance sheet is not applicable for ${itrType}. This feature is only available for ITR-3.`,
+        return validationErrorResponse(res, {
+          itrType: `Balance sheet is not applicable for ${itrType}. This feature is only available for ITR-3.`,
         });
       }
 
       const balanceSheet = await BalanceSheetService.getBalanceSheet(filingId);
 
-      res.json({
-        success: true,
-        balanceSheet,
-      });
+      return successResponse(res, { balanceSheet }, 'Balance sheet retrieved successfully');
     } catch (error) {
       enterpriseLogger.error('Get balance sheet failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to get balance sheet',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -3924,41 +3893,35 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Validate ITR type - Audit Information is only allowed for ITR-3
       const itrType = verifyResult.rows[0].itr_type;
       if (itrType !== 'ITR-3' && itrType !== 'ITR3') {
-        return res.status(400).json({
-          error: `Audit information is not applicable for ${itrType}. This feature is only available for ITR-3.`,
+        return validationErrorResponse(res, {
+          itrType: `Audit information is not applicable for ${itrType}. This feature is only available for ITR-3.`,
         });
       }
 
       const auditInfo = await AuditInformationService.getAuditInformation(filingId);
 
-      res.json({
-        success: true,
+      return successResponse(res, {
         auditInfo,
         applicability: auditInfo.applicability,
-      });
+      }, 'Audit information retrieved successfully');
     } catch (error) {
       enterpriseLogger.error('Get audit information failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to get audit information',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -3981,41 +3944,34 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Validate ITR type - Audit Information is only allowed for ITR-3
       const itrType = verifyResult.rows[0].itr_type;
       if (itrType !== 'ITR-3' && itrType !== 'ITR3') {
-        return res.status(400).json({
-          error: `Audit information is not applicable for ${itrType}. This feature is only available for ITR-3.`,
+        return validationErrorResponse(res, {
+          itrType: `Audit information is not applicable for ${itrType}. This feature is only available for ITR-3.`,
         });
       }
 
       const updated = await AuditInformationService.updateAuditInformation(filingId, auditData);
 
-      res.json({
-        success: true,
+      return successResponse(res, {
         auditInfo: updated,
-        message: 'Audit information updated successfully',
-      });
+      }, 'Audit information updated successfully');
     } catch (error) {
       enterpriseLogger.error('Update audit information failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to update audit information',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -4037,15 +3993,11 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       const jsonPayload = verifyResult.rows[0].json_payload || {};
@@ -4054,19 +4006,15 @@ class ITRController {
         jsonPayload.income?.professional
       );
 
-      res.json({
-        success: true,
-        ...applicability,
-      });
+      return successResponse(res, applicability, 'Audit applicability checked successfully');
     } catch (error) {
       enterpriseLogger.error('Check audit applicability failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to check audit applicability',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -4089,41 +4037,34 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Validate ITR type - Balance Sheet is only allowed for ITR-3
       const itrType = verifyResult.rows[0].itr_type;
       if (itrType !== 'ITR-3' && itrType !== 'ITR3') {
-        return res.status(400).json({
-          error: `Balance sheet is not applicable for ${itrType}. This feature is only available for ITR-3.`,
+        return validationErrorResponse(res, {
+          itrType: `Balance sheet is not applicable for ${itrType}. This feature is only available for ITR-3.`,
         });
       }
 
       const updated = await BalanceSheetService.updateBalanceSheet(filingId, balanceSheetData);
 
-      res.json({
-        success: true,
+      return successResponse(res, {
         balanceSheet: updated,
-        message: 'Balance sheet updated successfully',
-      });
+      }, 'Balance sheet updated successfully');
     } catch (error) {
       enterpriseLogger.error('Update balance sheet failed', {
         error: error.message,
+        stack: error.stack,
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to update balance sheet',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -4146,23 +4087,19 @@ class ITRController {
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Filing not found',
-        });
+        return notFoundResponse(res, 'Filing');
       }
 
       if (verifyResult.rows[0].user_id !== userId) {
-        return res.status(403).json({
-          error: 'Unauthorized access to filing',
-        });
+        return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
       // Get filing data
       const filing = await ITRFiling.findByPk(filingId);
       
       if (!filing.acknowledgmentNumber) {
-        return res.status(400).json({
-          error: 'Filing not yet acknowledged',
+        return validationErrorResponse(res, {
+          acknowledgmentNumber: 'Filing not yet acknowledged',
         });
       }
 
@@ -4189,9 +4126,7 @@ class ITRController {
         userId: req.user?.userId,
         filingId: req.params.filingId,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to export PDF',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -4210,19 +4145,18 @@ class ITRController {
 
       // Validate required fields
       if (!itrData || !itrType) {
-        return res.status(400).json({
-          success: false,
-          error: 'itrData and itrType are required',
-        });
+        return validationErrorResponse(res, {
+          itrData: 'ITR data is required',
+          itrType: 'ITR type is required',
+        }, 'itrData and itrType are required');
       }
 
       // Validate ITR type
       const validTypes = ['ITR-1', 'ITR-2', 'ITR-3', 'ITR-4', 'ITR1', 'ITR2', 'ITR3', 'ITR4'];
       const normalizedItrType = itrType.toUpperCase().replace('-', '');
       if (!validTypes.includes(itrType) && !validTypes.includes(normalizedItrType)) {
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid ITR type. Must be ITR-1, ITR-2, ITR-3, or ITR-4',
+        return validationErrorResponse(res, {
+          itrType: 'Invalid ITR type. Must be ITR-1, ITR-2, ITR-3, or ITR-4',
         });
       }
 
@@ -4230,18 +4164,15 @@ class ITRController {
       const User = require('../models/User');
       const user = await User.findByPk(userId);
       if (!user) {
-        return res.status(404).json({
-          success: false,
-          error: 'User not found',
-        });
+        return notFoundResponse(res, 'User');
       }
 
       // Generate government-compliant JSON
-      const jsonPayload = this.generateGovernmentJson(itrData, itrType, assessmentYear || '2024-25', user);
+      const jsonPayload = this.generateGovernmentJson(itrData, itrType, assessmentYear || getDefaultAssessmentYear(), user);
 
       // Generate filename
       const currentDate = new Date().toISOString().split('T')[0];
-      const fileName = `${itrType}_${assessmentYear || '2024-25'}_${currentDate}.json`;
+      const fileName = `${itrType}_${assessmentYear || getDefaultAssessmentYear()}_${currentDate}.json`;
 
       // Optionally store file in uploads directory
       const fs = require('fs');
@@ -4262,33 +4193,29 @@ class ITRController {
       enterpriseLogger.info('ITR JSON exported successfully', {
         userId,
         itrType,
-        assessmentYear: assessmentYear || '2024-25',
+        assessmentYear: assessmentYear || getDefaultAssessmentYear(),
         fileName,
       });
 
-      res.json({
-        success: true,
+      return successResponse(res, {
         downloadUrl,
         fileName,
         metadata: {
           itrType,
-          assessmentYear: assessmentYear || '2024-25',
+          assessmentYear: assessmentYear || getDefaultAssessmentYear(),
           generatedAt: new Date().toISOString(),
           fileSize: JSON.stringify(jsonPayload).length,
           format: exportFormat || 'JSON',
           purpose: purpose || 'FILING',
         },
-      });
+      }, 'ITR JSON exported successfully');
     } catch (error) {
       enterpriseLogger.error('Export ITR JSON failed', {
         error: error.message,
         userId: req.user?.userId,
         stack: error.stack,
       });
-      res.status(error.statusCode || 500).json({
-        success: false,
-        error: error.message || 'Failed to export ITR JSON',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -4308,9 +4235,7 @@ class ITRController {
 
       // Check if file exists
       if (!fs.existsSync(filePath)) {
-        return res.status(404).json({
-          error: 'File not found',
-        });
+        return notFoundResponse(res, 'File');
       }
 
       // Set response headers
@@ -4324,9 +4249,7 @@ class ITRController {
         error: error.message,
         fileName: req.params.fileName,
       });
-      res.status(error.statusCode || 500).json({
-        error: error.message || 'Failed to download file',
-      });
+      return errorResponse(res, error, error.statusCode || 500);
     }
   }
 
@@ -4414,8 +4337,10 @@ class ITRController {
       transformed.income.otherIncome = parseFloat(formData.income.otherIncome || 0);
 
       // Business income
-      if (formData.businessIncome?.businesses && Array.isArray(formData.businessIncome.businesses)) {
-        const totalBusinessIncome = formData.businessIncome.businesses.reduce((sum, biz) => {
+      // Use consolidated structure: formData.income.businessIncome (with fallback for backward compatibility)
+      const businessIncome = formData.income?.businessIncome || formData.businessIncome;
+      if (businessIncome?.businesses && Array.isArray(businessIncome.businesses)) {
+        const totalBusinessIncome = businessIncome.businesses.reduce((sum, biz) => {
           if (biz.pnl) {
             const pnl = biz.pnl;
             const directExpenses = this.calculateExpenseTotal(pnl.directExpenses);
@@ -4434,14 +4359,16 @@ class ITRController {
           return sum;
         }, 0);
         transformed.income.businessIncome = totalBusinessIncome;
-        transformed.businessIncomeDetails = formData.businessIncome;
+        transformed.businessIncomeDetails = businessIncome;
       } else {
-        transformed.income.businessIncome = parseFloat(formData.income.businessIncome || 0);
+        transformed.income.businessIncome = parseFloat(businessIncome || 0);
       }
 
       // Professional income
-      if (formData.professionalIncome?.professions && Array.isArray(formData.professionalIncome.professions)) {
-        const totalProfessionalIncome = formData.professionalIncome.professions.reduce((sum, prof) => {
+      // Use consolidated structure: formData.income.professionalIncome (with fallback for backward compatibility)
+      const professionalIncome = formData.income?.professionalIncome || formData.professionalIncome;
+      if (professionalIncome?.professions && Array.isArray(professionalIncome.professions)) {
+        const totalProfessionalIncome = professionalIncome.professions.reduce((sum, prof) => {
           if (prof.pnl) {
             const pnl = prof.pnl;
             const expensesTotal = this.calculateExpenseTotal(pnl.expenses);
@@ -4452,9 +4379,9 @@ class ITRController {
           return sum;
         }, 0);
         transformed.income.professionalIncome = totalProfessionalIncome;
-        transformed.professionalIncomeDetails = formData.professionalIncome;
+        transformed.professionalIncomeDetails = professionalIncome;
       } else {
-        transformed.income.professionalIncome = parseFloat(formData.income.professionalIncome || 0);
+        transformed.income.professionalIncome = parseFloat(professionalIncome || 0);
       }
 
       // ITR-2 specific

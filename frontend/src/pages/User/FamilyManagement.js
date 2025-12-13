@@ -30,6 +30,7 @@ import {
   X,
 } from 'lucide-react';
 import api from '../../services/api';
+import { enterpriseLogger } from '../../utils/logger';
 
 const FamilyManagement = () => {
   const { user } = useAuth();
@@ -141,7 +142,7 @@ const FamilyManagement = () => {
         await addMemberMutation.mutateAsync(memberData);
       }
     } catch (error) {
-      console.error('Error saving family member:', error);
+      enterpriseLogger.error('Error saving family member:', { error });
     } finally {
       setLoading(false);
     }

@@ -5,7 +5,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import Card from '../common/Card';
 import Button from '../common/Button';
-import StatusBadge from '../common/StatusBadge';
+import StatusBadge from '../DesignSystem/StatusBadge';
 import documentService from '../../services/documentService';
 import { enterpriseLogger } from '../../utils/logger';
 import toast from 'react-hot-toast';

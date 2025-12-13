@@ -82,7 +82,10 @@ app.use(
         'https://burnblack.com',
         'https://www.burnblack.com',
         'https://app.burnblack.com',
-      ];
+        // Allow Vercel preview and production deployments
+        process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+        process.env.FRONTEND_URL || null,
+      ].filter(Boolean);
 
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);

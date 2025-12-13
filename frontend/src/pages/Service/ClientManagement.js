@@ -22,6 +22,7 @@ import {
   EnterpriseStatCard,
 } from '../../components/DesignSystem/EnterpriseComponents';
 import api from '../../services/api';
+import { enterpriseLogger } from '../../utils/logger';
 
 const ClientManagement = () => {
   const [clients, setClients] = useState([]);
@@ -55,7 +56,7 @@ const ClientManagement = () => {
         setPagination(response.data.pagination);
       }
     } catch (error) {
-      console.error('Error fetching clients:', error);
+      enterpriseLogger.error('Error fetching clients:', { error });
     } finally {
       setLoading(false);
     }
@@ -69,7 +70,7 @@ const ClientManagement = () => {
         setStatistics(response.data.statistics);
       }
     } catch (error) {
-      console.error('Error fetching statistics:', error);
+      enterpriseLogger.error('Error fetching statistics:', { error });
     }
   };
 
@@ -99,7 +100,7 @@ const ClientManagement = () => {
         fetchStatistics();
       }
     } catch (error) {
-      console.error('Error adding client:', error);
+      enterpriseLogger.error('Error adding client:', { error });
     }
   };
 
@@ -111,7 +112,7 @@ const ClientManagement = () => {
         fetchStatistics();
       }
     } catch (error) {
-      console.error('Error updating client:', error);
+      enterpriseLogger.error('Error updating client:', { error });
     }
   };
 
@@ -123,7 +124,7 @@ const ClientManagement = () => {
         fetchStatistics();
       }
     } catch (error) {
-      console.error('Error removing client:', error);
+      enterpriseLogger.error('Error removing client:', { error });
     }
   };
 

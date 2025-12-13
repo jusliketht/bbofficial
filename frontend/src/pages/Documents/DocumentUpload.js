@@ -7,9 +7,11 @@ import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
-import StatusBadge from '../../components/common/StatusBadge';
+import StatusBadge from '../../components/DesignSystem/StatusBadge';
+import { LoadingState, InlineLoader } from '../../components/DesignSystem';
 import apiClient from '../../services';
 import toast from 'react-hot-toast';
+import { enterpriseLogger } from '../../utils/logger';
 
 const DocumentUpload = () => {
   // State management
@@ -104,7 +106,7 @@ const DocumentUpload = () => {
       toast.success(`${uploadedFiles.length} file(s) uploaded successfully`);
 
     } catch (error) {
-      console.error('Upload failed:', error);
+      enterpriseLogger.error('Upload failed', { error });
       toast.error('Upload failed. Please try again.');
     } finally {
       setUploading(false);

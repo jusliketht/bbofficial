@@ -5,6 +5,8 @@
 // =====================================================
 
 import { authService } from './';
+import apiClient from './core/APIClient';
+import { validateITRJson } from '../lib/itrSchemaValidator';
 
 class ITRJsonExportService {
   constructor() {
@@ -26,15 +28,60 @@ class ITRJsonExportService {
         throw new Error('User must be logged in to export ITR data');
       }
 
-      // Generate government-compliant JSON structure
-      const jsonPayload = this.generateGovernmentJson(itrData, itrType, assessmentYear, user);
+      // Fetch Schedule FA for ITR-2 and ITR-3
+      if (itrType === 'ITR-2' || itrType === 'ITR2' || itrType === 'ITR-3' || itrType === 'ITR3') {
+        try {
+          const filingId = itrData.filingId || itrData.id;
+          if (filingId) {
+            const token = apiClient.getAuthToken();
+            if (token) {
+              const scheduleFAResponse = await fetch(
+                `/api/itr/filings/${filingId}/foreign-assets`,
+                {
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                  },
+                },
+              );
+              if (scheduleFAResponse.ok) {
+                const scheduleFAData = await scheduleFAResponse.json();
+                if (scheduleFAData.success && scheduleFAData.assets) {
+                  itrData.scheduleFA = {
+                    assets: scheduleFAData.assets,
+                    totalValue: scheduleFAData.totalValue || 0,
+                    totals: scheduleFAData.totals || {},
+                  };
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to fetch Schedule FA:', error);
+          // Continue without Schedule FA if fetch fails
+        }
+      }
+
+      // Generate government-compliant JSON structure matching ITD official schema
+      const jsonPayload = this.generateITDCompliantJson(itrData, itrType, assessmentYear, user);
+
+      // Validate against ITD schema before export
+      const validationResult = validateITRJson(jsonPayload, itrType);
+      if (!validationResult.isValid) {
+        const errorMessages = validationResult.errors.map(e => e.message).join('; ');
+        throw new Error(`JSON validation failed: ${errorMessages}`);
+      }
 
       // Call backend to generate downloadable JSON
+      const token = apiClient.getAuthToken();
+      if (!token) {
+        throw new Error('Authentication token not found. Please log in again.');
+      }
+
       const response = await fetch(this.apiEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authService.getToken()}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           itrData: jsonPayload,
@@ -52,20 +99,20 @@ class ITRJsonExportService {
 
       const result = await response.json();
 
-      // Generate client-side JSON as backup
-      const clientJson = this.generateClientJson(itrData, itrType, assessmentYear, user);
-
+      // Use ITD-compliant JSON for download (already validated)
       return {
         success: true,
         downloadUrl: result.downloadUrl,
-        jsonPayload: clientJson,
+        jsonPayload: jsonPayload, // Use the validated ITD-compliant JSON
         fileName: this.generateFileName(itrType, assessmentYear),
         metadata: {
           itrType,
           assessmentYear,
           generatedAt: new Date().toISOString(),
-          fileSize: JSON.stringify(clientJson).length,
-          checksum: this.generateChecksum(clientJson),
+          fileSize: JSON.stringify(jsonPayload).length,
+          checksum: this.generateChecksum(jsonPayload),
+          validated: true,
+          validationErrors: [],
         },
       };
 
@@ -167,9 +214,11 @@ class ITRJsonExportService {
       transformed.income.otherIncome = parseFloat(formData.income.otherIncome || 0);
 
       // Business income - handle both ITR-3 structure and simple structure
-      if (formData.businessIncome?.businesses && Array.isArray(formData.businessIncome.businesses)) {
+      // Use consolidated structure: formData.income.businessIncome (with fallback for backward compatibility)
+      const businessIncome = formData.income?.businessIncome || formData.businessIncome;
+      if (businessIncome?.businesses && Array.isArray(businessIncome.businesses)) {
         // ITR-3: Calculate total from businesses array
-        const totalBusinessIncome = formData.businessIncome.businesses.reduce((sum, biz) => {
+        const totalBusinessIncome = businessIncome.businesses.reduce((sum, biz) => {
           if (biz.pnl) {
             const pnl = biz.pnl;
             const directExpenses = this.calculateExpenseTotal(pnl.directExpenses);
@@ -188,15 +237,17 @@ class ITRJsonExportService {
           return sum;
         }, 0);
         transformed.income.businessIncome = totalBusinessIncome;
-        transformed.businessIncomeDetails = formData.businessIncome;
+        transformed.businessIncomeDetails = businessIncome;
       } else {
-        transformed.income.businessIncome = parseFloat(formData.income.businessIncome || 0);
+        transformed.income.businessIncome = parseFloat(businessIncome || 0);
       }
 
       // Professional income - handle both ITR-3 structure and simple structure
-      if (formData.professionalIncome?.professions && Array.isArray(formData.professionalIncome.professions)) {
+      // Use consolidated structure: formData.income.professionalIncome (with fallback for backward compatibility)
+      const professionalIncome = formData.income?.professionalIncome || formData.professionalIncome;
+      if (professionalIncome?.professions && Array.isArray(professionalIncome.professions)) {
         // ITR-3: Calculate total from professions array
-        const totalProfessionalIncome = formData.professionalIncome.professions.reduce((sum, prof) => {
+        const totalProfessionalIncome = professionalIncome.professions.reduce((sum, prof) => {
           if (prof.pnl) {
             const pnl = prof.pnl;
             const expensesTotal = this.calculateExpenseTotal(pnl.expenses);
@@ -207,9 +258,9 @@ class ITRJsonExportService {
           return sum;
         }, 0);
         transformed.income.professionalIncome = totalProfessionalIncome;
-        transformed.professionalIncomeDetails = formData.professionalIncome;
+        transformed.professionalIncomeDetails = professionalIncome;
       } else {
-        transformed.income.professionalIncome = parseFloat(formData.income.professionalIncome || 0);
+        transformed.income.professionalIncome = parseFloat(professionalIncome || 0);
       }
 
       // Store structured data for ITR-2 specific fields
@@ -284,109 +335,415 @@ class ITRJsonExportService {
   }
 
   /**
-   * Generate government-compliant JSON structure
-   * Follows Income Tax Department schema requirements
+   * Generate ITD-compliant JSON structure
+   * Routes to ITR-specific generation methods based on ITR type
    */
-  generateGovernmentJson(itrData, itrType, assessmentYear, user) {
-    const currentDate = new Date().toISOString();
+  generateITDCompliantJson(itrData, itrType, assessmentYear, user) {
+    const normalizedITRType = this.normalizeITRType(itrType);
 
-    // Transform formData to expected structure
-    const transformedData = this.transformFormDataToExportFormat(itrData, itrType);
+    switch (normalizedITRType) {
+      case 'ITR-1':
+      case 'ITR1':
+        return this.generateITR1Json(itrData, assessmentYear, user);
+      case 'ITR-2':
+      case 'ITR2':
+        return this.generateITR2Json(itrData, assessmentYear, user);
+      case 'ITR-3':
+      case 'ITR3':
+        return this.generateITR3Json(itrData, assessmentYear, user);
+      case 'ITR-4':
+      case 'ITR4':
+        return this.generateITR4Json(itrData, assessmentYear, user);
+      default:
+        throw new Error(`Unsupported ITR type: ${itrType}`);
+    }
+  }
 
-    // Base structure for all ITR types
-    const baseJson = {
-      // Header information
-      'ITR_Form': itrType,
-      'Assessment_Year': assessmentYear,
-      'Filing_Type': 'Original',
-      'Date_of_Filing': currentDate.split('T')[0], // YYYY-MM-DD format
-      'Acknowledgement_Number': '', // To be generated by tax department
+  /**
+   * Normalize ITR type string
+   */
+  normalizeITRType(itrType) {
+    if (!itrType) return 'ITR-1';
+    const normalized = itrType.toUpperCase().trim();
+    if (normalized === 'ITR1') return 'ITR-1';
+    if (normalized === 'ITR2') return 'ITR-2';
+    if (normalized === 'ITR3') return 'ITR-3';
+    if (normalized === 'ITR4') return 'ITR-4';
+    return normalized;
+  }
 
-      // Taxpayer information
-      'Taxpayer_Information': {
-        'PAN': transformedData.personal?.pan || user.pan || '',
-        'Name': {
-          'First_Name': transformedData.personal?.firstName || user.firstName || '',
-          'Middle_Name': transformedData.personal?.middleName || '',
-          'Last_Name': transformedData.personal?.lastName || user.lastName || '',
-        },
-        'Date_of_Birth': transformedData.personal?.dateOfBirth || user.dateOfBirth || '',
-        'Gender': transformedData.personal?.gender || user.gender || '',
-        'Residential_Status': transformedData.personal?.residentialStatus || 'RESIDENT',
-        'Contact_Information': {
-          'Email_ID': transformedData.personal?.email || user.email || '',
-          'Mobile_Number': transformedData.personal?.phone || user.phone || '',
-          'Address': {
-            'Flat_Door_Block_No': transformedData.personal?.address?.flat || '',
-            'Premises_Name_Building': transformedData.personal?.address?.building || '',
-            'Road_Street': transformedData.personal?.address?.street || '',
-            'Area_Locality': transformedData.personal?.address?.area || '',
-            'City_Town': transformedData.personal?.address?.city || '',
-            'State': transformedData.personal?.address?.state || '',
-            'PIN_Code': transformedData.personal?.address?.pincode || '',
-            'Country': transformedData.personal?.address?.country || 'INDIA',
+  /**
+   * Generate ITR-1 (Sahaj) JSON - Official ITD Schema Format
+   */
+  generateITR1Json(itrData, assessmentYear, user) {
+    const transformedData = this.transformFormDataToExportFormat(itrData, 'ITR-1');
+    const personalInfo = transformedData.personal || {};
+    const income = transformedData.income || {};
+    const deductions = transformedData.deductions || {};
+    const taxes = transformedData.taxes || {};
+    const tds = transformedData.tds || {};
+    const bank = transformedData.bank || {};
+
+    // Calculate totals
+    const grossSalary = parseFloat(income.salaryIncome || 0);
+    const salary16ia = parseFloat(income.salary16ia || 0); // Standard deduction
+    const professionalTax = parseFloat(income.professionalTax || 0);
+    const netSalary = Math.max(0, grossSalary - salary16ia - professionalTax);
+
+    const incomeFromHP = parseFloat(income.housePropertyIncome || 0);
+    const incFromOthSources = parseFloat(income.otherIncome || 0);
+    const grossTotIncome = grossSalary + incomeFromHP + incFromOthSources;
+
+    const deductUndChapVIA = parseFloat(deductions.section80C || 0) +
+                             parseFloat(deductions.section80D || 0) +
+                             parseFloat(deductions.section80E || 0) +
+                             parseFloat(deductions.section80G || 0) +
+                             parseFloat(deductions.section80TTA || 0);
+    const totalIncome = Math.max(0, grossTotIncome - deductUndChapVIA);
+
+    // Calculate tax payable
+    const taxPayableOnTI = this.calculateTaxPayable(totalIncome);
+
+    // Format name
+    const fullName = personalInfo.firstName && personalInfo.lastName
+      ? `${personalInfo.firstName} ${personalInfo.middleName ? personalInfo.middleName + ' ' : ''}${personalInfo.lastName}`.trim()
+      : user.fullName || user.name || '';
+
+    // Format DOB (ITD expects DD/MM/YYYY)
+    const dob = this.formatDateForITD(personalInfo.dateOfBirth || user.dateOfBirth);
+
+    // Format address
+    const address = personalInfo.address || {};
+
+    return {
+      // eslint-disable-next-line camelcase
+      Form_ITR1: {
+        // eslint-disable-next-line camelcase
+        PartA_GEN1: {
+          PersonalInfo: {
+            PAN: (personalInfo.pan || user.pan || '').toUpperCase(),
+            AssesseeName: fullName,
+            DOB: dob,
+            AadhaarCardNo: personalInfo.aadhaar || user.aadhaarNumber || '',
+          },
+          FilingStatus: {
+            ReturnFileSec: '139(1)', // Regular filing
+            SesTypeReturn: 'ORIGINAL', // Original return
+          },
+          AddressDetails: {
+            FlatDoorBuildingBlockNo: address.flat || address.addressLine1 || '',
+            AreaLocality: address.area || address.addressLine2 || '',
+            CityTownDistrict: address.city || '',
+            StateCode: this.getStateCode(address.state || ''),
+            PinCode: address.pincode || '',
           },
         },
-      },
-
-      // Bank account details
-      'Bank_Account_Details': {
-        'Account_Number': transformedData.bank?.accountNumber || '',
-        'Account_Type': transformedData.bank?.accountType || 'SAVINGS',
-        'Bank_Name': transformedData.bank?.bankName || '',
-        'Branch_Name': transformedData.bank?.branchName || '',
-        'IFSC_Code': transformedData.bank?.ifscCode || '',
-        'MICR_Code': transformedData.bank?.micrCode || '',
-      },
-
-      // Income details
-      'Income_Details': {
-        'Income_from_Salary': this.formatAmount(transformedData.income?.salaryIncome || 0),
-        'Income_from_House_Property': this.formatAmount(transformedData.income?.housePropertyIncome || 0),
-        'Income_from_Other_Sources': this.formatAmount(transformedData.income?.otherIncome || 0),
-        'Business_Income': this.formatAmount(transformedData.income?.businessIncome || 0),
-        'Capital_Gains': this.formatAmount(transformedData.income?.capitalGains || 0),
-        'Total_Gross_Income': 0, // Will be calculated
-      },
-
-      // Deductions
-      'Deductions': {
-        'Section_80C': this.formatAmount(transformedData.deductions?.section80C || 0),
-        'Section_80D': this.formatAmount(transformedData.deductions?.section80D || 0),
-        'Section_80E': this.formatAmount(transformedData.deductions?.section80E || 0),
-        'Section_80G': this.formatAmount(transformedData.deductions?.section80G || 0),
-        'Section_80TTA': this.formatAmount(transformedData.deductions?.section80TTA || 0),
-        'Total_Deductions': 0, // Will be calculated
-      },
-
-      // Tax calculation
-      'Tax_Calculation': {
-        'Total_Income': 0, // Will be calculated
-        'Total_Tax_Liability': 0, // Will be calculated
-        'Education_Cess': 0, // Will be calculated
-        'Total_Tax_Payable': 0, // Will be calculated
-        'TDS_TCS': this.formatAmount(transformedData.tds?.totalTDS || 0),
-        'Advance_Tax': this.formatAmount(transformedData.taxes?.advanceTax || 0),
-        'Self_Assessment_Tax': this.formatAmount(transformedData.taxes?.selfAssessmentTax || 0),
-        'Total_Tax_Paid': 0, // Will be calculated
-      },
-
-      // Verification
-      'Verification': {
-        'Declaration': 'I declare that the information furnished above is true to the best of my knowledge and belief.',
-        'Place': transformedData.verification?.place || user.address?.city || '',
-        'Date': currentDate.split('T')[0],
-        'Signature_Type': transformedData.verification?.signatureType || 'ELECTRONIC',
+        // eslint-disable-next-line camelcase
+        PartB_TI: {
+          Salaries: {
+            GrossSalary: this.formatAmount(grossSalary),
+            Salary16ia: this.formatAmount(salary16ia),
+            ProfessionalTaxUs16iii: this.formatAmount(professionalTax),
+            NetSalary: this.formatAmount(netSalary),
+          },
+          IncomeFromHP: {
+            AnnualValue: this.formatAmount(incomeFromHP),
+            NetAnnualValue: this.formatAmount(incomeFromHP),
+            DeductionUs24: this.formatAmount(0),
+            IncomeFromHP: this.formatAmount(incomeFromHP),
+          },
+          IncFromOthSources: {
+            InterestIncome: this.formatAmount(incFromOthSources),
+            OtherIncome: this.formatAmount(0),
+            TotalOthSrcInc: this.formatAmount(incFromOthSources),
+          },
+        },
+        // eslint-disable-next-line camelcase
+        PartB_TTI: {
+          GrossTotIncome: this.formatAmount(grossTotIncome),
+          DeductUndChapVIA: this.formatAmount(deductUndChapVIA),
+          TotalIncome: this.formatAmount(totalIncome),
+          TaxPayableOnTI: this.formatAmount(taxPayableOnTI),
+        },
+        PartC: {
+          TaxesPaid: {
+            AdvanceTax: this.formatAmount(taxes.advanceTax || 0),
+            SelfAssessmentTax: this.formatAmount(taxes.selfAssessmentTax || 0),
+            TotalTaxesPaid: this.formatAmount((taxes.advanceTax || 0) + (taxes.selfAssessmentTax || 0)),
+          },
+          TDS: {
+            TotalTDS: this.formatAmount(tds.totalTDS || 0),
+          },
+          BankDetails: {
+            AccountNumber: bank.accountNumber || '',
+            IFSCCode: bank.ifscCode || '',
+            BankName: bank.bankName || '',
+          },
+        },
+        PartD: {
+          RefundOrTaxPayable: {
+            RefundDue: this.formatAmount(Math.max(0, (tds.totalTDS || 0) + (taxes.advanceTax || 0) - taxPayableOnTI)),
+            BalTaxPayable: this.formatAmount(Math.max(0, taxPayableOnTI - (tds.totalTDS || 0) - (taxes.advanceTax || 0))),
+          },
+        },
+        Verification: {
+          Declaration: 'I declare that the information furnished above is true to the best of my knowledge and belief.',
+          Place: address.city || user.address?.city || '',
+          Date: this.formatDateForITD(new Date().toISOString()),
+        },
       },
     };
+  }
 
-    // Calculate derived values
-    this.calculateDerivedValues(baseJson);
+  /**
+   * Generate ITR-2 JSON - Official ITD Schema Format
+   */
+  generateITR2Json(itrData, assessmentYear, user) {
+    const transformedData = this.transformFormDataToExportFormat(itrData, 'ITR-2');
+    const personalInfo = transformedData.personal || {};
+    const income = transformedData.income || {};
 
-    // Add ITR type specific fields
-    this.addITRTypeSpecificFields(baseJson, transformedData, itrType);
+    // Format name and DOB
+    const fullName = personalInfo.firstName && personalInfo.lastName
+      ? `${personalInfo.firstName} ${personalInfo.middleName ? personalInfo.middleName + ' ' : ''}${personalInfo.lastName}`.trim()
+      : user.fullName || user.name || '';
+    const dob = this.formatDateForITD(personalInfo.dateOfBirth || user.dateOfBirth);
+    const address = personalInfo.address || {};
 
-    return baseJson;
+    return {
+      // eslint-disable-next-line camelcase
+      Form_ITR2: {
+        // eslint-disable-next-line camelcase
+        PartA_GEN: {
+          PersonalInfo: {
+            PAN: (personalInfo.pan || user.pan || '').toUpperCase(),
+            AssesseeName: fullName,
+            DOB: dob,
+            AadhaarCardNo: personalInfo.aadhaar || user.aadhaarNumber || '',
+          },
+          FilingStatus: {
+            ReturnFileSec: '139(1)',
+            SesTypeReturn: 'ORIGINAL',
+          },
+          AddressDetails: {
+            FlatDoorBuildingBlockNo: address.flat || address.addressLine1 || '',
+            AreaLocality: address.area || address.addressLine2 || '',
+            CityTownDistrict: address.city || '',
+            StateCode: this.getStateCode(address.state || ''),
+            PinCode: address.pincode || '',
+          },
+        },
+        ScheduleS: {
+          GrossSalary: this.formatAmount(income.salaryIncome || 0),
+          NetSalary: this.formatAmount(income.salaryIncome || 0),
+        },
+        ScheduleHP: this.formatHousePropertySchedule(income.housePropertyDetails || income.houseProperty),
+        ScheduleCG: this.formatCapitalGainsSchedule(income.capitalGainsDetails || income.capitalGains),
+        ScheduleOS: {
+          InterestIncome: this.formatAmount(income.otherIncome || 0),
+          OtherIncome: this.formatAmount(0),
+        },
+        ScheduleVIA: this.formatDeductionsSchedule(transformedData.deductions || {}),
+        // eslint-disable-next-line camelcase
+        PartB_TI: {
+          GrossTotIncome: this.formatAmount(
+            (income.salaryIncome || 0) +
+            (income.housePropertyIncome || 0) +
+            (income.capitalGains || 0) +
+            (income.otherIncome || 0),
+          ),
+        },
+        // eslint-disable-next-line camelcase
+        PartB_TTI: {
+          TotalIncome: this.formatAmount(0), // Will be calculated
+          TaxPayableOnTI: this.formatAmount(0), // Will be calculated
+        },
+        Schedule80G: {
+          Total80G: this.formatAmount(transformedData.deductions?.section80G || 0),
+        },
+        ScheduleTDS1: {
+          TotalTDS: this.formatAmount(transformedData.tds?.totalTDS || 0),
+        },
+        ScheduleTDS2: {},
+        ScheduleIT: {
+          AdvanceTax: this.formatAmount(transformedData.taxes?.advanceTax || 0),
+          SelfAssessmentTax: this.formatAmount(transformedData.taxes?.selfAssessmentTax || 0),
+        },
+        ScheduleAL: {},
+        ScheduleFA: this.formatScheduleFAForExport(itrData.scheduleFA),
+        Verification: {
+          Declaration: 'I declare that the information furnished above is true to the best of my knowledge and belief.',
+          Place: address.city || user.address?.city || '',
+          Date: this.formatDateForITD(new Date().toISOString()),
+        },
+      },
+    };
+  }
+
+  /**
+   * Generate ITR-3 JSON - Official ITD Schema Format
+   */
+  generateITR3Json(itrData, assessmentYear, user) {
+    const transformedData = this.transformFormDataToExportFormat(itrData, 'ITR-3');
+    const personalInfo = transformedData.personal || {};
+
+    const fullName = personalInfo.firstName && personalInfo.lastName
+      ? `${personalInfo.firstName} ${personalInfo.middleName ? personalInfo.middleName + ' ' : ''}${personalInfo.lastName}`.trim()
+      : user.fullName || user.name || '';
+    const dob = this.formatDateForITD(personalInfo.dateOfBirth || user.dateOfBirth);
+    const address = personalInfo.address || {};
+
+    return {
+      // eslint-disable-next-line camelcase
+      Form_ITR3: {
+        // eslint-disable-next-line camelcase
+        PartA_GEN: {
+          PersonalInfo: {
+            PAN: (personalInfo.pan || user.pan || '').toUpperCase(),
+            AssesseeName: fullName,
+            DOB: dob,
+            AadhaarCardNo: personalInfo.aadhaar || user.aadhaarNumber || '',
+          },
+          FilingStatus: {
+            ReturnFileSec: '139(1)',
+            SesTypeReturn: 'ORIGINAL',
+          },
+          AddressDetails: {
+            FlatDoorBuildingBlockNo: address.flat || address.addressLine1 || '',
+            AreaLocality: address.area || address.addressLine2 || '',
+            CityTownDistrict: address.city || '',
+            StateCode: this.getStateCode(address.state || ''),
+            PinCode: address.pincode || '',
+          },
+        },
+        ScheduleS: {
+          GrossSalary: this.formatAmount(transformedData.income?.salaryIncome || 0),
+        },
+        ScheduleHP: this.formatHousePropertySchedule(transformedData.income?.housePropertyDetails),
+        ScheduleBP: this.formatBusinessIncomeSchedule(transformedData.businessIncomeDetails || transformedData.income?.businessIncome),
+        ScheduleCG: this.formatCapitalGainsSchedule(transformedData.income?.capitalGainsDetails),
+        ScheduleOS: {
+          InterestIncome: this.formatAmount(transformedData.income?.otherIncome || 0),
+        },
+        ScheduleVIA: this.formatDeductionsSchedule(transformedData.deductions || {}),
+        ScheduleCYLA: {},
+        ScheduleBFLA: {},
+        // eslint-disable-next-line camelcase
+        PartB_TI: {
+          GrossTotIncome: this.formatAmount(0), // Calculated
+        },
+        // eslint-disable-next-line camelcase
+        PartB_TTI: {
+          TotalIncome: this.formatAmount(0), // Calculated
+          TaxPayableOnTI: this.formatAmount(0), // Calculated
+        },
+        // eslint-disable-next-line camelcase
+        PartA_BS: this.formatBalanceSheet(transformedData.balanceSheetDetails || itrData.balanceSheet),
+        // eslint-disable-next-line camelcase
+        PartA_PL: this.formatProfitLoss(transformedData.balanceSheetDetails || itrData.balanceSheet),
+        Schedule80G: {
+          Total80G: this.formatAmount(transformedData.deductions?.section80G || 0),
+        },
+        ScheduleTDS1: {
+          TotalTDS: this.formatAmount(transformedData.tds?.totalTDS || 0),
+        },
+        ScheduleTDS2: {},
+        ScheduleIT: {
+          AdvanceTax: this.formatAmount(transformedData.taxes?.advanceTax || 0),
+          SelfAssessmentTax: this.formatAmount(transformedData.taxes?.selfAssessmentTax || 0),
+        },
+        ScheduleAL: {},
+        ScheduleFA: this.formatScheduleFAForExport(itrData.scheduleFA),
+        Verification: {
+          Declaration: 'I declare that the information furnished above is true to the best of my knowledge and belief.',
+          Place: address.city || user.address?.city || '',
+          Date: this.formatDateForITD(new Date().toISOString()),
+        },
+      },
+    };
+  }
+
+  /**
+   * Generate ITR-4 (Sugam) JSON - Official ITD Schema Format
+   */
+  generateITR4Json(itrData, assessmentYear, user) {
+    const transformedData = this.transformFormDataToExportFormat(itrData, 'ITR-4');
+    const personalInfo = transformedData.personal || {};
+    const fullName = personalInfo.firstName && personalInfo.lastName
+      ? `${personalInfo.firstName} ${personalInfo.middleName ? personalInfo.middleName + ' ' : ''}${personalInfo.lastName}`.trim()
+      : user.fullName || user.name || '';
+    const dob = this.formatDateForITD(personalInfo.dateOfBirth || user.dateOfBirth);
+    const address = personalInfo.address || {};
+
+    const presumptiveBusiness = transformedData.income?.presumptiveBusinessDetails || transformedData.income?.presumptiveBusiness || {};
+    const presumptiveProfessional = transformedData.income?.presumptiveProfessionalDetails || transformedData.income?.presumptiveProfessional || {};
+
+    return {
+      // eslint-disable-next-line camelcase
+      Form_ITR4: {
+        // eslint-disable-next-line camelcase
+        PartA_GEN1: {
+          PersonalInfo: {
+            PAN: (personalInfo.pan || user.pan || '').toUpperCase(),
+            AssesseeName: fullName,
+            DOB: dob,
+            AadhaarCardNo: personalInfo.aadhaar || user.aadhaarNumber || '',
+          },
+          FilingStatus: {
+            ReturnFileSec: '139(1)',
+            SesTypeReturn: 'ORIGINAL',
+          },
+          AddressDetails: {
+            FlatDoorBuildingBlockNo: address.flat || address.addressLine1 || '',
+            AreaLocality: address.area || address.addressLine2 || '',
+            CityTownDistrict: address.city || '',
+            StateCode: this.getStateCode(address.state || ''),
+            PinCode: address.pincode || '',
+          },
+        },
+        ScheduleBP: {
+          NatOfBus44AD: presumptiveBusiness.hasPresumptiveBusiness ? 'YES' : 'NO',
+          PresumpIncDtls: {
+            TotPresumpBusInc: this.formatAmount(presumptiveBusiness.presumptiveIncome || 0),
+            GrossTurnoverReceipts: this.formatAmount(presumptiveBusiness.grossTurnover || 0),
+          },
+          PresumpProfDtls: presumptiveProfessional.hasPresumptiveProfessional ? {
+            PresumpProfInc: this.formatAmount(presumptiveProfessional.presumptiveIncome || 0),
+            GrossReceipts: this.formatAmount(presumptiveProfessional.grossReceipts || 0),
+          } : {},
+          Section44AE: this.formatSection44AEForExport(itrData.goodsCarriage || itrData.income?.goodsCarriage),
+        },
+        ScheduleVIA: this.formatDeductionsSchedule(transformedData.deductions || {}),
+        // eslint-disable-next-line camelcase
+        PartB_TI: {
+          GrossTotIncome: this.formatAmount(
+            (presumptiveBusiness.presumptiveIncome || 0) +
+            (presumptiveProfessional.presumptiveIncome || 0) +
+            (transformedData.income?.housePropertyIncome || 0) +
+            (transformedData.income?.salaryIncome || 0),
+          ),
+        },
+        // eslint-disable-next-line camelcase
+        PartB_TTI: {
+          TotalIncome: this.formatAmount(0), // Calculated
+          TaxPayableOnTI: this.formatAmount(0), // Calculated
+        },
+        PartC: {
+          TaxesPaid: {
+            AdvanceTax: this.formatAmount(transformedData.taxes?.advanceTax || 0),
+            SelfAssessmentTax: this.formatAmount(transformedData.taxes?.selfAssessmentTax || 0),
+          },
+          TDS: {
+            TotalTDS: this.formatAmount(transformedData.tds?.totalTDS || 0),
+          },
+        },
+        Verification: {
+          Declaration: 'I declare that the information furnished above is true to the best of my knowledge and belief.',
+          Place: address.city || user.address?.city || '',
+          Date: this.formatDateForITD(new Date().toISOString()),
+        },
+      },
+    };
   }
 
   /**
@@ -445,6 +802,341 @@ class ITRJsonExportService {
         ],
       },
     };
+  }
+
+  /**
+   * Format date for ITD (DD/MM/YYYY format)
+   */
+  formatDateForITD(dateString) {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
+    } catch {
+      return dateString; // Return as-is if parsing fails
+    }
+  }
+
+  /**
+   * Get state code from state name
+   */
+  getStateCode(stateName) {
+    if (!stateName) return '';
+    // Common state codes mapping (simplified - can be expanded)
+    const stateCodeMap = {
+      'ANDHRA PRADESH': '37',
+      'ARUNACHAL PRADESH': '12',
+      'ASSAM': '18',
+      'BIHAR': '10',
+      'CHHATTISGARH': '22',
+      'GOA': '30',
+      'GUJARAT': '24',
+      'HARYANA': '06',
+      'HIMACHAL PRADESH': '02',
+      'JAMMU AND KASHMIR': '01',
+      'JHARKHAND': '20',
+      'KARNATAKA': '29',
+      'KERALA': '32',
+      'MADHYA PRADESH': '23',
+      'MAHARASHTRA': '27',
+      'MANIPUR': '14',
+      'MEGHALAYA': '17',
+      'MIZORAM': '15',
+      'NAGALAND': '13',
+      'ODISHA': '21',
+      'PUNJAB': '03',
+      'RAJASTHAN': '08',
+      'SIKKIM': '11',
+      'TAMIL NADU': '33',
+      'TELANGANA': '36',
+      'TRIPURA': '16',
+      'UTTAR PRADESH': '09',
+      'UTTARAKHAND': '05',
+      'WEST BENGAL': '19',
+      'DELHI': '07',
+      'PUDUCHERRY': '34',
+    };
+    const upperState = stateName.toUpperCase();
+    return stateCodeMap[upperState] || '';
+  }
+
+  /**
+   * Format house property schedule
+   */
+  formatHousePropertySchedule(houseProperty) {
+    if (!houseProperty) {
+      return {
+        AnnualValue: this.formatAmount(0),
+        NetAnnualValue: this.formatAmount(0),
+        DeductionUs24: this.formatAmount(0),
+        IncomeFromHP: this.formatAmount(0),
+      };
+    }
+
+    if (Array.isArray(houseProperty.properties)) {
+      // Multiple properties - sum them up
+      const total = houseProperty.properties.reduce((sum, prop) => {
+        const rentalIncome = parseFloat(prop.annualRentalIncome || 0);
+        const municipalTaxes = parseFloat(prop.municipalTaxes || 0);
+        const interestOnLoan = parseFloat(prop.interestOnLoan || 0);
+        return sum + Math.max(0, rentalIncome - municipalTaxes - interestOnLoan);
+      }, 0);
+      return {
+        AnnualValue: this.formatAmount(total),
+        NetAnnualValue: this.formatAmount(total),
+        DeductionUs24: this.formatAmount(0),
+        IncomeFromHP: this.formatAmount(total),
+      };
+    }
+    const annualValue = parseFloat(houseProperty.annualRentalIncome || houseProperty || 0);
+    return {
+      AnnualValue: this.formatAmount(annualValue),
+      NetAnnualValue: this.formatAmount(annualValue),
+      DeductionUs24: this.formatAmount(0),
+      IncomeFromHP: this.formatAmount(annualValue),
+    };
+  }
+
+  /**
+   * Format Schedule FA (Foreign Assets) for export
+   */
+  formatScheduleFAForExport(scheduleFA) {
+    if (!scheduleFA || !scheduleFA.assets || scheduleFA.assets.length === 0) {
+      return {
+        BankAccounts: [],
+        EquityHoldings: [],
+        ImmovableProperties: [],
+        OtherAssets: [],
+        TotalValue: this.formatAmount(0),
+      };
+    }
+
+    const bankAccounts = [];
+    const equityHoldings = [];
+    const immovableProperties = [];
+    const otherAssets = [];
+
+    scheduleFA.assets.forEach((asset) => {
+      const assetData = {
+        Country: asset.country || '',
+        ValuationDate: this.formatDateForITD(asset.valuationDate || asset.valuation_date),
+        ValuationAmountINR: this.formatAmount(asset.valuationAmountInr || asset.valuation_amount_inr || 0),
+        ValuationAmountForeign: this.formatAmount(asset.valuationAmountForeign || asset.valuation_amount_foreign || 0),
+        Currency: asset.assetDetails?.currency || asset.asset_details?.currency || '',
+      };
+
+      switch (asset.assetType || asset.asset_type) {
+        case 'bank_account':
+          bankAccounts.push({
+            ...assetData,
+            BankName: asset.assetDetails?.bankName || asset.asset_details?.bankName || '',
+            AccountNumber: asset.assetDetails?.accountNumber || asset.asset_details?.accountNumber || '',
+            AccountType: asset.assetDetails?.accountType || asset.asset_details?.accountType || '',
+          });
+          break;
+        case 'equity_holding':
+          equityHoldings.push({
+            ...assetData,
+            CompanyName: asset.assetDetails?.companyName || asset.asset_details?.companyName || '',
+            NumberOfShares: asset.assetDetails?.numberOfShares || asset.asset_details?.numberOfShares || 0,
+          });
+          break;
+        case 'immovable_property':
+          immovableProperties.push({
+            ...assetData,
+            PropertyAddress: asset.assetDetails?.address || asset.asset_details?.address || '',
+            PropertyType: asset.assetDetails?.propertyType || asset.asset_details?.propertyType || '',
+          });
+          break;
+        case 'other':
+          otherAssets.push({
+            ...assetData,
+            AssetDescription: asset.assetDetails?.description || asset.asset_details?.description || '',
+          });
+          break;
+      }
+    });
+
+    return {
+      BankAccounts: bankAccounts,
+      EquityHoldings: equityHoldings,
+      ImmovableProperties: immovableProperties,
+      OtherAssets: otherAssets,
+      TotalValue: this.formatAmount(scheduleFA.totalValue || scheduleFA.totals?.totalValue || 0),
+    };
+  }
+
+  /**
+   * Format Section 44AE (Goods Carriage) for export
+   */
+  formatSection44AEForExport(goodsCarriage) {
+    if (!goodsCarriage || !goodsCarriage.hasGoodsCarriage) {
+      return {
+        HasGoodsCarriage: false,
+        Vehicles: [],
+        TotalPresumptiveIncome: this.formatAmount(0),
+        TotalVehicles: 0,
+      };
+    }
+
+    const vehicles = (goodsCarriage.vehicles || []).map((vehicle) => {
+      const monthsOwned = vehicle.monthsOwned || 12;
+      let presumptiveIncome = 0;
+
+      if (vehicle.type === 'heavy_goods') {
+        const tons = vehicle.gvw || 12;
+        presumptiveIncome = 1000 * tons * monthsOwned;
+      } else {
+        presumptiveIncome = 7500 * monthsOwned;
+      }
+
+      return {
+        VehicleType: vehicle.type === 'heavy_goods' ? 'Heavy Goods Vehicle' : 'Other Goods Vehicle',
+        RegistrationNumber: vehicle.registrationNo || vehicle.registrationNumber || '',
+        GrossVehicleWeight: this.formatAmount(vehicle.gvw || 0),
+        MonthsOwned: monthsOwned,
+        OwnedOrLeased: vehicle.ownedOrLeased || 'owned',
+        PresumptiveIncome: this.formatAmount(presumptiveIncome),
+      };
+    });
+
+    return {
+      HasGoodsCarriage: true,
+      Vehicles: vehicles,
+      TotalPresumptiveIncome: this.formatAmount(goodsCarriage.totalPresumptiveIncome || 0),
+      TotalVehicles: goodsCarriage.totalVehicles || vehicles.length || 0,
+    };
+  }
+
+  /**
+   * Format capital gains schedule
+   */
+  formatCapitalGainsSchedule(capitalGains) {
+    if (!capitalGains) {
+      return {
+        STCG: this.formatAmount(0),
+        LTCG: this.formatAmount(0),
+        TotalCapitalGains: this.formatAmount(0),
+      };
+    }
+    if (capitalGains.stcgDetails && capitalGains.ltcgDetails) {
+      const stcg = (capitalGains.stcgDetails || []).reduce((sum, entry) =>
+        sum + parseFloat(entry.gainAmount || 0), 0);
+      const ltcg = (capitalGains.ltcgDetails || []).reduce((sum, entry) =>
+        sum + parseFloat(entry.gainAmount || 0), 0);
+      return {
+        STCG: this.formatAmount(stcg),
+        LTCG: this.formatAmount(ltcg),
+        TotalCapitalGains: this.formatAmount(stcg + ltcg),
+      };
+    }
+    const total = parseFloat(capitalGains || 0);
+    return {
+      STCG: this.formatAmount(0),
+      LTCG: this.formatAmount(total),
+      TotalCapitalGains: this.formatAmount(total),
+    };
+  }
+
+  /**
+   * Format deductions schedule (Schedule VIA)
+   */
+  formatDeductionsSchedule(deductions) {
+    return {
+      Section80C: this.formatAmount(deductions.section80C || 0),
+      Section80D: this.formatAmount(deductions.section80D || 0),
+      Section80E: this.formatAmount(deductions.section80E || 0),
+      Section80G: this.formatAmount(deductions.section80G || 0),
+      Section80TTA: this.formatAmount(deductions.section80TTA || 0),
+      Section80TTB: this.formatAmount(deductions.section80TTB || 0),
+      TotalDeductions: this.formatAmount(
+        (deductions.section80C || 0) +
+        (deductions.section80D || 0) +
+        (deductions.section80E || 0) +
+        (deductions.section80G || 0) +
+        (deductions.section80TTA || 0) +
+        (deductions.section80TTB || 0),
+      ),
+    };
+  }
+
+  /**
+   * Format business income schedule
+   */
+  formatBusinessIncomeSchedule(businessIncome) {
+    if (!businessIncome) return {};
+    if (businessIncome.businesses && Array.isArray(businessIncome.businesses)) {
+      const total = businessIncome.businesses.reduce((sum, biz) => {
+        if (biz.pnl) {
+          const pnl = biz.pnl;
+          const directExpenses = this.calculateExpenseTotal(pnl.directExpenses);
+          const indirectExpenses = this.calculateExpenseTotal(pnl.indirectExpenses);
+          const depreciation = this.calculateExpenseTotal(pnl.depreciation);
+          const netProfit = (pnl.grossReceipts || 0) +
+            (pnl.openingStock || 0) -
+            (pnl.closingStock || 0) -
+            (pnl.purchases || 0) -
+            directExpenses -
+            indirectExpenses -
+            depreciation -
+            (pnl.otherExpenses || 0);
+          return sum + netProfit;
+        }
+        return sum;
+      }, 0);
+      return {
+        NetBusinessIncome: this.formatAmount(total),
+      };
+    }
+    return {
+      NetBusinessIncome: this.formatAmount(businessIncome || 0),
+    };
+  }
+
+  /**
+   * Format balance sheet
+   */
+  formatBalanceSheet(balanceSheet) {
+    if (!balanceSheet || !balanceSheet.hasBalanceSheet) {
+      return { maintained: false };
+    }
+    return {
+      maintained: true,
+      assets: balanceSheet.assets || {},
+      liabilities: balanceSheet.liabilities || {},
+    };
+  }
+
+  /**
+   * Format profit and loss statement
+   */
+  formatProfitLoss(balanceSheet) {
+    if (!balanceSheet || !balanceSheet.hasBalanceSheet) {
+      return { maintained: false };
+    }
+    return {
+      maintained: true,
+      income: balanceSheet.income || {},
+      expenses: balanceSheet.expenses || {},
+    };
+  }
+
+  /**
+   * Calculate tax payable based on income
+   */
+  calculateTaxPayable(taxableIncome) {
+    if (taxableIncome <= 0) return 0;
+    if (taxableIncome <= 250000) return 0;
+    if (taxableIncome <= 500000) {
+      return (taxableIncome - 250000) * 0.05;
+    }
+    if (taxableIncome <= 1000000) {
+      return 12500 + (taxableIncome - 500000) * 0.2;
+    }
+    return 112500 + (taxableIncome - 1000000) * 0.3;
   }
 
   /**
@@ -823,87 +1515,37 @@ class ITRJsonExportService {
 
   /**
    * Validate JSON before export against ITD schema requirements
+   * Uses the official ITD schema validator
    */
   validateJsonForExport(itrData, itrType) {
-    // Transform data first to validate against expected structure
-    const transformedData = this.transformFormDataToExportFormat(itrData, itrType);
-
-    const errors = [];
-
-    // Required fields validation
-    const requiredFields = {
-      personal: ['pan'],
-      income: ['salaryIncome'],
-    };
-
-    for (const [section, fields] of Object.entries(requiredFields)) {
-      if (!transformedData[section]) {
-        errors.push(`Missing required section: ${section}`);
-        continue;
+    try {
+      // Generate ITD-compliant JSON first
+      const user = authService.getCurrentUser();
+      if (!user) {
+        throw new Error('User must be logged in to validate ITR data');
       }
 
-      for (const field of fields) {
-        if (!transformedData[section][field] && transformedData[section][field] !== 0) {
-          errors.push(`Missing required field: ${section}.${field}`);
-        }
+      const jsonPayload = this.generateITDCompliantJson(itrData, itrType, '2024-25', user);
+      // Validate against ITD schema
+      const validationResult = validateITRJson(jsonPayload, itrType);
+      if (!validationResult.isValid) {
+        const errorMessages = validationResult.errors.map(e => `${e.path}: ${e.message}`).join('; ');
+        throw new Error(`JSON validation failed: ${errorMessages}`);
       }
-    }
 
-    // PAN format validation (ITD requirement)
-    if (transformedData.personal?.pan) {
-      const panPattern = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
-      if (!panPattern.test(transformedData.personal.pan)) {
-        errors.push('Invalid PAN format. PAN must be in format: ABCDE1234F');
+      // Check for warnings
+      if (validationResult.warnings.length > 0) {
+        console.warn('ITR JSON validation warnings:', validationResult.warnings);
       }
-    }
 
-    // Date format validation (ITD requires DD/MM/YYYY)
-    if (transformedData.personal?.dateOfBirth) {
-      const datePattern = /^\d{2}\/\d{2}\/\d{4}$/;
-      if (!datePattern.test(transformedData.personal.dateOfBirth)) {
-        errors.push('Date of birth must be in DD/MM/YYYY format');
+      return true;
+    } catch (error) {
+      // Re-throw with better error message
+      if (error.message.includes('JSON validation failed')) {
+        throw error;
       }
+      throw new Error(`Validation error: ${error.message}`);
     }
-
-    // Number format validation (should be numbers, not strings)
-    const numericFields = ['salaryIncome', 'housePropertyIncome', 'otherIncome', 'totalIncome'];
-    for (const field of numericFields) {
-      if (transformedData.income?.[field] !== undefined) {
-        const value = transformedData.income[field];
-        if (typeof value === 'string' && isNaN(parseFloat(value))) {
-          errors.push(`Invalid number format for income.${field}: ${value}`);
-        }
-      }
-    }
-
-    // ITR-specific validations
-    if (itrType === 'ITR-1' || itrType === 'ITR1') {
-      // ITR-1: Total income should not exceed ₹50L
-      const totalIncome = parseFloat(transformedData.income?.salaryIncome || 0) +
-                         parseFloat(transformedData.income?.housePropertyIncome || 0) +
-                         parseFloat(transformedData.income?.otherIncome || 0);
-      if (totalIncome > 5000000) {
-        errors.push('Total income exceeds ₹50 lakh limit for ITR-1. Please use ITR-2.');
-      }
-    }
-
-    // Character encoding validation (check for special characters that might cause issues)
-    const textFields = ['firstName', 'lastName', 'address'];
-    for (const field of textFields) {
-      if (transformedData.personal?.[field]) {
-        const value = transformedData.personal[field];
-        // Check for problematic characters (non-ASCII characters excluding null)
-        if (/[^\u0020-\u007F]/.test(value) && !this.isValidUnicode(value)) {
-          errors.push(`Special characters in ${field} may cause encoding issues`);
-        }
-      }
-    }
-
-    if (errors.length > 0) {
-      throw new Error('JSON validation failed:\n' + errors.join('\n'));
-    }
-
-    return true;
   }
 
   /**

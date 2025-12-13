@@ -10,7 +10,7 @@ import { ChevronRight, ChevronDown, AlertTriangle, Loader } from 'lucide-react';
 import { formatIndianCurrency } from '../../../lib/format';
 import { cn } from '../../../lib/utils';
 import SourceChip from '../SourceChip/SourceChip';
-import EmptyState from '../EmptyState/EmptyState';
+import EmptyState from '../../DesignSystem/EmptyState';
 import { FileText } from 'lucide-react';
 
 const BreakdownList = ({

@@ -157,7 +157,7 @@ const EVerificationModal = ({
         toast.error(result.message || 'Verification failed');
       }
     } catch (error) {
-      console.error('E-verification error:', error);
+      console.error('E-verification error', { error });
       setVerificationStatus({
         success: false,
         message: error.response?.data?.error || error.message || 'Verification failed',

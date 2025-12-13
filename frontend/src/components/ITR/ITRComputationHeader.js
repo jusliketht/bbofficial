@@ -95,7 +95,13 @@ const ITRComputationHeader = ({
           <div className="flex items-center gap-1.5">
             {/* Auto-save indicator - compact */}
             {!isReadOnly && (
-              <div className="hidden sm:flex items-center text-[10px] text-neutral-500" style={{ gap: '2px' }}>
+              <div
+                className="hidden sm:flex items-center text-[10px] text-neutral-500"
+                style={{ gap: '2px' }}
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
                 {!navigator.onLine ? (
                   <motion.span
                     initial={{ opacity: 0 }}
@@ -157,6 +163,7 @@ const ITRComputationHeader = ({
               <button
                 onClick={onSaveDraft}
                 disabled={isSaving}
+                aria-label={isSaving ? 'Saving draft...' : 'Save draft'}
                 className="px-3 py-1.5 text-xs font-medium bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
               >
                 <Save className="w-3 h-3" />
@@ -177,6 +184,7 @@ const ITRComputationHeader = ({
             <button
               onClick={onDownloadJSON}
               disabled={isDownloading}
+              aria-label={isDownloading ? 'Downloading JSON...' : 'Download JSON'}
               className="px-3 py-1.5 text-xs font-medium bg-neutral-100 text-neutral-700 rounded-lg hover:bg-neutral-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
             >
               <Download className="w-3 h-3" />
@@ -187,6 +195,7 @@ const ITRComputationHeader = ({
             {!isReadOnly && (
               <button
                 onClick={onFileReturns}
+                aria-label="File ITR returns"
                 className="px-3 py-1.5 text-xs font-medium bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors flex items-center gap-1.5"
               >
                 <FileText className="w-3 h-3" />

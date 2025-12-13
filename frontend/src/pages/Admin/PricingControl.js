@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import adminService from '../../services/api/adminService';
 import toast from 'react-hot-toast';
+import { enterpriseLogger } from '../../utils/logger';
 
 const PricingControl = () => {
   const [pricingData, setPricingData] = useState({
@@ -74,7 +75,7 @@ const PricingControl = () => {
 
         setPricingData(transformedData);
       } catch (error) {
-        console.error('Failed to fetch pricing data:', error);
+        enterpriseLogger.error('Failed to fetch pricing data:', { error });
         toast.error('Failed to load pricing data. Please try again.');
         // Set default data on error
         setPricingData({
@@ -105,7 +106,7 @@ const PricingControl = () => {
       endUserFilingFee: newFee,
     }));
     // API call to save pricing
-    console.log('Saving end user filing fee:', newFee);
+    enterpriseLogger.info('Saving end user filing fee:', { fee: newFee });
   };
 
   const handleSaveExpertReviewFee = (newFee) => {
@@ -114,7 +115,7 @@ const PricingControl = () => {
       expertReviewFee: newFee,
     }));
     // API call to save pricing
-    console.log('Saving expert review fee:', newFee);
+    enterpriseLogger.info('Saving expert review fee:', { fee: newFee });
   };
 
   const handleSavePlan = (plan) => {
@@ -126,7 +127,7 @@ const PricingControl = () => {
     }));
     setEditingPlan(null);
     // API call to save plan
-    console.log('Saving plan:', plan);
+    enterpriseLogger.info('Saving plan:', { plan });
   };
 
   const handleAddPlan = () => {
@@ -154,7 +155,7 @@ const PricingControl = () => {
     });
     setShowAddPlan(false);
     // API call to add plan
-    console.log('Adding plan:', plan);
+    enterpriseLogger.info('Adding plan:', { plan });
   };
 
   const handleDeletePlan = (planId) => {
@@ -163,7 +164,7 @@ const PricingControl = () => {
       caSubscriptionPlans: prev.caSubscriptionPlans.filter(p => p.id !== planId),
     }));
     // API call to delete plan
-    console.log('Deleting plan:', planId);
+    enterpriseLogger.info('Deleting plan:', { planId });
   };
 
   if (loading) {

@@ -106,7 +106,7 @@ class ITRComputationEngine {
       };
 
     } catch (error) {
-      console.error('Tax computation error:', error);
+      enterpriseLogger.error('Tax computation error', { error });
       computation.error = error.message;
     }
 

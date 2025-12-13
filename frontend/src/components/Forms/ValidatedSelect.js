@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { AlertCircle, CheckCircle, Info, RefreshCw, ChevronDown } from 'lucide-react';
 import { validationEngine } from '../utils/validation';
+import { getAriaLabel, getAriaDescribedBy } from '../../utils/accessibility';
 
 const ValidatedSelect = ({
   name,
@@ -45,7 +46,7 @@ const ValidatedSelect = ({
           isTouched: true,
         });
       } catch (error) {
-        console.error('Validation error:', error);
+        enterpriseLogger.error('Validation error', { error });
       } finally {
         setIsValidating(false);
       }
@@ -164,18 +165,26 @@ const ValidatedSelect = ({
     return 'text-gray-500';
   };
 
+  const fieldId = `select-${name}`;
+  const errorId = validationState.errors.length > 0 ? `${fieldId}-error` : undefined;
+  const warningId = validationState.warnings.length > 0 ? `${fieldId}-warning` : undefined;
+  const describedBy = getAriaDescribedBy(fieldId, undefined, validationState.errors[0]?.message);
+
+  const labelId = label ? `${fieldId}-label` : undefined;
+
   return (
     <div className={`space-y-1 ${className}`}>
       {label && (
-        <label className="block text-sm font-medium text-gray-700">
+        <label id={labelId} htmlFor={fieldId} className="block text-sm font-medium text-gray-700">
           {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
+          {required && <span className="text-red-500 ml-1" aria-label="required">*</span>}
         </label>
       )}
 
       <div className="relative">
         {/* Hidden native select for accessibility */}
         <select
+          id={fieldId}
           name={name}
           value={value || ''}
           onChange={(e) => handleChange(e.target.value)}
@@ -183,6 +192,10 @@ const ValidatedSelect = ({
           onBlur={handleBlur}
           disabled={disabled}
           required={required}
+          aria-label={!label ? getAriaLabel(name, required, validationState.errors[0]?.message) : undefined}
+          aria-describedby={describedBy}
+          aria-invalid={validationState.errors.length > 0}
+          aria-required={required}
           className="sr-only"
           {...props}
         >
@@ -197,10 +210,15 @@ const ValidatedSelect = ({
         {/* Custom dropdown button */}
         <button
           type="button"
+          id={`${fieldId}-button`}
           onClick={() => setIsOpen(!isOpen)}
           onFocus={handleFocus}
           onBlur={handleBlur}
           disabled={disabled}
+          aria-haspopup="listbox"
+          aria-expanded={isOpen}
+          aria-controls={`${fieldId}-listbox`}
+          aria-labelledby={label ? `${fieldId}-label` : undefined}
           className={`${getSelectClassName()} flex items-center justify-between`}
         >
           <span className={value ? 'text-gray-900' : 'text-gray-500'}>
@@ -213,7 +231,12 @@ const ValidatedSelect = ({
 
         {/* Custom dropdown menu */}
         {isOpen && !disabled && (
-          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          <div
+            id={`${fieldId}-listbox`}
+            role="listbox"
+            aria-label={label || name}
+            className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+          >
             <div className="py-1">
               {options.length === 0 ? (
                 <div className="px-3 py-2 text-sm text-gray-500 text-center">
@@ -224,6 +247,8 @@ const ValidatedSelect = ({
                   <button
                     key={option.value}
                     type="button"
+                    role="option"
+                    aria-selected={value === option.value}
                     onClick={() => handleChange(option.value)}
                     className={`w-full px-3 py-2 text-left hover:bg-gray-50 focus:bg-gray-50 focus:outline-none transition-colors ${
                       value === option.value
@@ -247,7 +272,12 @@ const ValidatedSelect = ({
 
       {/* Helper Text */}
       {getHelperText() && (
-        <p className={`text-xs ${getHelperTextColor()}`}>
+        <p
+          id={validationState.errors.length > 0 ? errorId : validationState.warnings.length > 0 ? warningId : undefined}
+          role={validationState.errors.length > 0 ? 'alert' : undefined}
+          aria-live={validationState.errors.length > 0 ? 'polite' : undefined}
+          className={`text-xs ${getHelperTextColor()}`}
+        >
           {getHelperText()}
         </p>
       )}
@@ -294,15 +324,15 @@ const ValidatedSelect = ({
 
       {/* Errors */}
       {validationState.errors.length > 0 && validationState.isTouched && (
-        <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+        <div id={errorId} role="alert" aria-live="polite" className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
           <div className="flex items-start space-x-2">
-            <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+            <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" aria-hidden="true" />
             <div>
               <p className="text-sm font-medium text-red-900 mb-1">Please Fix:</p>
               <ul className="text-xs text-red-800 space-y-1">
                 {validationState.errors.map((error, index) => (
                   <li key={index} className="flex items-start">
-                    <span className="mr-2">•</span>
+                    <span className="mr-2" aria-hidden="true">•</span>
                     <span>{error.message}</span>
                   </li>
                 ))}

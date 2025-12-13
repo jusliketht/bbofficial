@@ -135,14 +135,16 @@ router.post('/compute-tax', authenticateToken, async (req, res) => {
       });
     }
 
+    const { getDefaultAssessmentYear } = require('../constants/assessmentYears');
     const calculator = new TaxRegimeCalculator();
     const selectedRegime = regime || 'old';
-    const result = calculator.calculateTax(formData, selectedRegime, assessmentYear || '2024-25');
+    const finalAssessmentYear = assessmentYear || getDefaultAssessmentYear();
+    const result = calculator.calculateTax(formData, selectedRegime, finalAssessmentYear);
 
     enterpriseLogger.info('Tax computed', {
       userId,
       regime: selectedRegime,
-      assessmentYear: assessmentYear || '2024-25',
+      assessmentYear: finalAssessmentYear,
       taxLiability: result.finalTaxLiability,
     });
 
@@ -179,12 +181,14 @@ router.post('/compare-regimes', authenticateToken, async (req, res) => {
       });
     }
 
+    const { getDefaultAssessmentYear } = require('../constants/assessmentYears');
     const calculator = new TaxRegimeCalculator();
-    const comparison = calculator.compareRegimes(formData, assessmentYear || '2024-25');
+    const finalAssessmentYear = assessmentYear || getDefaultAssessmentYear();
+    const comparison = calculator.compareRegimes(formData, finalAssessmentYear);
 
     enterpriseLogger.info('Regime comparison completed', {
       userId,
-      assessmentYear: assessmentYear || '2024-25',
+      assessmentYear: finalAssessmentYear,
       recommendedRegime: comparison.comparison.recommendedRegime,
       savings: comparison.comparison.savings,
     });
@@ -273,6 +277,37 @@ router.post('/filings/:filingId/refund/update-account', authenticateToken, async
 // Request refund re-issue
 router.post('/filings/:filingId/refund/reissue-request', authenticateToken, async (req, res) => {
   await itrController.requestRefundReissue(req, res);
+});
+
+// =====================================================
+// ITR-V PROCESSING ROUTES
+// =====================================================
+
+const itrvController = require('../controllers/ITRVController');
+
+// Initialize ITR-V tracking for a filing
+router.post('/filings/:filingId/itrv/initialize', authenticateToken, async (req, res, next) => {
+  await itrvController.initializeTracking(req, res, next);
+});
+
+// Get ITR-V status for a filing
+router.get('/filings/:filingId/itrv/status', authenticateToken, async (req, res, next) => {
+  await itrvController.getStatus(req, res, next);
+});
+
+// Get all ITR-V records for user
+router.get('/itrv/user', authenticateToken, async (req, res, next) => {
+  await itrvController.getUserRecords(req, res, next);
+});
+
+// Check ITR-V status from Income Tax Portal
+router.post('/filings/:filingId/itrv/check-status', authenticateToken, async (req, res, next) => {
+  await itrvController.checkStatusFromPortal(req, res, next);
+});
+
+// Mark ITR-V as verified
+router.post('/filings/:filingId/itrv/verify', authenticateToken, async (req, res, next) => {
+  await itrvController.markAsVerified(req, res, next);
 });
 
 // =====================================================
@@ -746,6 +781,14 @@ router.post('/recommend-form', authenticateToken, async (req, res) => {
       const isDirector = userData.isDirector || false;
       const isPartner = userData.isPartner || false;
 
+      // CRITICAL: Check agricultural income - must be checked BEFORE other rules
+      // Agricultural income > ₹5,000 requires ITR-2 (regulatory requirement)
+      const agriIncome = userData.agriculturalIncome
+        || userData.exemptIncome?.agriculturalIncome?.netAgriculturalIncome
+        || userData.exemptIncome?.netAgriculturalIncome
+        || 0;
+      const hasHighAgriculturalIncome = agriIncome > 5000;
+
       // ITR-3: Business or professional income
       if (hasBusinessIncome || hasProfessionalIncome) {
         recommendedITR = 'ITR-3';
@@ -758,18 +801,31 @@ router.post('/recommend-form', authenticateToken, async (req, res) => {
           allEligibleITRs.push('ITR-4');
         }
       }
-      // ITR-2: Capital gains, multiple properties, foreign income, director/partner
-      else if (hasCapitalGains || hasMultipleProperties || hasForeignIncome || isNRI || isDirector || isPartner) {
+      // ITR-2: Capital gains, multiple properties, foreign income, director/partner, OR high agricultural income
+      else if (hasCapitalGains || hasMultipleProperties || hasForeignIncome || isNRI || isDirector || isPartner || hasHighAgriculturalIncome) {
         recommendedITR = 'ITR-2';
-        reason = 'Complex income sources detected (capital gains, multiple properties, foreign income, or director/partner status)';
-        confidence = 0.85;
+        if (hasHighAgriculturalIncome) {
+          reason = `Agricultural income (₹${agriIncome.toLocaleString('en-IN')}) exceeds ₹5,000 - ITR-2 is mandatory per Income Tax Department rules`;
+          confidence = 1.0; // Highest confidence for regulatory requirement
+        } else {
+          reason = 'Complex income sources detected (capital gains, multiple properties, foreign income, or director/partner status)';
+          confidence = 0.85;
+        }
         allEligibleITRs.push('ITR-2');
       }
-      // ITR-1: Simple salaried individual
+      // ITR-1: Simple salaried individual (only if agricultural income ≤ ₹5,000)
       else {
-        recommendedITR = 'ITR-1';
-        reason = 'Simple salaried individual with basic income sources';
-        confidence = 0.8;
+        if (hasHighAgriculturalIncome) {
+          // This should not happen due to above check, but safety check
+          recommendedITR = 'ITR-2';
+          reason = `Agricultural income (₹${agriIncome.toLocaleString('en-IN')}) exceeds ₹5,000 - ITR-2 is mandatory`;
+          confidence = 1.0;
+          allEligibleITRs.push('ITR-2');
+        } else {
+          recommendedITR = 'ITR-1';
+          reason = 'Simple salaried individual with basic income sources';
+          confidence = 0.8;
+        }
       }
     }
 
@@ -1100,7 +1156,7 @@ router.post('/recommendations', authenticateToken, async (req, res) => {
     const recommendations = await recommendationService.generateRecommendations(
       formData,
       itrType,
-      assessmentYear || '2024-25'
+      assessmentYear || getDefaultAssessmentYear()
     );
 
     enterpriseLogger.info('AI recommendations generated', {
@@ -1513,6 +1569,60 @@ router.put('/filings/:filingId/audit-information', authenticateToken, async (req
 
 router.post('/filings/:filingId/audit-information/check-applicability', authenticateToken, async (req, res) => {
   await itrController.checkAuditApplicability(req, res);
+});
+
+// =====================================================
+// ASSESSMENT NOTICE ROUTES
+// =====================================================
+const assessmentNoticeRoutes = require('./assessment-notices');
+router.use('/assessment-notices', assessmentNoticeRoutes);
+
+// =====================================================
+// TAX DEMAND ROUTES
+// =====================================================
+const taxDemandRoutes = require('./tax-demands');
+router.use('/tax-demands', taxDemandRoutes);
+
+// =====================================================
+// FILING ANALYTICS ROUTES
+// =====================================================
+
+const filingAnalyticsController = require('../controllers/FilingAnalyticsController');
+
+// Get comprehensive filing analytics
+router.get('/analytics', authenticateToken, async (req, res, next) => {
+  await filingAnalyticsController.getAnalytics(req, res, next);
+});
+
+// =====================================================
+// SCENARIO MANAGEMENT ROUTES
+// =====================================================
+
+const scenarioController = require('../controllers/ScenarioController');
+
+// Save a scenario
+router.post('/scenarios', authenticateToken, async (req, res, next) => {
+  await scenarioController.saveScenario(req, res, next);
+});
+
+// Get user scenarios
+router.get('/scenarios', authenticateToken, async (req, res, next) => {
+  await scenarioController.getUserScenarios(req, res, next);
+});
+
+// Get scenario by ID
+router.get('/scenarios/:id', authenticateToken, async (req, res, next) => {
+  await scenarioController.getScenario(req, res, next);
+});
+
+// Update scenario
+router.patch('/scenarios/:id', authenticateToken, async (req, res, next) => {
+  await scenarioController.updateScenario(req, res, next);
+});
+
+// Delete scenario
+router.delete('/scenarios/:id', authenticateToken, async (req, res, next) => {
+  await scenarioController.deleteScenario(req, res, next);
 });
 
 module.exports = router;

@@ -5,6 +5,7 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/AdminController');
+const adminSettingsController = require('../controllers/AdminSettingsController');
 const adminFinancialRoutes = require('./admin/financial');
 const adminSupportRoutes = require('./admin/support');
 const adminAuditRoutes = require('./admin/audit');
@@ -164,11 +165,29 @@ router.get('/analytics', adminController.getAnalytics.bind(adminController));
 router.get('/analytics/users', adminController.getUserAnalytics.bind(adminController));
 router.get('/analytics/revenue', adminController.getRevenueAnalytics.bind(adminController));
 router.get('/analytics/ca', adminController.getCAAnalytics.bind(adminController));
+
+// Report Builder Routes
+router.post('/reports/build', adminController.buildCustomReport.bind(adminController));
+router.get('/reports/templates', adminController.getReportTemplates.bind(adminController));
+router.post('/reports/templates', adminController.saveReportTemplate.bind(adminController));
+router.post('/reports/schedule', adminController.scheduleReport.bind(adminController));
 router.get('/platform/stats', adminController.getPlatformStats);
 
 // Settings Routes
 router.get('/settings', adminController.getSettings);
 router.put('/settings', adminController.updateSettings);
+
+// System Settings Routes (by category)
+router.get('/settings/general', adminSettingsController.getGeneralSettings.bind(adminSettingsController));
+router.put('/settings/general', adminSettingsController.updateGeneralSettings.bind(adminSettingsController));
+router.get('/settings/tax', adminSettingsController.getTaxSettings.bind(adminSettingsController));
+router.put('/settings/tax', adminSettingsController.updateTaxSettings.bind(adminSettingsController));
+router.get('/settings/security', adminSettingsController.getSecuritySettings.bind(adminSettingsController));
+router.put('/settings/security', adminSettingsController.updateSecuritySettings.bind(adminSettingsController));
+router.get('/settings/integrations', adminSettingsController.getIntegrationSettings.bind(adminSettingsController));
+router.put('/settings/integrations', adminSettingsController.updateIntegrationSettings.bind(adminSettingsController));
+router.get('/settings/notifications', adminSettingsController.getNotificationSettings.bind(adminSettingsController));
+router.put('/settings/notifications', adminSettingsController.updateNotificationSettings.bind(adminSettingsController));
 
 // Mount financial routes
 router.use('/financial', adminFinancialRoutes);

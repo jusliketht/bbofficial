@@ -9,7 +9,7 @@ import { motion } from 'framer-motion';
 import { CheckCircle, Loader } from 'lucide-react';
 import { formatIndianCurrency } from '../../../lib/format';
 import { cn } from '../../../lib/utils';
-import EmptyState from '../EmptyState/EmptyState';
+import EmptyState from '../../DesignSystem/EmptyState';
 import { FileText } from 'lucide-react';
 
 const ComparisonTable = ({

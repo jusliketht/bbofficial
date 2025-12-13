@@ -12,6 +12,7 @@ import apiClient from '../../services/core/APIClient';
 import toast from 'react-hot-toast';
 import Button from '../../components/common/Button';
 import { cn } from '../../lib/utils';
+import { enterpriseLogger } from '../../utils/logger';
 
 const RefundTracking = () => {
   const [searchParams] = useSearchParams();
@@ -42,7 +43,7 @@ const RefundTracking = () => {
         setRefund(response.data.refund);
       }
     } catch (error) {
-      console.error('Error loading refund status:', error);
+      enterpriseLogger.error('Error loading refund status:', { error });
       toast.error('Failed to load refund status');
     } finally {
       setLoading(false);
@@ -56,7 +57,7 @@ const RefundTracking = () => {
         setRefundHistory(response.data.refunds || []);
       }
     } catch (error) {
-      console.error('Error loading refund history:', error);
+      enterpriseLogger.error('Error loading refund history:', { error });
       toast.error('Failed to load refund history');
     }
   };
@@ -91,7 +92,7 @@ const RefundTracking = () => {
         toast.success('Bank account updated successfully');
       }
     } catch (error) {
-      console.error('Error updating bank account:', error);
+      enterpriseLogger.error('Error updating bank account:', { error });
       toast.error(error.response?.data?.error || 'Failed to update bank account');
     } finally {
       setUpdating(false);
@@ -113,7 +114,7 @@ const RefundTracking = () => {
         toast.success('Refund re-issue request submitted successfully');
       }
     } catch (error) {
-      console.error('Error requesting refund reissue:', error);
+      enterpriseLogger.error('Error requesting refund reissue:', { error });
       toast.error(error.response?.data?.error || 'Failed to request refund reissue');
     } finally {
       setUpdating(false);

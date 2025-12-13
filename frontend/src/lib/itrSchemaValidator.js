@@ -4,29 +4,37 @@
 // =====================================================
 
 // ITR-1 (Sahaj) Schema Structure
+// eslint-disable-next-line camelcase
 const ITR1_SCHEMA = {
   required: [
     'Form_ITR1',
   ],
+  // eslint-disable-next-line camelcase
   Form_ITR1: {
     required: [
+      // eslint-disable-next-line camelcase
       'PartA_GEN1',
+      // eslint-disable-next-line camelcase
       'PartB_TI',
+      // eslint-disable-next-line camelcase
       'PartB_TTI',
       'PartC',
       'PartD',
       'Verification',
     ],
+    // eslint-disable-next-line camelcase
     PartA_GEN1: {
       required: ['PersonalInfo', 'FilingStatus', 'AddressDetails'],
       PersonalInfo: ['PAN', 'AssesseeName', 'DOB', 'AadhaarCardNo'],
       FilingStatus: ['ReturnFileSec', 'SesTypeReturn'],
       AddressDetails: ['FlatDoorBuildingBlockNo', 'AreaLocality', 'CityTownDistrict', 'StateCode', 'PinCode'],
     },
+    // eslint-disable-next-line camelcase
     PartB_TI: {
       required: ['Salaries', 'IncomeFromHP', 'IncFromOthSources'],
       Salaries: ['GrossSalary', 'Salary16ia', 'ProfessionalTaxUs16iii', 'NetSalary'],
     },
+    // eslint-disable-next-line camelcase
     PartB_TTI: {
       required: ['GrossTotIncome', 'DeductUndChapVIA', 'TotalIncome', 'TaxPayableOnTI'],
     },
@@ -43,8 +51,11 @@ const ITR1_SCHEMA = {
 };
 
 // ITR-2 Schema Structure
+// eslint-disable-next-line camelcase
 const ITR2_SCHEMA = {
+  // eslint-disable-next-line camelcase
   required: ['Form_ITR2'],
+  // eslint-disable-next-line camelcase
   Form_ITR2: {
     required: [
       'PartA_GEN',
@@ -65,9 +76,12 @@ const ITR2_SCHEMA = {
   },
 };
 
-// ITR-3 Schema Structure  
+// ITR-3 Schema Structure
+// eslint-disable-next-line camelcase
 const ITR3_SCHEMA = {
+  // eslint-disable-next-line camelcase
   required: ['Form_ITR3'],
+  // eslint-disable-next-line camelcase
   Form_ITR3: {
     required: [
       'PartA_GEN',
@@ -94,8 +108,11 @@ const ITR3_SCHEMA = {
 };
 
 // ITR-4 (Sugam) Schema Structure
+// eslint-disable-next-line camelcase
 const ITR4_SCHEMA = {
+  // eslint-disable-next-line camelcase
   required: ['Form_ITR4'],
+  // eslint-disable-next-line camelcase
   Form_ITR4: {
     required: [
       'PartA_GEN1',
@@ -233,7 +250,7 @@ const validateITR1 = (json, result) => {
   // Validate PartA_GEN1
   if (form.PartA_GEN1) {
     const gen = form.PartA_GEN1;
-    
+
     // Personal Info
     if (gen.PersonalInfo) {
       const pi = gen.PersonalInfo;
@@ -261,7 +278,7 @@ const validateITR1 = (json, result) => {
   // Validate PartB_TI (Income)
   if (form.PartB_TI) {
     const ti = form.PartB_TI;
-    
+
     // Salary validation
     if (ti.Salaries) {
       const sal = ti.Salaries;
@@ -295,7 +312,7 @@ const validateITR1 = (json, result) => {
   // Validate PartB_TTI (Tax computation)
   if (form.PartB_TTI) {
     const tti = form.PartB_TTI;
-    
+
     // Validate computation
     if (tti.TotalIncome > 5000000 && tti.TotalIncome <= form.PartB_TI?.GrossTotIncome) {
       addWarning(result, 'PartB_TTI', 'Total income exceeds ₹50 lakh - verify ITR-1 eligibility');
@@ -348,22 +365,22 @@ const validateITR4 = (json, result) => {
   // Validate presumptive income section
   if (form.ScheduleBP) {
     const bp = form.ScheduleBP;
-    
+
     // Section 44AD validation
     if (bp.PresumpIncDtls) {
       const pid = bp.PresumpIncDtls;
-      
+
       // 44AD turnover limit
       if (pid.GrossTurnoverReceipts > 20000000) { // 2 Cr
-        addError(result, 'ScheduleBP.PresumpIncDtls.GrossTurnoverReceipts', 
+        addError(result, 'ScheduleBP.PresumpIncDtls.GrossTurnoverReceipts',
           'Turnover exceeds ₹2 Cr limit for Section 44AD', 'LIMIT_EXCEEDED');
       }
-      
+
       // Minimum presumptive rate check (8% for non-digital, 6% for digital)
       const minRate = 0.06; // Assuming digital
       const declaredRate = pid.TotPresumpBusInc / pid.GrossTurnoverReceipts;
       if (declaredRate < minRate) {
-        addWarning(result, 'ScheduleBP.PresumpIncDtls', 
+        addWarning(result, 'ScheduleBP.PresumpIncDtls',
           'Declared presumptive income is less than minimum 6%');
       }
     }
@@ -371,13 +388,12 @@ const validateITR4 = (json, result) => {
     // Section 44ADA validation
     if (bp.PresumpProfDtls) {
       const ppd = bp.PresumpProfDtls;
-      
+
       // 44ADA gross receipts limit
       if (ppd.GrossReceipts > 5000000) { // 50L
         addError(result, 'ScheduleBP.PresumpProfDtls.GrossReceipts',
           'Gross receipts exceed ₹50 Lakh limit for Section 44ADA', 'LIMIT_EXCEEDED');
       }
-      
       // Minimum 50% presumptive rate
       const declaredRate = ppd.PresumpProfInc / ppd.GrossReceipts;
       if (declaredRate < 0.5) {
@@ -389,7 +405,7 @@ const validateITR4 = (json, result) => {
     // Section 44AE validation
     if (bp.GoodsCarriageDtls) {
       const gc = bp.GoodsCarriageDtls;
-      
+
       // Maximum 10 vehicles
       if (gc.TotalVehicles > 10) {
         addError(result, 'ScheduleBP.GoodsCarriageDtls.TotalVehicles',

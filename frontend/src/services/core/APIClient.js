@@ -8,6 +8,7 @@
 
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { enterpriseLogger } from '../../utils/logger';
 
 class APIClient {
   constructor() {
@@ -37,6 +38,7 @@ class APIClient {
     this.client = axios.create({
       baseURL: this.baseURL,
       timeout: this.defaultTimeout,
+      withCredentials: true, // Required for HttpOnly cookies (refresh tokens)
       headers: {
         'Content-Type': 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
@@ -64,7 +66,7 @@ class APIClient {
         // Log request in development
         if (process.env.NODE_ENV === 'development') {
           // eslint-disable-next-line no-console
-          console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`, {
+          enterpriseLogger.info(`API Request: ${config.method?.toUpperCase()} ${config.url}`, {
             data: config.data,
             params: config.params,
           });
@@ -74,7 +76,7 @@ class APIClient {
       },
       (error) => {
         // eslint-disable-next-line no-console
-        console.error('❌ Request interceptor error:', error);
+        enterpriseLogger.error('Request interceptor error', { error });
         return Promise.reject(error);
       },
     );
@@ -85,7 +87,7 @@ class APIClient {
         // Log response in development
         if (process.env.NODE_ENV === 'development') {
           // eslint-disable-next-line no-console
-          console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`, {
+          enterpriseLogger.info(`API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`, {
             status: response.status,
             data: response.data,
           });
@@ -99,7 +101,7 @@ class APIClient {
         // Log error in development (skip if suppressed for optional endpoints)
         if (process.env.NODE_ENV === 'development' && !originalRequest?._suppressErrorLog) {
           // eslint-disable-next-line no-console
-          console.error(`❌ API Error: ${originalRequest?.method?.toUpperCase()} ${originalRequest?.url}`, {
+          enterpriseLogger.error(`API Error: ${originalRequest?.method?.toUpperCase()} ${originalRequest?.url}`, {
             status: error.response?.status,
             message: error.message,
             data: error.response?.data,
@@ -197,10 +199,30 @@ class APIClient {
       this.refreshAttempts = 0; // Reset attempts
       this.clearAuthTokens();
 
-      // Only show toast and redirect if not already on login page
-      if (!window.location.pathname.includes('/login')) {
-        toast.error('Session expired. Please login again.');
-        window.location.href = '/login';
+      // Log the error for debugging
+      if (process.env.NODE_ENV === 'development') {
+        enterpriseLogger.error('Token refresh failed', {
+          status: refreshError.response?.status,
+          message: refreshError.message,
+          data: refreshError.response?.data,
+        });
+      }
+
+      // Only show toast and redirect if not already on login page or auth page
+      const isAuthPage = window.location.pathname.includes('/login') ||
+        window.location.pathname.includes('/auth') ||
+        window.location.pathname.includes('/signup');
+      if (!isAuthPage) {
+        // Don't show toast if it's a silent refresh (e.g., background prefetch)
+        if (!originalRequest?._suppressErrorLog) {
+          toast.error('Your session has expired. Please login again.', {
+            duration: 4000,
+          });
+        }
+        // Delay redirect slightly to allow toast to show
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 100);
       }
 
       // Reject the original request
@@ -213,8 +235,6 @@ class APIClient {
         this.refreshAttempts = 0;
       }
     }
-
-    return Promise.reject(originalRequest);
   }
 
   handleHttpError(error) {

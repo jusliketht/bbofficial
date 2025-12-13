@@ -4,7 +4,7 @@
 // Covers: Interest, Dividend, Family Pension, Lottery, etc.
 // =====================================================
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
@@ -123,6 +123,12 @@ const OtherSourcesForm = ({
   const [interestIncomes, setInterestIncomes] = useState(data?.interestIncomes || []);
   const [otherIncomes, setOtherIncomes] = useState(data?.otherIncomes || []);
 
+  // Store onUpdate in a ref to avoid infinite loops
+  const onUpdateRef = useRef(onUpdate);
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+  }, [onUpdate]);
+
   // Calculate totals
   const totalInterestIncome = useMemo(() => {
     return interestIncomes.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
@@ -146,7 +152,7 @@ const OtherSourcesForm = ({
 
   // Propagate changes to parent
   useEffect(() => {
-    onUpdate?.({
+    onUpdateRef.current?.({
       interestIncomes,
       otherIncomes,
       totalInterestIncome,
@@ -154,7 +160,7 @@ const OtherSourcesForm = ({
       totalOtherSourcesIncome,
       eligible80TTADeduction,
     });
-  }, [interestIncomes, otherIncomes, totalInterestIncome, totalOtherIncome, totalOtherSourcesIncome, eligible80TTADeduction, onUpdate]);
+  }, [interestIncomes, otherIncomes, totalInterestIncome, totalOtherIncome, totalOtherSourcesIncome, eligible80TTADeduction]);
 
   const handleAddInterest = () => {
     setInterestIncomes([

@@ -110,7 +110,7 @@ const AssetDocumentUpload = ({ filingId, assetId, existingDocuments = [], onUplo
         toast.error(result.error || 'Failed to upload document');
       }
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('Upload error', { error });
       toast.error('Failed to upload document');
     }
   };

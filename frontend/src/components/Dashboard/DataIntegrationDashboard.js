@@ -26,6 +26,7 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { enterpriseLogger } from '../../utils/logger';
 
 // Import services
 import {
@@ -35,6 +36,7 @@ import {
   autoPopulationITRService,
   documentProcessingService,
 } from '../../services';
+import apiClient from '../../services/core/APIClient';
 
 const DataIntegrationDashboard = ({ userId }) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -99,7 +101,7 @@ const DataIntegrationDashboard = ({ userId }) => {
       setAutoPopulation(autoPopStatus);
 
     } catch (error) {
-      console.error('Error loading dashboard data:', error);
+      enterpriseLogger.error('Error loading dashboard data', { error });
       toast.error('Failed to load dashboard data');
     } finally {
       setIsLoading(false);
@@ -113,7 +115,7 @@ const DataIntegrationDashboard = ({ userId }) => {
     setSyncStatus(prev => ({ ...prev, isSyncing: true }));
 
     try {
-      console.log('🔄 Starting comprehensive data synchronization...');
+      enterpriseLogger.info('Starting comprehensive data synchronization');
 
       // Start comprehensive sync
       const syncResults = await dataIntegrationService.syncAllFinancialData(userId);
@@ -142,7 +144,7 @@ const DataIntegrationDashboard = ({ userId }) => {
       }
 
     } catch (error) {
-      console.error('Sync failed:', error);
+      enterpriseLogger.error('Sync failed', { error });
       toast.error('Data synchronization failed');
       setSyncStatus(prev => ({ ...prev, isSyncing: false }));
     }
@@ -160,7 +162,7 @@ const DataIntegrationDashboard = ({ userId }) => {
     setIsLoading(true);
 
     try {
-      console.log('🚀 Starting ITR auto-population...');
+      enterpriseLogger.info('Starting ITR auto-population');
 
       const itrType = determineITRType(financialData);
       const autoPopResult = await autoPopulationITRService.autoPopulateITR(
@@ -173,13 +175,13 @@ const DataIntegrationDashboard = ({ userId }) => {
         toast.success(`ITR-${itrType} auto-populated with ${autoPopResult.summary.dataSources} data sources`);
 
         // Navigate to ITR filing or show results
-        console.log('Auto-population results:', autoPopResult);
+        enterpriseLogger.info('Auto-population results', { result: autoPopResult });
       } else {
         toast.error('Auto-population failed');
       }
 
     } catch (error) {
-      console.error('Auto-population failed:', error);
+      enterpriseLogger.error('Auto-population failed', { error });
       toast.error('Auto-population failed');
     } finally {
       setIsLoading(false);
@@ -187,21 +189,94 @@ const DataIntegrationDashboard = ({ userId }) => {
   };
 
   /**
-   * Calculate financial summary
+   * Calculate financial summary from real data
    */
   const calculateFinancialSummary = async (userId) => {
-    // This would calculate actual financial data from synced sources
-    return {
-      totalIncome: 850000,
-      totalDeductions: 150000,
-      totalTDS: 75000,
-      taxLiability: 45000,
-      dataSources: [
-        { type: 'bank_statement', name: 'HDFC Bank', status: 'active', lastSync: '2024-01-15' },
-        { type: 'broker', name: 'Zerodha', status: 'active', lastSync: '2024-01-15' },
-        { type: 'form_16', name: 'ABC Corporation', status: 'active', lastSync: '2024-01-10' },
-      ],
-    };
+    try {
+      // Fetch financial profile data
+      const profileResult = await financialProfileService.getFinancialProfile(userId);
+      
+      if (profileResult.success && profileResult.profile) {
+        const profile = profileResult.profile;
+        
+        // Calculate from actual profile data
+        const incomeProfile = profile.incomeProfile || {};
+        const currentYearEstimate = incomeProfile.currentYearEstimate || {};
+        const totalIncome = (currentYearEstimate.total || 0) +
+          (currentYearEstimate.salary || 0) +
+          (currentYearEstimate.other || 0);
+        
+        const deductionProfile = profile.deductionProfile || {};
+        const totalDeductions = deductionProfile.totalClaimed || 0;
+        const totalTDS = currentYearEstimate.tds || 0;
+        
+        // Get tax liability from recent filings if available
+        try {
+          const filingsResponse = await apiClient.get('/itr/filings', { params: { limit: 1 } });
+          const recentFiling = filingsResponse.success && filingsResponse.data?.filings?.[0]
+            ? filingsResponse.data.filings[0]
+            : (Array.isArray(filingsResponse.data) && filingsResponse.data[0] ? filingsResponse.data[0] : null);
+          
+          const taxLiability = recentFiling?.taxComputation?.finalTax || 0;
+          
+          // Get data sources from profile connections
+          const connections = profile.connections || [];
+          const dataSources = connections.map(conn => ({
+            type: conn.type || 'unknown',
+            name: conn.name || 'Unknown',
+            status: conn.status || 'active',
+            lastSync: conn.lastSync || new Date().toISOString(),
+          }));
+          
+          return {
+            totalIncome,
+            totalDeductions,
+            totalTDS,
+            taxLiability,
+            dataSources: dataSources.length > 0 ? dataSources : [],
+          };
+        } catch (filingError) {
+          enterpriseLogger.warn('Failed to fetch recent filing for tax liability', { error: filingError });
+          // Continue with profile data only
+        }
+        
+        // Get data sources from profile connections
+        const connections = profile.connections || [];
+        const dataSources = connections.map(conn => ({
+          type: conn.type || 'unknown',
+          name: conn.name || 'Unknown',
+          status: conn.status || 'active',
+          lastSync: conn.lastSync || new Date().toISOString(),
+        }));
+        
+        return {
+          totalIncome,
+          totalDeductions,
+          totalTDS,
+          taxLiability: 0, // Will be calculated when filing is available
+          dataSources: dataSources.length > 0 ? dataSources : [],
+        };
+      }
+      
+      // Fallback to empty data if profile not available
+      return {
+        totalIncome: 0,
+        totalDeductions: 0,
+        totalTDS: 0,
+        taxLiability: 0,
+        dataSources: [],
+      };
+    } catch (error) {
+      enterpriseLogger.error('Failed to calculate financial summary', { error, userId });
+      // Return empty data on error
+      return {
+        totalIncome: 0,
+        totalDeductions: 0,
+        totalTDS: 0,
+        taxLiability: 0,
+        dataSources: [],
+      };
+    }
   };
 
   /**
@@ -256,7 +331,7 @@ const DataIntegrationDashboard = ({ userId }) => {
         toast.error(`Failed to process ${documentType}`);
       }
     } catch (error) {
-      console.error('Document upload failed:', error);
+      enterpriseLogger.error('Document upload failed', { error });
       toast.error('Document upload failed');
     }
   };

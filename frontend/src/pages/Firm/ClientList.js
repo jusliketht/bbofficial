@@ -20,6 +20,7 @@ import Button from '../../components/common/Button';
 import ClientAssignmentModal from '../../components/Firm/ClientAssignmentModal';
 import toast from 'react-hot-toast';
 import apiClient from '../../services/core/APIClient';
+import { enterpriseLogger } from '../../utils/logger';
 
 const ClientList = () => {
   const navigate = useNavigate();
@@ -45,7 +46,7 @@ const ClientList = () => {
       }
     } catch (error) {
       toast.error(error.response?.data?.error || 'Failed to load clients.');
-      console.error('Client list fetch error:', error);
+      enterpriseLogger.error('Client list fetch error:', { error });
     } finally {
       setLoading(false);
     }

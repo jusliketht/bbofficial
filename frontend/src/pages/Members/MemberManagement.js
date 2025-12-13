@@ -7,10 +7,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
-import StatusBadge from '../../components/common/StatusBadge';
+import StatusBadge from '../../components/DesignSystem/StatusBadge';
+import { LoadingState } from '../../components/DesignSystem';
 import Modal from '../../components/common/Modal';
 import apiClient from '../../services';
 import toast from 'react-hot-toast';
+import { enterpriseLogger } from '../../utils/logger';
 
 const MemberManagement = () => {
   const navigate = useNavigate();
@@ -83,7 +85,7 @@ const MemberManagement = () => {
         toast.success('Member deleted successfully');
         loadMembers();
       } catch (error) {
-        console.error('Failed to delete member:', error);
+        enterpriseLogger.error('Failed to delete member', { error });
         toast.error('Failed to delete member');
       }
     }
@@ -105,7 +107,7 @@ const MemberManagement = () => {
       setShowEditModal(false);
       loadMembers();
     } catch (error) {
-      console.error('Failed to save member:', error);
+      enterpriseLogger.error('Failed to save member', { error });
       toast.error('Failed to save member');
     }
   };
@@ -150,11 +152,8 @@ const MemberManagement = () => {
 
   if (loading) {
     return (
-      <div className="member-management loading">
-        <div className="loading-spinner">
-          <div className="spinner"></div>
-          <p>Loading members...</p>
-        </div>
+      <div className="member-management">
+        <LoadingState message="Loading members..." fullScreen={false} />
       </div>
     );
   }

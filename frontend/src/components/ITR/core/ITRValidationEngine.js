@@ -263,6 +263,66 @@ class ITRValidationEngine {
         },
       },
     });
+
+    // ITR-2: Capital Gains validation rules
+    this.validationRules.set('capitalGains', {
+      shortTerm: {
+        required: false,
+        type: 'number',
+        min: 0,
+        message: 'Short-term capital gains must be non-negative',
+      },
+      longTerm: {
+        required: false,
+        type: 'number',
+        min: 0,
+        message: 'Long-term capital gains must be non-negative',
+      },
+      stcg: {
+        required: false,
+        type: 'number',
+        min: 0,
+        message: 'STCG must be non-negative',
+      },
+      ltcg: {
+        required: false,
+        type: 'number',
+        min: 0,
+        message: 'LTCG must be non-negative',
+      },
+    });
+
+    // ITR-4: Presumptive Income validation rules
+    this.validationRules.set('presumptiveIncome', {
+      presumptiveBusiness: {
+        required: false,
+        type: 'object',
+        custom: (presumptiveBusiness) => {
+          if (!presumptiveBusiness) {
+            return null; // Optional
+          }
+          const grossReceipts = presumptiveBusiness.grossReceipts || 0;
+          if (grossReceipts > 2000000) {
+            return 'Presumptive business income: Gross receipts cannot exceed ₹20 lakh for ITR-4. Consider ITR-3 for higher turnover.';
+          }
+          return null;
+        },
+      },
+      presumptiveProfessional: {
+        required: false,
+        type: 'object',
+        custom: (presumptiveProfessional) => {
+          if (!presumptiveProfessional) {
+            return null; // Optional
+          }
+          const grossReceipts = presumptiveProfessional.grossReceipts || 0;
+          if (grossReceipts > 500000) {
+            return 'Presumptive professional income: Gross receipts cannot exceed ₹5 lakh for ITR-4. Consider ITR-3 for higher receipts.';
+          }
+          return null;
+        },
+      },
+    });
   }
 
   calculateExpenseTotal(expenseCategory) {
@@ -404,9 +464,19 @@ class ITRValidationEngine {
     // Validate all configured sections
     let sectionIds = ['personal_info', 'income', 'deductions', 'taxes_paid'];
 
+    // Add ITR-2 specific sections (capital gains)
+    if (itrType === 'ITR-2' || itrType === 'ITR2') {
+      sectionIds = [...sectionIds, 'capitalGains'];
+    }
+
     // Add ITR-3 specific sections
     if (itrType === 'ITR-3' || itrType === 'ITR3') {
       sectionIds = [...sectionIds, 'businessIncome', 'professionalIncome', 'balanceSheet', 'auditInfo'];
+    }
+
+    // Add ITR-4 specific sections (presumptive income)
+    if (itrType === 'ITR-4' || itrType === 'ITR4') {
+      sectionIds = [...sectionIds, 'presumptiveIncome'];
     }
 
     for (const sectionId of sectionIds) {
@@ -761,6 +831,15 @@ class ITRValidationEngine {
       if (businessIncome > 0) {
         errors.push('Business income cannot be declared in ITR-2. Consider ITR-3 or ITR-4.');
       }
+
+      // Schedule FA validation: Check if user has foreign income but no Schedule FA
+      const hasForeignIncome = (formData.income?.foreignIncome?.totalIncome ||
+                                formData.income?.foreignIncomeDetails?.totalIncome || 0) > 0;
+      const hasScheduleFA = formData.scheduleFA?.assets?.length > 0;
+
+      if (hasForeignIncome && !hasScheduleFA) {
+        warnings.push('You have declared foreign income. Consider declaring foreign assets in Schedule FA if applicable.');
+      }
     }
 
     // ITR-3 specific rules
@@ -772,6 +851,15 @@ class ITRValidationEngine {
 
       if (!hasBusinessIncome && !hasProfessionalIncome) {
         warnings.push('ITR-3 typically requires business or professional income. Please verify your ITR type selection.');
+      }
+
+      // Schedule FA validation: Check if user has foreign income but no Schedule FA
+      const hasForeignIncome = (formData.income?.foreignIncome?.totalIncome ||
+                                formData.income?.foreignIncomeDetails?.totalIncome || 0) > 0;
+      const hasScheduleFA = formData.scheduleFA?.assets?.length > 0;
+
+      if (hasForeignIncome && !hasScheduleFA) {
+        warnings.push('You have declared foreign income. Consider declaring foreign assets in Schedule FA if applicable.');
       }
     }
 
@@ -785,6 +873,18 @@ class ITRValidationEngine {
       const presumptiveProfessional = formData.income?.presumptive_professional || formData.income?.presumptiveProfessional || {};
       if (presumptiveProfessional.grossReceipts > 5000000) {
         errors.push('Presumptive professional income: Gross receipts cannot exceed ₹50 lakhs for ITR-4. Consider ITR-3 for higher receipts.');
+      }
+
+      // Section 44AE validation: Vehicle limit (max 10 vehicles)
+      const goodsCarriage = formData.goodsCarriage || formData.income?.goodsCarriage;
+      if (goodsCarriage?.hasGoodsCarriage) {
+        const vehicleCount = goodsCarriage.vehicles?.length || 0;
+        if (vehicleCount > 10) {
+          errors.push(
+            'Section 44AE is applicable only if you own not more than 10 goods carriages. ' +
+            `You have declared ${vehicleCount} vehicles. Please reduce the number of vehicles or use regular business income accounting.`,
+          );
+        }
       }
     }
 
@@ -811,8 +911,10 @@ class ITRValidationEngine {
     total += parseFloat(income.other_sources || income.otherIncome || 0);
 
     // ITR-3: Add business income
-    if (formData.businessIncome?.businesses) {
-      formData.businessIncome.businesses.forEach(business => {
+    // Use consolidated structure: formData.income.businessIncome (with fallback for backward compatibility)
+    const businessIncome = formData.income?.businessIncome || formData.businessIncome;
+    if (businessIncome?.businesses && Array.isArray(businessIncome.businesses)) {
+      businessIncome.businesses.forEach(business => {
         if (business.pnl) {
           const pnl = business.pnl;
           const directExpenses = this.calculateExpenseTotal(pnl.directExpenses);
@@ -829,13 +931,15 @@ class ITRValidationEngine {
           total += netProfit;
         }
       });
-    } else if (formData.income?.businessIncome) {
-      total += parseFloat(formData.income.businessIncome) || 0;
+    } else if (businessIncome) {
+      total += parseFloat(businessIncome) || 0;
     }
 
     // ITR-3: Add professional income
-    if (formData.professionalIncome?.professions) {
-      formData.professionalIncome.professions.forEach(profession => {
+    // Use consolidated structure: formData.income.professionalIncome (with fallback for backward compatibility)
+    const professionalIncome = formData.income?.professionalIncome || formData.professionalIncome;
+    if (professionalIncome?.professions && Array.isArray(professionalIncome.professions)) {
+      professionalIncome.professions.forEach(profession => {
         if (profession.pnl) {
           const pnl = profession.pnl;
           const expensesTotal = this.calculateExpenseTotal(pnl.expenses);
@@ -844,8 +948,8 @@ class ITRValidationEngine {
           total += netIncome;
         }
       });
-    } else if (formData.income?.professionalIncome) {
-      total += parseFloat(formData.income.professionalIncome) || 0;
+    } else if (professionalIncome) {
+      total += parseFloat(professionalIncome) || 0;
     }
 
     return total;

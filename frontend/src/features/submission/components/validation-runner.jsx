@@ -4,6 +4,7 @@
 // =====================================================
 
 import React, { useState, useEffect } from 'react';
+import { enterpriseLogger } from '../../../../utils/logger';
 import {
   CheckCircle,
   AlertCircle,
@@ -31,7 +32,7 @@ const ValidationRunner = ({ filingId, formData, onValidationComplete }) => {
         onValidationComplete(results);
       }
     } catch (error) {
-      console.error('Validation error:', error);
+      enterpriseLogger.error('Validation error', { error });
     } finally {
       setIsRunning(false);
     }

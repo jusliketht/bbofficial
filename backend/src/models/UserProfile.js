@@ -37,6 +37,23 @@ const UserProfile = sequelize.define('UserProfile', {
     },
     field: 'aadhaar_number',
   },
+  aadhaarLinked: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
+    field: 'aadhaar_linked',
+  },
+  aadhaarVerifiedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'aadhaar_verified_at',
+  },
+  aadhaarVerificationData: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    defaultValue: {},
+    field: 'aadhaar_verification_data',
+  },
   dateOfBirth: {
     type: DataTypes.DATEONLY,
     allowNull: true,

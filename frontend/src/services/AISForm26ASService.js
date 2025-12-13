@@ -4,6 +4,7 @@
 // =====================================================
 
 import { apiClient } from './core/APIClient';
+import { enterpriseLogger } from '../utils/logger';
 
 class AISForm26ASService {
   constructor() {
@@ -47,7 +48,7 @@ class AISForm26ASService {
    */
   async authenticateWithIncomeTaxPortal(userId, credentials) {
     try {
-      console.log('🔐 Authenticating with Income Tax Portal via ERI...');
+      enterpriseLogger.info('Authenticating with Income Tax Portal via ERI');
 
       const authRequest = {
         pan: credentials.pan,
@@ -60,7 +61,7 @@ class AISForm26ASService {
       const response = await apiClient.post('/api/eri/login', authRequest);
 
       if (response.data?.success) {
-        console.log('✅ Successfully authenticated with Income Tax Portal via ERI');
+        enterpriseLogger.info('Successfully authenticated with Income Tax Portal via ERI');
         return {
           success: true,
           authToken: response.data.data?.sessionToken,
@@ -74,7 +75,7 @@ class AISForm26ASService {
       return { success: false, error: response.data?.message || 'Authentication failed' };
 
     } catch (error) {
-      console.error('❌ ERI authentication failed:', error);
+      enterpriseLogger.error('ERI authentication failed', { error });
       return {
         success: false,
         error: error.response?.data?.error || error.message || 'Authentication failed',
@@ -87,7 +88,7 @@ class AISForm26ASService {
    */
   async fetchAISData(userId, authToken, assessmentYear = '2024-25') {
     try {
-      console.log('📊 Fetching AIS data for assessment year:', assessmentYear);
+      enterpriseLogger.info('Fetching AIS data', { assessmentYear });
 
       const request = {
         userId,
@@ -103,7 +104,7 @@ class AISForm26ASService {
         // Process and categorize AIS data
         const processedData = this.processAISData(aisData);
 
-        console.log('✅ AIS data fetched and processed successfully');
+        enterpriseLogger.info('AIS data fetched and processed successfully');
         return {
           success: true,
           data: processedData,
@@ -114,7 +115,7 @@ class AISForm26ASService {
       return { success: false, error: response.message };
 
     } catch (error) {
-      console.error('❌ Error fetching AIS data:', error);
+      enterpriseLogger.error('Error fetching AIS data', { error });
       return { success: false, error: error.message };
     }
   }
@@ -124,7 +125,7 @@ class AISForm26ASService {
    */
   async fetchForm26ASData(userId, authToken, assessmentYear = '2024-25') {
     try {
-      console.log('📄 Fetching Form 26AS data...');
+      enterpriseLogger.info('Fetching Form 26AS data');
 
       const request = {
         userId,
@@ -140,7 +141,7 @@ class AISForm26ASService {
         // Process Form 26AS data
         const processedData = this.processForm26ASData(form26ASData);
 
-        console.log('✅ Form 26AS data fetched successfully');
+        enterpriseLogger.info('Form 26AS data fetched successfully');
         return {
           success: true,
           data: processedData,
@@ -151,7 +152,7 @@ class AISForm26ASService {
       return { success: false, error: response.message };
 
     } catch (error) {
-      console.error('❌ Error fetching Form 26AS data:', error);
+      enterpriseLogger.error('Error fetching Form 26AS data', { error });
       return { success: false, error: error.message };
     }
   }
@@ -161,7 +162,7 @@ class AISForm26ASService {
    */
   async getTDSDetails(userId, authToken, assessmentYear = '2024-25') {
     try {
-      console.log('💼 Fetching TDS details...');
+      enterpriseLogger.info('Fetching TDS details');
 
       const request = {
         userId,
@@ -177,7 +178,7 @@ class AISForm26ASService {
         // Analyze TDS data
         const analyzedData = this.analyzeTDSData(tdsData);
 
-        console.log('✅ TDS details fetched and analyzed');
+        enterpriseLogger.info('TDS details fetched and analyzed');
         return {
           success: true,
           data: analyzedData,
@@ -188,7 +189,7 @@ class AISForm26ASService {
       return { success: false, error: response.message };
 
     } catch (error) {
-      console.error('❌ Error fetching TDS details:', error);
+      enterpriseLogger.error('Error fetching TDS details', { error });
       return { success: false, error: error.message };
     }
   }
@@ -198,7 +199,7 @@ class AISForm26ASService {
    */
   async getTaxPaidDetails(userId, authToken, assessmentYear = '2024-25') {
     try {
-      console.log('💰 Fetching tax paid details...');
+      enterpriseLogger.info('Fetching tax paid details');
 
       const request = {
         userId,
@@ -214,7 +215,7 @@ class AISForm26ASService {
         // Process tax paid data
         const processedData = this.processTaxPaidData(taxPaidData);
 
-        console.log('✅ Tax paid details fetched successfully');
+        enterpriseLogger.info('Tax paid details fetched successfully');
         return {
           success: true,
           data: processedData,
@@ -225,7 +226,7 @@ class AISForm26ASService {
       return { success: false, error: response.message };
 
     } catch (error) {
-      console.error('❌ Error fetching tax paid details:', error);
+      enterpriseLogger.error('Error fetching tax paid details', { error });
       return { success: false, error: error.message };
     }
   }
@@ -235,7 +236,7 @@ class AISForm26ASService {
    */
   async checkRefundStatus(userId, authToken, assessmentYear = '2024-25') {
     try {
-      console.log('💸 Checking refund status...');
+      enterpriseLogger.info('Checking refund status');
 
       const request = {
         userId,
@@ -251,7 +252,7 @@ class AISForm26ASService {
         // Process refund data
         const processedData = this.processRefundData(refundData);
 
-        console.log('✅ Refund status fetched successfully');
+        enterpriseLogger.info('Refund status fetched successfully');
         return {
           success: true,
           data: processedData,
@@ -261,7 +262,7 @@ class AISForm26ASService {
       return { success: false, error: response.message };
 
     } catch (error) {
-      console.error('❌ Error checking refund status:', error);
+      enterpriseLogger.error('Error checking refund status', { error });
       return { success: false, error: error.message };
     }
   }
@@ -271,7 +272,7 @@ class AISForm26ASService {
    */
   async syncAllTaxData(userId, credentials, assessmentYear = '2024-25') {
     try {
-      console.log('🔄 Starting comprehensive tax data synchronization...');
+      enterpriseLogger.info('Starting comprehensive tax data synchronization');
 
       // Step 1: Authenticate
       const authResult = await this.authenticateWithIncomeTaxPortal(userId, credentials);
@@ -330,11 +331,11 @@ class AISForm26ASService {
         },
       };
 
-      console.log('✅ Comprehensive tax data synchronization completed');
+      enterpriseLogger.info('Comprehensive tax data synchronization completed');
       return result;
 
     } catch (error) {
-      console.error('❌ Error in tax data synchronization:', error);
+      enterpriseLogger.error('Error in tax data synchronization', { error });
       return { success: false, error: error.message };
     }
   }
@@ -740,7 +741,7 @@ class AISForm26ASService {
         data,
       });
     } catch (error) {
-      console.error('Error saving synchronized tax data:', error);
+      enterpriseLogger.error('Error saving synchronized tax data', { error });
     }
   }
 

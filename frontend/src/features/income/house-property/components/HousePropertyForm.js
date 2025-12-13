@@ -9,10 +9,12 @@ import rentReceiptOCRService from '../../../../services/RentReceiptOCRService';
 import toast from 'react-hot-toast';
 import PreConstructionCalculator from './pre-construction-calculator';
 import RentReceiptOCRUpload from './RentReceiptOCRUpload';
+import PropertyDocumentOCRUpload from './PropertyDocumentOCRUpload';
 import AISRentalIncomePopup from './ais-rental-popup';
 import { useAISRentalIncome } from '../hooks/use-ais-integration';
 import { FieldAutoFillIndicator } from '../../../../components/UI/AutoFillIndicator/AutoFillIndicator';
 import SourceChip from '../../../../components/UI/SourceChip/SourceChip';
+import { enterpriseLogger } from '../../../../utils/logger';
 
 const HousePropertyForm = ({ filingId, data, onUpdate, selectedITR, onDataUploaded }) => {
   const [properties, setProperties] = useState(data?.properties || []);
@@ -83,7 +85,7 @@ const HousePropertyForm = ({ filingId, data, onUpdate, selectedITR, onDataUpload
         }
       }
     } catch (error) {
-      console.error('Rent receipt processing error:', error);
+      enterpriseLogger.error('Rent receipt processing error', { error });
       toast.error('Failed to process rent receipt: ' + error.message);
     } finally {
       setIsProcessingReceipt(false);
@@ -181,7 +183,7 @@ const HousePropertyForm = ({ filingId, data, onUpdate, selectedITR, onDataUpload
         }
       }
     } catch (error) {
-      console.error('Batch rent receipt processing error:', error);
+      enterpriseLogger.error('Batch rent receipt processing error', { error });
       toast.error('Failed to process rent receipts: ' + error.message);
     } finally {
       setBatchProcessing(false);
@@ -316,6 +318,94 @@ const HousePropertyForm = ({ filingId, data, onUpdate, selectedITR, onDataUpload
         }}
       />
 
+      {/* Property Document OCR Upload */}
+      <PropertyDocumentOCRUpload
+        filingId={filingId}
+        onExtracted={(extractedData, propertyIndex) => {
+          if (propertyIndex !== null && propertyIndex !== undefined) {
+            // Apply to specific property
+            const property = properties[propertyIndex] || {};
+            const updated = [...properties];
+            updated[propertyIndex] = {
+              ...property,
+              propertyAddress: extractedData.propertyAddress || property.propertyAddress,
+              purchasePrice: extractedData.purchasePrice || property.purchasePrice,
+              registrationNumber: extractedData.registrationNumber || property.registrationNumber,
+              registrationDate: extractedData.registrationDate || property.registrationDate,
+              propertyType: extractedData.propertyType || property.propertyType,
+              area: extractedData.area || property.area,
+              source: 'ocr',
+              sourceData: {
+                confidence: extractedData.confidence,
+                date: new Date().toISOString(),
+                documentType: extractedData.documentType,
+              },
+              documentData: {
+                ownerName: extractedData.ownerName,
+                sellerName: extractedData.sellerName,
+                sellerPAN: extractedData.sellerPAN,
+              },
+            };
+            setProperties(updated);
+            onUpdate({ properties: updated });
+            toast.success('Property document data applied');
+          } else if (properties.length > 0) {
+            // Apply to first property if no index specified
+            const property = properties[0] || {};
+            const updated = [...properties];
+            updated[0] = {
+              ...property,
+              propertyAddress: extractedData.propertyAddress || property.propertyAddress,
+              purchasePrice: extractedData.purchasePrice || property.purchasePrice,
+              registrationNumber: extractedData.registrationNumber || property.registrationNumber,
+              registrationDate: extractedData.registrationDate || property.registrationDate,
+              propertyType: extractedData.propertyType || property.propertyType,
+              area: extractedData.area || property.area,
+              source: 'ocr',
+              sourceData: {
+                confidence: extractedData.confidence,
+                date: new Date().toISOString(),
+                documentType: extractedData.documentType,
+              },
+              documentData: {
+                ownerName: extractedData.ownerName,
+                sellerName: extractedData.sellerName,
+                sellerPAN: extractedData.sellerPAN,
+              },
+            };
+            setProperties(updated);
+            onUpdate({ properties: updated });
+            toast.success('Property document data applied');
+          } else {
+            // Create new property with extracted data
+            const newProperty = {
+              propertyType: 'self_occupied',
+              propertyAddress: extractedData.propertyAddress || '',
+              purchasePrice: extractedData.purchasePrice || null,
+              registrationNumber: extractedData.registrationNumber || null,
+              registrationDate: extractedData.registrationDate || null,
+              propertyCategory: extractedData.propertyType || 'Residential',
+              area: extractedData.area || null,
+              source: 'ocr',
+              sourceData: {
+                confidence: extractedData.confidence,
+                date: new Date().toISOString(),
+                documentType: extractedData.documentType,
+              },
+              documentData: {
+                ownerName: extractedData.ownerName,
+                sellerName: extractedData.sellerName,
+                sellerPAN: extractedData.sellerPAN,
+              },
+            };
+            const updated = [...properties, newProperty];
+            setProperties(updated);
+            onUpdate({ properties: updated });
+            toast.success('Property created with extracted document data');
+          }
+        }}
+      />
+
       <div className="flex items-center justify-between">
         <h4 className="font-semibold text-gray-900">House Properties</h4>
         <button
@@ -442,10 +532,50 @@ const HousePropertyForm = ({ filingId, data, onUpdate, selectedITR, onDataUpload
                   <label className="block text-sm font-medium text-gray-700 mb-1">Property Address</label>
                   <textarea
                     value={property.propertyAddress || ''}
-                    onChange={(e) => updateProperty(index, 'propertyAddress', e.target.value)}
+                    onChange={(e) => {
+                      updateProperty(index, 'propertyAddress', e.target.value);
+                      // Mark as edited if user changes OCR data
+                      if (property.source && property.source !== 'manual') {
+                        updateProperty(index, 'isEdited', true);
+                      }
+                    }}
                     rows={2}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
                     placeholder="Enter property address"
+                  />
+                </div>
+
+                {/* Property Document OCR for this specific property */}
+                <div className="md:col-span-2">
+                  <PropertyDocumentOCRUpload
+                    filingId={filingId}
+                    propertyIndex={index}
+                    onExtracted={(extractedData) => {
+                      const updated = [...properties];
+                      updated[index] = {
+                        ...updated[index],
+                        propertyAddress: extractedData.propertyAddress || updated[index].propertyAddress,
+                        purchasePrice: extractedData.purchasePrice || updated[index].purchasePrice,
+                        registrationNumber: extractedData.registrationNumber || updated[index].registrationNumber,
+                        registrationDate: extractedData.registrationDate || updated[index].registrationDate,
+                        propertyType: extractedData.propertyType || updated[index].propertyType,
+                        area: extractedData.area || updated[index].area,
+                        source: 'ocr',
+                        sourceData: {
+                          confidence: extractedData.confidence,
+                          date: new Date().toISOString(),
+                          documentType: extractedData.documentType,
+                        },
+                        documentData: {
+                          ownerName: extractedData.ownerName,
+                          sellerName: extractedData.sellerName,
+                          sellerPAN: extractedData.sellerPAN,
+                        },
+                      };
+                      setProperties(updated);
+                      onUpdate({ properties: updated });
+                      toast.success('Property document data applied');
+                    }}
                   />
                 </div>
               </div>

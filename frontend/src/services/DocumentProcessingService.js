@@ -4,6 +4,7 @@
 // =====================================================
 
 import { apiClient } from './core/APIClient';
+import { enterpriseLogger } from '../utils/logger';
 
 class DocumentProcessingService {
   constructor() {
@@ -174,7 +175,7 @@ class DocumentProcessingService {
    */
   async processDocument(file, documentType, options = {}) {
     try {
-      console.log(`📄 Processing ${documentType} document...`);
+      enterpriseLogger.info('Processing document', { documentType });
 
       const processingId = this.generateProcessingId();
       const processingStart = Date.now();
@@ -231,11 +232,11 @@ class DocumentProcessingService {
       // Save processing result
       await this.saveProcessingResult(processingId, processingResult);
 
-      console.log(`✅ Document processed successfully in ${processingResult.processingTime}ms`);
+      enterpriseLogger.info('Document processed successfully', { processingTime: processingResult.processingTime, documentType });
       return processingResult;
 
     } catch (error) {
-      console.error('❌ Error processing document:', error);
+      enterpriseLogger.error('Error processing document', { error, documentType });
       return {
         success: false,
         error: error.message,
@@ -249,7 +250,7 @@ class DocumentProcessingService {
    */
   async extractTextFromDocument(file, documentType) {
     try {
-      console.log('🔍 Extracting text from document...');
+      enterpriseLogger.info('Extracting text from document');
 
       // Create FormData for file upload
       const formData = new FormData();
@@ -277,7 +278,7 @@ class DocumentProcessingService {
       return { success: false, error: response.message };
 
     } catch (error) {
-      console.error('❌ OCR extraction failed:', error);
+      enterpriseLogger.error('OCR extraction failed', { error });
       return { success: false, error: error.message };
     }
   }
@@ -287,7 +288,7 @@ class DocumentProcessingService {
    */
   async parseDocumentText(text, documentType, options = {}) {
     try {
-      console.log('📋 Parsing document text...');
+      enterpriseLogger.info('Parsing document text');
 
       let extractedData = {};
 
@@ -314,7 +315,7 @@ class DocumentProcessingService {
       return extractedData;
 
     } catch (error) {
-      console.error('❌ Error parsing document text:', error);
+      enterpriseLogger.error('Error parsing document text', { error });
       return { error: error.message };
     }
   }
@@ -323,7 +324,7 @@ class DocumentProcessingService {
    * Parse salary slip for tax-relevant data
    */
   parseSalarySlip(text, options) {
-    console.log('💰 Parsing salary slip...');
+    enterpriseLogger.info('Parsing salary slip');
 
     const salaryData = {
       employer: {},
@@ -401,7 +402,7 @@ class DocumentProcessingService {
    * Parse rent receipt for HRA claim
    */
   parseRentReceipt(text, options) {
-    console.log('🏠 Parsing rent receipt...');
+    enterpriseLogger.info('Parsing rent receipt');
 
     const rentData = {
       landlord: {},
@@ -468,7 +469,7 @@ class DocumentProcessingService {
    * Parse Form 16 data
    */
   parseForm16(text, options) {
-    console.log('📋 Parsing Form 16...');
+    enterpriseLogger.info('Parsing Form 16');
 
     // Form 16 parsing would be more complex and structured
     // This is a simplified implementation
@@ -791,7 +792,7 @@ class DocumentProcessingService {
         result,
       });
     } catch (error) {
-      console.error('Error saving processing result:', error);
+      enterpriseLogger.error('Error saving processing result', { error });
     }
   }
 
@@ -799,7 +800,7 @@ class DocumentProcessingService {
    * Batch processing for multiple documents
    */
   async processBatchDocuments(files, documentType, options = {}) {
-    console.log(`📁 Processing batch of ${files.length} ${documentType} documents...`);
+    enterpriseLogger.info('Processing batch documents', { count: files.length, documentType });
 
     const results = [];
     const batchId = this.generateProcessingId();

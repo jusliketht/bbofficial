@@ -49,7 +49,7 @@ const TaxSavingsRecommendations = ({ userProfile, currentInvestments, onRecommen
         setRecommendations(result);
       }
     } catch (err) {
-      console.error('Tax recommendations error:', err);
+      enterpriseLogger.error('Tax recommendations error', { error: err });
       setError(err.message || 'Failed to generate recommendations');
     } finally {
       setIsGenerating(false);
@@ -342,7 +342,7 @@ const TaxSavingsRecommendations = ({ userProfile, currentInvestments, onRecommen
                       size="sm"
                       onClick={() => {
                         // Show more details
-                        console.log('Show details for:', recommendation.name);
+                        enterpriseLogger.info('Show details for recommendation', { name: recommendation.name });
                       }}
                       className="w-full lg:w-full"
                     >

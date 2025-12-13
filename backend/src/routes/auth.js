@@ -1115,7 +1115,51 @@ router.post('/logout', authenticateToken, auditAuthEvents('logout'), async (req,
   }
 });
 
-// Revoke all sessions
+// Logout from all devices (user-facing, no admin permission required)
+router.post('/sessions/logout-all', authenticateToken, auditAuthEvents('revoke_all_sessions'), async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    // Revoke all sessions
+    await UserSession.revokeAllSessions(userId);
+
+    // Increment token version to invalidate all existing tokens
+    const user = await User.findByPk(userId);
+    await user.update({
+      tokenVersion: user.tokenVersion + 1,
+    });
+
+    // Clear refresh token cookie
+    clearRefreshTokenCookie(res);
+
+    // Log audit event
+    await AuditLog.logAuthEvent({
+      userId,
+      action: 'all_sessions_revoked',
+      ipAddress: req.ip || req.connection.remoteAddress,
+      userAgent: req.headers['user-agent'],
+      success: true,
+    });
+
+    res.json({
+      success: true,
+      message: 'All sessions revoked successfully',
+    });
+
+  } catch (error) {
+    enterpriseLogger.error('Revoke all sessions failed', {
+      error: error.message,
+      userId: req.user?.userId,
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
+});
+
+// Revoke all sessions (admin-only, with admin permission)
 router.post('/revoke-all', authenticateToken, requirePermission('admin.user_sessions'), auditAuthEvents('revoke_all_sessions'), async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -1163,8 +1207,77 @@ router.post('/revoke-all', authenticateToken, requirePermission('admin.user_sess
 // SESSION MANAGEMENT ROUTES
 // =====================================================
 
-// Get user sessions
-router.get('/sessions', authenticateToken, requirePermission('admin.user_sessions'), async (req, res) => {
+const deviceDetectionService = require('../services/utils/DeviceDetectionService');
+
+// Get current user's active sessions (user-facing, no admin permission required)
+router.get('/sessions', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const sessions = await UserSession.findActiveSessions(userId);
+
+    // Get current session's refresh token from cookie to identify current session
+    const currentRefreshToken = req.cookies?.refreshToken;
+    let currentSessionId = null;
+
+    if (currentRefreshToken && sessions.length > 0) {
+      // Find which session matches the current refresh token
+      for (const session of sessions) {
+        try {
+          const isValid = await bcrypt.compare(currentRefreshToken, session.refreshTokenHash);
+          if (isValid) {
+            currentSessionId = session.id;
+            break;
+          }
+        } catch (e) {
+          // Continue checking other sessions
+          continue;
+        }
+      }
+    }
+
+    // If we couldn't identify current session, use the most recent one as fallback
+    if (!currentSessionId && sessions.length > 0) {
+      currentSessionId = sessions[0].id; // Most recent session (sorted by lastActive DESC)
+    }
+
+    const formattedSessions = sessions.map((session) => {
+      const deviceInfo = deviceDetectionService.parseDeviceInfo(session.userAgent, session.ipAddress);
+      const isCurrent = session.id === currentSessionId;
+
+      return {
+        id: session.id,
+        deviceType: deviceInfo.deviceType,
+        deviceName: deviceInfo.deviceName,
+        browser: deviceInfo.browser,
+        os: deviceInfo.os,
+        location: deviceInfo.location || 'Unknown',
+        ipAddress: session.ipAddress,
+        lastActive: session.lastActive,
+        createdAt: session.createdAt,
+        isCurrent,
+      };
+    });
+
+    res.json({
+      success: true,
+      sessions: formattedSessions,
+    });
+
+  } catch (error) {
+    enterpriseLogger.error('Get sessions failed', {
+      error: error.message,
+      userId: req.user?.userId,
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
+});
+
+// Get user sessions (admin-only, with admin permission)
+router.get('/sessions/admin', authenticateToken, requirePermission('admin.user_sessions'), async (req, res) => {
   try {
     const userId = req.user.userId;
     const sessions = await UserSession.findActiveSessions(userId);
@@ -1193,8 +1306,62 @@ router.get('/sessions', authenticateToken, requirePermission('admin.user_session
   }
 });
 
-// Revoke specific session
-router.delete('/sessions/:sessionId', authenticateToken, requirePermission('admin.user_sessions'), async (req, res) => {
+// Logout from specific session (user-facing, no admin permission required)
+router.delete('/sessions/:sessionId', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { sessionId } = req.params;
+
+    const session = await UserSession.findOne({
+      where: {
+        id: sessionId,
+        userId,
+      },
+    });
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found',
+      });
+    }
+
+    await session.update({
+      revoked: true,
+      revokedAt: new Date(),
+    });
+
+    // Log audit event
+    await AuditLog.logAuthEvent({
+      userId,
+      action: 'session_revoked',
+      ipAddress: req.ip || req.connection.remoteAddress,
+      userAgent: req.headers['user-agent'],
+      metadata: { sessionId },
+      success: true,
+    });
+
+    res.json({
+      success: true,
+      message: 'Session revoked successfully',
+    });
+
+  } catch (error) {
+    enterpriseLogger.error('Revoke session failed', {
+      error: error.message,
+      userId: req.user?.userId,
+      sessionId: req.params.sessionId,
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
+});
+
+// Revoke specific session (admin-only, with admin permission)
+router.delete('/sessions/:sessionId/admin', authenticateToken, requirePermission('admin.user_sessions'), async (req, res) => {
   try {
     const userId = req.user.userId;
     const { sessionId } = req.params;

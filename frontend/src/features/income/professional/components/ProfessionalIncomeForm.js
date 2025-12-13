@@ -24,6 +24,7 @@ const ProfessionalIncomeForm = ({ filingId, data, onUpdate, selectedITR, onDataU
     professionType: '',
     professionAddress: '',
     registrationNumber: '',
+    usePresumptiveTax: false, // Section 44ADA
     pnl: {
       professionalFees: 0,
       expenses: {
@@ -317,12 +318,52 @@ const ProfessionalIncomeForm = ({ filingId, data, onUpdate, selectedITR, onDataU
 
           {/* Professional Income & Expenses */}
           <div className="space-y-4">
-            <h5 className="font-semibold text-gray-900 border-b pb-2">Professional Income & Expenses</h5>
+            <div className="flex items-center justify-between border-b pb-2">
+              <h5 className="font-semibold text-gray-900">Professional Income & Expenses</h5>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={profession.usePresumptiveTax || false}
+                  onChange={(e) => {
+                    const updated = [...professions];
+                    updated[professionIndex] = {
+                      ...updated[professionIndex],
+                      usePresumptiveTax: e.target.checked,
+                    };
+                    setProfessions(updated);
+                    onUpdate({ professions: updated });
+                    if (e.target.checked) {
+                      toast.success('Section 44ADA (Presumptive Tax) enabled. 50% of gross receipts will be considered as income.');
+                    }
+                  }}
+                  className="rounded border-gray-300"
+                />
+                <span className="text-sm font-medium text-purple-700">Use Section 44ADA (Presumptive Tax)</span>
+              </label>
+            </div>
+
+            {/* Presumptive Tax Info */}
+            {profession.usePresumptiveTax && (
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-5 w-5 text-purple-600 mt-0.5" />
+                  <div className="text-sm text-purple-800">
+                    <p className="font-semibold mb-1">Section 44ADA - Presumptive Taxation</p>
+                    <p>Applicable if gross receipts ≤ ₹50 lakhs. Presumptive income: 50% of gross receipts. No need to maintain books of accounts or claim expenses.</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Professional Fees */}
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <label className="block text-sm font-medium text-gray-700">Professional Fees Received (₹)</label>
+                <label className="block text-sm font-medium text-gray-700">
+                  Professional Fees Received (₹)
+                  {profession.usePresumptiveTax && (
+                    <span className="text-xs text-purple-600 ml-2">(Gross Receipts for 44ADA)</span>
+                  )}
+                </label>
                 {profession.source === 'ais' && profession.pnl?.professionalFees > 0 && (
                   <SourceChip source="ais" size="sm" />
                 )}
@@ -330,30 +371,57 @@ const ProfessionalIncomeForm = ({ filingId, data, onUpdate, selectedITR, onDataU
               <input
                 type="number"
                 value={profession.pnl?.professionalFees || 0}
-                onChange={(e) => updatePNL(professionIndex, 'professionalFees', e.target.value)}
+                onChange={(e) => {
+                  updatePNL(professionIndex, 'professionalFees', e.target.value);
+                  // Auto-calculate presumptive income if 44ADA is enabled
+                  if (profession.usePresumptiveTax) {
+                    const presumptiveIncome = (parseFloat(e.target.value) || 0) * 0.5;
+                    const updated = [...professions];
+                    updated[professionIndex].pnl.netIncome = presumptiveIncome;
+                    setProfessions(updated);
+                    onUpdate({ professions: updated });
+                  }
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gold-500"
+                max={profession.usePresumptiveTax ? 5000000 : undefined}
               />
+              {profession.usePresumptiveTax && (
+                <p className="text-xs text-gray-500 mt-1">Maximum ₹50 lakhs for Section 44ADA</p>
+              )}
             </div>
 
-            {/* Professional Expenses - Expandable */}
-            <div>
-              <button
-                onClick={() => toggleSection(`expenses-${professionIndex}`)}
-                className="flex items-center justify-between w-full p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <span className="font-medium text-gray-700">Professional Expenses</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">
-                    Total: ₹{(profession.pnl?.expenses?.total || 0).toLocaleString('en-IN')}
+            {/* Presumptive Income Display */}
+            {profession.usePresumptiveTax && (
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-gray-900">Presumptive Income (50% of Gross Receipts):</span>
+                  <span className="text-xl font-bold text-purple-700">
+                    ₹{((profession.pnl?.professionalFees || 0) * 0.5).toLocaleString('en-IN')}
                   </span>
-                  {expandedSections[`expenses-${professionIndex}`] ? (
-                    <ChevronUp className="w-5 h-5" />
-                  ) : (
-                    <ChevronDown className="w-5 h-5" />
-                  )}
                 </div>
-              </button>
-              {expandedSections[`expenses-${professionIndex}`] && (
+              </div>
+            )}
+
+            {/* Professional Expenses - Expandable (Disabled for 44ADA) */}
+            {!profession.usePresumptiveTax && (
+              <div>
+                <button
+                  onClick={() => toggleSection(`expenses-${professionIndex}`)}
+                  className="flex items-center justify-between w-full p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <span className="font-medium text-gray-700">Professional Expenses</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600">
+                      Total: ₹{(profession.pnl?.expenses?.total || 0).toLocaleString('en-IN')}
+                    </span>
+                    {expandedSections[`expenses-${professionIndex}`] ? (
+                      <ChevronUp className="w-5 h-5" />
+                    ) : (
+                      <ChevronDown className="w-5 h-5" />
+                    )}
+                  </div>
+                </button>
+                {expandedSections[`expenses-${professionIndex}`] && (
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Office Rent (₹)</label>
@@ -410,28 +478,30 @@ const ProfessionalIncomeForm = ({ filingId, data, onUpdate, selectedITR, onDataU
                     />
                   </div>
                 </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
-            {/* Depreciation - Expandable */}
-            <div>
-              <button
-                onClick={() => toggleSection(`depreciation-${professionIndex}`)}
-                className="flex items-center justify-between w-full p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <span className="font-medium text-gray-700">Depreciation on Professional Assets</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">
-                    Total: ₹{(profession.pnl?.depreciation?.total || 0).toLocaleString('en-IN')}
-                  </span>
-                  {expandedSections[`depreciation-${professionIndex}`] ? (
-                    <ChevronUp className="w-5 h-5" />
-                  ) : (
-                    <ChevronDown className="w-5 h-5" />
-                  )}
-                </div>
-              </button>
-              {expandedSections[`depreciation-${professionIndex}`] && (
+            {/* Depreciation - Expandable (Disabled for 44ADA) */}
+            {!profession.usePresumptiveTax && (
+              <div>
+                <button
+                  onClick={() => toggleSection(`depreciation-${professionIndex}`)}
+                  className="flex items-center justify-between w-full p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <span className="font-medium text-gray-700">Depreciation on Professional Assets</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600">
+                      Total: ₹{(profession.pnl?.depreciation?.total || 0).toLocaleString('en-IN')}
+                    </span>
+                    {expandedSections[`depreciation-${professionIndex}`] ? (
+                      <ChevronUp className="w-5 h-5" />
+                    ) : (
+                      <ChevronDown className="w-5 h-5" />
+                    )}
+                  </div>
+                </button>
+                {expandedSections[`depreciation-${professionIndex}`] && (
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Office Equipment (₹)</label>
@@ -471,7 +541,8 @@ const ProfessionalIncomeForm = ({ filingId, data, onUpdate, selectedITR, onDataU
                   </div>
                 </div>
               )}
-            </div>
+              </div>
+            )}
 
             {/* Net Professional Income Display */}
             <div className={`rounded-lg p-4 ${

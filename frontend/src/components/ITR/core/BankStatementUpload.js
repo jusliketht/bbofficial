@@ -97,7 +97,7 @@ const BankStatementUpload = ({ onAnalysisComplete, onAutoPopulate, className = '
       }
 
     } catch (err) {
-      console.error('Bank statement analysis error:', err);
+      enterpriseLogger.error('Bank statement analysis error', { error: err });
       setError(err.message || 'Failed to analyze bank statement');
     } finally {
       setIsUploading(false);

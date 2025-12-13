@@ -18,6 +18,7 @@ import { PageTransition, StaggerContainer, StaggerItem } from '../../components/
 import Badge from '../../components/DesignSystem/components/Badge';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { enterpriseLogger } from '../../utils/logger';
 
 const AdminKnowledgeBase = () => {
   const [articles, setArticles] = useState([]);
@@ -66,7 +67,7 @@ const AdminKnowledgeBase = () => {
 
         setArticles(transformedArticles);
       } catch (error) {
-        console.error('Failed to fetch articles:', error);
+        enterpriseLogger.error('Failed to fetch articles:', { error });
         toast.error('Failed to load articles. Please try again.');
         setArticles([]);
       } finally {

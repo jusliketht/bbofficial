@@ -1,320 +1,47 @@
-# BurnBlack ITR Filing Platform - Git Ignore File
-# Comprehensive ignore patterns for Node.js, React, and enterprise development
-
-# ===========================================
-# DEPENDENCIES & PACKAGE MANAGERS
-# ===========================================
+# Dependencies
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-.pnpm-store/
+backend/node_modules/
+frontend/node_modules/
 
-# Package manager lock files (keep package-lock.json for consistency)
-# yarn.lock
-# pnpm-lock.yaml
+# Build outputs
+frontend/build/
+backend/dist/
 
-# ===========================================
-# BUILD OUTPUTS & DISTRIBUTION
-# ===========================================
-dist/
-build/
-out/
-.next/
-.nuxt/
-.vuepress/dist/
-.serverless/
-.fusebox/
-
-# ===========================================
-# ENVIRONMENT & CONFIGURATION
-# ===========================================
+# Environment variables
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
-.env.*.local
 
-# Configuration files with sensitive data
-config/production.json
-config/staging.json
-config/local.json
-secrets/
-credentials/
-
-# ===========================================
-# LOGS & DEBUGGING
-# ===========================================
+# Logs
 logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-lerna-debug.log*
-.pnpm-debug.log*
+backend/logs/
 
-# Runtime data
-pids/
-*.pid
-*.seed
-*.pid.lock
-
-# Coverage directory used by tools like istanbul
-coverage/
-*.lcov
-.nyc_output/
-
-# ===========================================
-# IDE & EDITOR FILES
-# ===========================================
-# VSCode
+# IDE
 .vscode/
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-!.vscode/*.code-snippets
-
-# IntelliJ IDEA
 .idea/
-*.iml
-*.ipr
-*.iws
-
-# Sublime Text
-*.sublime-project
-*.sublime-workspace
-
-# Vim
 *.swp
 *.swo
 *~
 
-# Emacs
-*~
-\#*\#
-/.emacs.desktop
-/.emacs.desktop.lock
-*.elc
-auto-save-list
-tramp
-.\#*
-
-# ===========================================
-# OPERATING SYSTEM FILES
-# ===========================================
-# macOS
+# OS
 .DS_Store
-.AppleDouble
-.LSOverride
-Icon
-._*
-.DocumentRevisions-V100
-.fseventsd
-.Spotlight-V100
-.TemporaryItems
-.Trashes
-.VolumeIcon.icns
-.com.apple.timemachine.donotpresent
-.AppleDB
-.AppleDesktop
-Network Trash Folder
-Temporary Items
-.apdisk
-
-# Windows
 Thumbs.db
-Thumbs.db:encryptable
-ehthumbs.db
-ehthumbs_vista.db
-*.stackdump
-[Dd]esktop.ini
-$RECYCLE.BIN/
-*.cab
-*.msi
-*.msix
-*.msm
-*.msp
-*.lnk
 
-# Linux
-*~
-.fuse_hidden*
-.directory
-.Trash-*
-.nfs*
+# Vercel
+.vercel
 
-# ===========================================
-# DATABASE & STORAGE
-# ===========================================
-# SQLite
-*.sqlite
-*.sqlite3
-*.db
-
-# PostgreSQL
-*.dump
-*.sql
-
-# MongoDB
-*.bson
-
-# Redis
-dump.rdb
-
-# ===========================================
-# TESTING & QUALITY ASSURANCE
-# ===========================================
-# Jest
+# Testing
 coverage/
 .nyc_output/
-
-# Cypress
-cypress/videos/
-cypress/screenshots/
-
-# Playwright
-test-results/
-playwright-report/
-playwright/.cache/
-
-# ===========================================
-# TEMPORARY & CACHE FILES
-# ===========================================
-# npm
-.npm
-.eslintcache
-
-# Yarn
-.yarn/cache
-.yarn/unplugged
-.yarn/build-state.yml
-.yarn/install-state.gz
-.pnp.*
-
-# TypeScript
-*.tsbuildinfo
-
-# Optional npm cache directory
-.npm
-
-# Optional eslint cache
-.eslintcache
-
-# Microbundle cache
-.rpt2_cache/
-.rts2_cache_cjs/
-.rts2_cache_es/
-.rts2_cache_umd/
-
-# Optional REPL history
-.node_repl_history
-
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
-.yarn-integrity
-
-# ===========================================
-# ENTERPRISE & SECURITY
-# ===========================================
-# SSL Certificates
-*.pem
-*.key
-*.crt
-*.csr
-*.p12
-*.pfx
-
-# API Keys & Secrets
-api-keys.json
-secrets.json
-.env.secrets
-
-# Backup files
-*.bak
-*.backup
-*.old
-*.orig
-
-# ===========================================
-# DOCUMENTATION & ASSETS
-# ===========================================
-# Generated documentation (keep docs/ for project documentation)
-# docs/
-# facts/
-
-# Markdown documentation files (keep docs/ and README files)
-# *.md
-# Exclude root-level status reports (moved to docs/changelog/)
-# Keep: README.md, DEMO_CREDENTIALS.md, docs/**/*.md
 
 # Temporary files
 tmp/
 temp/
-.tmp/
-
-# ===========================================
-# PROJECT SPECIFIC
-# ===========================================
-# BurnBlack specific ignores
-uploads/
-public/uploads/
-storage/
-backups/
-exports/
-
-# Test results
-test-results.json
-test-output/
-
-# Debug files
-debug-*.log
-error-*.log
-
-# Performance monitoring
-*.cpuprofile
-*.heapprofile
-
-# Database migration scripts (keep only essential ones)
-backend/migrations/
-backend/database/
-
-# Temporary migration and fix scripts
-backend/fix-*.js
-backend/create-*.js
-backend/check-*.js
-backend/debug-*.js
-backend/test-*.js
-backend/reset-*.js
-
-# Microservices (not used in current implementation)
-backend/services/
-
-# Monitoring configs (not needed for MVP)
-backend/monitoring/
-backend/k8s/
-
-# Docker production files (not needed for development)
-backend/Dockerfile.production
-docker-compose.production.yml
-
-# ===========================================
-# DOCKER & CONTAINERIZATION
-# ===========================================
-# Docker
-.dockerignore
-docker-compose.override.yml
-
-# ===========================================
-# MONOREPO & WORKSPACES
-# ===========================================
-# Lerna
-lerna-debug.log*
-
-# Rush
-common/temp/
+backend/uploads/
+frontend/public/uploads/

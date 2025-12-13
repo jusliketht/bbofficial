@@ -13,13 +13,13 @@ import {
   Mail,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { apiClient } from '../../services/filingService';
+import filingService from '../services/filingService';
 import {
   EnterpriseCard,
   EnterpriseButton,
   EnterpriseBadge,
   EnterpriseStatCard,
-} from '../../components/DesignSystem/EnterpriseComponents';
+} from '../components/DesignSystem/EnterpriseComponents';
 
 const Acknowledgment = () => {
   const { filingId } = useParams();

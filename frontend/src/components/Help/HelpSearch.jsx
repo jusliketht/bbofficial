@@ -26,7 +26,7 @@ const HelpSearch = ({ onResultClick, placeholder = 'Search for help articles, FA
       try {
         setSearchHistory(JSON.parse(history));
       } catch (e) {
-        console.error('Failed to parse search history:', e);
+        console.error('Failed to parse search history', e);
       }
     }
   }, []);

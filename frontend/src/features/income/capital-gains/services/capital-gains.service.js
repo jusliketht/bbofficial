@@ -23,7 +23,7 @@ class CapitalGainsService {
         ...response.data,
       };
     } catch (error) {
-      console.error('Failed to get capital gains:', error);
+      console.error('Failed to get capital gains', error);
       // Return empty structure if API doesn't exist
       return {
         success: true,
@@ -50,7 +50,7 @@ class CapitalGainsService {
         ...response.data,
       };
     } catch (error) {
-      console.error('Failed to update capital gains:', error);
+      console.error('Failed to update capital gains', error);
       throw new Error(error.response?.data?.message || 'Failed to update capital gains');
     }
   }
@@ -159,24 +159,35 @@ class CapitalGainsService {
     // Suggest offsetting STCG with STCL
     if (totalSTCG > 0 && totalSTCL > 0) {
       const offsetAmount = Math.min(totalSTCG, totalSTCL);
+      const taxRate = 0.15; // STCG is taxed at 15% for equity, or as per tax slab
+      const savings = offsetAmount * taxRate;
       suggestions.push({
         type: 'offset',
         title: 'Offset Short-term Gains with Losses',
-        description: `You can offset ₹${offsetAmount.toLocaleString('en-IN')} of STCG with your STCL`,
-        savings: offsetAmount * 0.3, // Assuming 30% tax rate on STCG
+        description: `You can offset ₹${offsetAmount.toLocaleString('en-IN')} of STCG with your STCL of ₹${totalSTCL.toLocaleString('en-IN')}`,
+        savings: savings,
+        offsetAmount: offsetAmount,
         action: 'Apply offset',
+        details: `Short-term capital gains are taxed at 15% (for equity) or as per your income tax slab. By offsetting ₹${offsetAmount.toLocaleString('en-IN')} of gains with losses, you can save ₹${savings.toLocaleString('en-IN')} in taxes.`,
       });
     }
 
     // Suggest offsetting LTCG with LTCL
     if (totalLTCG > 0 && totalLTCL > 0) {
       const offsetAmount = Math.min(totalLTCG, totalLTCL);
+      const exemptAmount = Math.min(totalLTCG, 100000); // First ₹1L is exempt
+      const taxableLTCG = Math.max(0, totalLTCG - exemptAmount);
+      const offsetTaxableAmount = Math.min(offsetAmount, taxableLTCG);
+      const taxRate = 0.10; // LTCG above ₹1L is taxed at 10% for equity
+      const savings = offsetTaxableAmount * taxRate;
       suggestions.push({
         type: 'offset',
         title: 'Offset Long-term Gains with Losses',
-        description: `You can offset ₹${offsetAmount.toLocaleString('en-IN')} of LTCG with your LTCL`,
-        savings: offsetAmount * 0.2, // Assuming 20% tax rate on LTCG
+        description: `You can offset ₹${offsetAmount.toLocaleString('en-IN')} of LTCG with your LTCL of ₹${totalLTCL.toLocaleString('en-IN')}`,
+        savings: savings,
+        offsetAmount: offsetAmount,
         action: 'Apply offset',
+        details: `Long-term capital gains above ₹1,00,000 are taxed at 10% (for equity) or 20% (for other assets). By offsetting ₹${offsetAmount.toLocaleString('en-IN')} of gains with losses, you can save ₹${savings.toLocaleString('en-IN')} in taxes.`,
       });
     }
 
@@ -187,12 +198,28 @@ class CapitalGainsService {
       if (carryForwardSTCL > 0 || carryForwardLTCL > 0) {
         suggestions.push({
           type: 'carryforward',
-          title: 'Carry Forward Losses',
-          description: `You can carry forward ₹${(carryForwardSTCL + carryForwardLTCL).toLocaleString('en-IN')} in losses to next year`,
+          title: 'Carry Forward Losses to Next Year',
+          description: `You have ₹${(carryForwardSTCL + carryForwardLTCL).toLocaleString('en-IN')} in losses that can be carried forward`,
           savings: 0,
+          carryForwardSTCL: carryForwardSTCL,
+          carryForwardLTCL: carryForwardLTCL,
           action: 'Review carry forward',
+          details: `Short-term capital losses (₹${carryForwardSTCL.toLocaleString('en-IN')}) and long-term capital losses (₹${carryForwardLTCL.toLocaleString('en-IN')}) can be carried forward for up to 8 assessment years. These losses can be set off against future capital gains of the same type.`,
         });
       }
+    }
+
+    // Suggest tax harvesting for high gains
+    if (totalSTCG > 100000 || totalLTCG > 200000) {
+      const highGainAmount = Math.max(totalSTCG, totalLTCG);
+      suggestions.push({
+        type: 'harvest',
+        title: 'Consider Tax Harvesting Strategy',
+        description: `You have significant capital gains (₹${highGainAmount.toLocaleString('en-IN')}). Consider selling loss-making investments to offset gains.`,
+        savings: 0,
+        action: 'Learn more',
+        details: 'Tax harvesting involves strategically selling loss-making investments to offset capital gains. This can help reduce your overall tax liability while maintaining your investment portfolio.',
+      });
     }
 
     return {

@@ -4,7 +4,8 @@
 // =====================================================
 
 import React from 'react';
-import { TrendingDown, TrendingUp, CheckCircle, ArrowRight, Download } from 'lucide-react';
+import { TrendingDown, TrendingUp, CheckCircle, ArrowRight, Download, BarChart3 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 
 const SimulationResults = ({ simulationResult, selectedScenario, scenariosToCompare, onApply, currentTaxComputation }) => {
   const { baseTax, simulatedTax, savings, breakdown } = simulationResult;
@@ -59,6 +60,35 @@ const SimulationResults = ({ simulationResult, selectedScenario, scenariosToComp
                 Apply This Scenario
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Comparison Chart */}
+        {simulationResult.scenarios && simulationResult.scenarios.length > 0 && (
+          <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+            <h4 className="text-heading-sm font-medium text-gray-900 mb-4">Visual Comparison</h4>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={[
+                {
+                  name: 'Current',
+                  tax: parseFloat(simulationResult.baseTax?.totalTaxLiability || simulationResult.baseTax?.finalTax || 0),
+                  savings: 0,
+                },
+                ...simulationResult.scenarios.map((sr, idx) => ({
+                  name: sr.scenario.name || `Scenario ${idx + 1}`,
+                  tax: parseFloat(sr.taxComputation?.totalTaxLiability || sr.taxComputation?.finalTax || 0),
+                  savings: sr.savings.totalSavings,
+                })),
+              ]}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip formatter={(value) => formatCurrency(value)} />
+                <Legend />
+                <Bar dataKey="tax" fill="#8884d8" name="Tax Liability" />
+                <Bar dataKey="savings" fill="#82ca9d" name="Savings" />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         )}
 
@@ -273,6 +303,57 @@ const SimulationResults = ({ simulationResult, selectedScenario, scenariosToComp
                 <span className="font-medium">{key}:</span> {breakdown.changes[key]}
               </p>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Export Options */}
+      {simulationResult && (
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h4 className="text-heading-sm font-medium text-gray-900 mb-4">Export Results</h4>
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                const data = {
+                  baseTax: simulationResult.baseTax,
+                  simulatedTax: simulationResult.simulatedTax || simulationResult.scenarios,
+                  savings: simulationResult.savings || simulationResult.bestScenario?.savings,
+                  timestamp: new Date().toISOString(),
+                };
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `tax-simulation-${Date.now()}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export JSON
+            </button>
+            <button
+              onClick={() => {
+                const rows = [
+                  ['Metric', 'Current', 'Simulated'],
+                  ['Tax Liability', formatCurrency(simulationResult.baseTax?.totalTaxLiability || 0), formatCurrency(simulationResult.simulatedTax?.totalTaxLiability || 0)],
+                  ['Savings', '-', formatCurrency(simulationResult.savings?.totalSavings || 0)],
+                ];
+                const csv = rows.map(row => row.join(',')).join('\n');
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `tax-simulation-${Date.now()}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </button>
           </div>
         </div>
       )}

@@ -5,6 +5,7 @@
 
 import itrService from './api/itrService';
 import apiClient from './core/APIClient';
+import { enterpriseLogger } from '../utils/logger';
 
 class FormDataService {
   constructor() {
@@ -49,7 +50,7 @@ class FormDataService {
 
       return response;
     } catch (error) {
-      console.error(`Failed to save ${section} data:`, error);
+      enterpriseLogger.error('Failed to save section data', { section, error });
       throw error;
     }
   }
@@ -80,7 +81,7 @@ class FormDataService {
 
       return formData;
     } catch (error) {
-      console.error('Failed to load form data:', error);
+      enterpriseLogger.error('Failed to load form data', { error });
       // Return empty object on error to prevent crashes
       return {};
     }
@@ -97,7 +98,7 @@ class FormDataService {
       const formData = await this.loadFormData(draftId);
       return formData[section] || {};
     } catch (error) {
-      console.error(`Failed to load ${section} data:`, error);
+      enterpriseLogger.error('Failed to load section data', { section, error });
       return {};
     }
   }
@@ -201,7 +202,7 @@ class FormDataService {
       const response = await apiClient.put('/users/profile', profileData);
       return response.data;
     } catch (error) {
-      console.error('Failed to save profile data:', error);
+      enterpriseLogger.error('Failed to save profile data', { error });
       throw error;
     }
   }
@@ -215,7 +216,7 @@ class FormDataService {
       const response = await apiClient.get('/users/profile');
       return response.data?.user || response.data || {};
     } catch (error) {
-      console.error('Failed to load profile data:', error);
+      enterpriseLogger.error('Failed to load profile data', { error });
       return {};
     }
   }
@@ -236,7 +237,7 @@ class FormDataService {
         return response.data;
       }
     } catch (error) {
-      console.error('Failed to save family member data:', error);
+      enterpriseLogger.error('Failed to save family member data', { error });
       throw error;
     }
   }
@@ -251,7 +252,7 @@ class FormDataService {
       const response = await apiClient.get(`/members/${memberId}`);
       return response.data || {};
     } catch (error) {
-      console.error('Failed to load family member data:', error);
+      enterpriseLogger.error('Failed to load family member data', { error });
       return {};
     }
   }

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { enterpriseLogger } from '../../utils/logger';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   CheckCircle,
@@ -53,19 +54,19 @@ const SectionCard = ({
 
   // Handle adding new items
   const handleAddItem = (type) => {
-    console.log(`Adding new ${type} item to ${title}`);
+    enterpriseLogger.info('Adding new item', { type, title });
     // This will be implemented based on the specific section
   };
 
   // Handle editing items
   const handleEditItem = (itemId) => {
-    console.log(`Editing item ${itemId} in ${title}`);
+    enterpriseLogger.info('Editing item', { itemId, title });
     // This will be implemented based on the specific section
   };
 
   // Handle deleting items
   const handleDeleteItem = (itemId) => {
-    console.log(`Deleting item ${itemId} from ${title}`);
+    enterpriseLogger.info('Deleting item', { itemId, title });
     // This will be implemented based on the specific section
   };
 

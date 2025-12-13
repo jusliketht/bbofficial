@@ -68,7 +68,7 @@ const DeductionBreakdown = ({ formData, onUpdate }) => {
         toast.success(`Document processed: ₹${amount.toLocaleString('en-IN')} extracted`);
       }
     } catch (error) {
-      console.error('Document upload error:', error);
+      console.error('Document upload error', { error });
       toast.error('Failed to process document: ' + (error.response?.data?.error || error.message));
     } finally {
       setUploadingFields(prev => ({ ...prev, [field]: false }));

@@ -198,7 +198,7 @@ const ITRSelection = () => {
 
   const handlePromptAccept = (action) => {
     // Handle prompt acceptance
-    console.log('Prompt accepted:', action);
+    enterpriseLogger.info('Prompt accepted', { action });
     setPrompt(null);
   };
 
@@ -208,7 +208,7 @@ const ITRSelection = () => {
 
   const handleLearnMore = (prompt) => {
     // Show detailed information
-    console.log('Learn more:', prompt);
+    enterpriseLogger.info('Learn more clicked', { prompt });
   };
 
   return (

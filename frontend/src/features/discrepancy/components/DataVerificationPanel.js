@@ -4,6 +4,7 @@
 // =====================================================
 
 import React, { useState, useEffect } from 'react';
+import { enterpriseLogger } from '../../../utils/logger';
 import { AlertTriangle, CheckCircle, Info, X, ChevronDown, ChevronUp } from 'lucide-react';
 import apiClient from '../../../services/core/APIClient';
 import DiscrepancyPanel from './DiscrepancyPanel';
@@ -51,7 +52,7 @@ const DataVerificationPanel = ({ formData, uploadedData, onResolve, filingId, cl
           onResolve(discrepancy.fieldPath, action);
         }
       } catch (error) {
-        console.error('Failed to resolve discrepancy:', error);
+        enterpriseLogger.error('Failed to resolve discrepancy', { error });
       }
     } else if (onResolve) {
       onResolve(discrepancy.fieldPath || discrepancy, action);
@@ -67,7 +68,7 @@ const DataVerificationPanel = ({ formData, uploadedData, onResolve, filingId, cl
           resolutionAction: action,
         });
       } catch (error) {
-        console.error('Failed to bulk resolve discrepancies:', error);
+        enterpriseLogger.error('Failed to bulk resolve discrepancies', { error });
       }
     }
   };

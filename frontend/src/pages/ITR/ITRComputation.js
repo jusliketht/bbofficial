@@ -51,6 +51,7 @@ import ValidationSummary from '../../components/ITR/ValidationSummary';
 import { formatIndianCurrency } from '../../lib/format';
 import useAutoSave, { AutoSaveIndicator } from '../../hooks/useAutoSave';
 import formDataService from '../../services/FormDataService';
+import { enterpriseLogger } from '../../utils/logger';
 import verificationStatusService from '../../services/VerificationStatusService';
 import { motion, AnimatePresence } from 'framer-motion';
 import ITRComputationHeader from '../../components/ITR/ITRComputationHeader';
@@ -79,15 +80,51 @@ const ITRComputation = () => {
   const [activeSectionId, setActiveSectionId] = useState('personalInfo'); // For sidebar navigation
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
+  // Helper function for safe localStorage operations
+  const safeLocalStorageGet = (key, defaultValue = null) => {
+    try {
+      const item = localStorage.getItem(key);
+      if (!item) return defaultValue;
+      return JSON.parse(item);
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        console.warn(`Invalid JSON in localStorage key "${key}"`, { error, key });
+        // Clear invalid data
+        try {
+          localStorage.removeItem(key);
+        } catch (e) {
+          console.error('Failed to remove invalid localStorage key', { key, error: e });
+        }
+      } else if (error.name === 'QuotaExceededError') {
+        enterpriseLogger.error('localStorage quota exceeded', { key });
+        toast.error('Storage limit reached. Some data may not be saved.');
+      } else {
+        console.error('Error reading localStorage key', { key, error });
+      }
+      return defaultValue;
+    }
+  };
+
+  const safeLocalStorageSet = (key, value) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (error) {
+      if (error.name === 'QuotaExceededError') {
+        enterpriseLogger.error('localStorage quota exceeded', { key });
+        toast.error('Storage limit reached. Please clear some data and try again.');
+        return false;
+      } else {
+        console.error('Error writing to localStorage key', { key, error });
+        return false;
+      }
+    }
+  };
+
   // Route guard: Check for selectedPerson, restore from localStorage if needed
   const getSelectedPersonFromStorage = () => {
     if (location.state?.selectedPerson) return location.state.selectedPerson;
-    try {
-      const saved = localStorage.getItem('itr_selected_person');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
+    return safeLocalStorageGet('itr_selected_person', null);
   };
 
   const selectedPerson = getSelectedPersonFromStorage();
@@ -122,26 +159,32 @@ const ITRComputation = () => {
   // Store entry point in localStorage for page refresh recovery
   useEffect(() => {
     if (entryPoint) {
-      try {
-        localStorage.setItem('itr_computation_entry_point', entryPoint);
-      } catch (e) {
-        console.warn('Failed to save entry point to localStorage:', e);
-      }
+      safeLocalStorageSet('itr_computation_entry_point', entryPoint);
     }
   }, [entryPoint]);
 
   // Route guard: Redirect if no selectedPerson and no draftId/filingId
   useEffect(() => {
     if (!selectedPerson && !draftId && !filingId && !viewMode) {
-      toast.error('Please select a person to file for');
-      navigate('/itr/select-person');
-    } else if (selectedPerson) {
-      // Save selectedPerson to localStorage for page refresh recovery
-      try {
-        localStorage.setItem('itr_selected_person', JSON.stringify(selectedPerson));
-      } catch (e) {
-        console.warn('Failed to save selectedPerson to localStorage:', e);
+      // Check if we can recover from localStorage
+      const recoveredPerson = safeLocalStorageGet('itr_selected_person', null);
+      if (recoveredPerson) {
+        // Person found in localStorage, continue
+        return;
       }
+      // No person found, redirect to selection page
+      toast.error('Please select a person to file for');
+      navigate('/itr/select-person', { replace: true });
+    } else if (selectedPerson) {
+      // Validate selectedPerson structure
+      if (!selectedPerson.panNumber && !selectedPerson.pan) {
+        enterpriseLogger.warn('Selected person missing PAN number');
+        toast.error('Invalid person data. Please select again.');
+        navigate('/itr/select-person', { replace: true });
+        return;
+      }
+      // Save selectedPerson to localStorage for page refresh recovery
+      safeLocalStorageSet('itr_selected_person', selectedPerson);
     }
   }, [selectedPerson, draftId, filingId, viewMode, navigate]);
   const autoDetectITR = location.state?.autoDetectITR || false;
@@ -169,7 +212,13 @@ const ITRComputation = () => {
   const [verificationResult, setVerificationResult] = useState(initialVerificationResult || null);
   const [showValidationSummary, setShowValidationSummary] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
-  const lastSavedTimestampRef = useRef(null); // Track last saved timestamp to prevent recursive updates
+  const lastSavedTimestampRef = useRef(null);
+  const isCreatingDraftRef = useRef(false);
+  const pendingDraftCreationRef = useRef(null); // Track last saved timestamp to prevent recursive updates
+  const draftCreationErrorRef = useRef(false); // Track if draft creation failed (prevent infinite retries)
+  const lastCreationAttemptRef = useRef(null); // Track last creation attempt timestamp (cooldown)
+  const isNavigatingRef = useRef(false); // Track if navigation is in progress
+  const errorDisplayedRef = useRef(false); // Track if error was already displayed
 
   // Form data state (must be declared before useRealTimeValidation)
   const [formData, setFormData] = useState({
@@ -234,12 +283,6 @@ const ITRComputation = () => {
       } : undefined,
       otherIncome: 0,
     },
-    businessIncome: (selectedITR === 'ITR-3' || selectedITR === 'ITR3') ? {
-      businesses: [],
-    } : undefined,
-    professionalIncome: (selectedITR === 'ITR-3' || selectedITR === 'ITR3') ? {
-      professions: [],
-    } : undefined,
     balanceSheet: (selectedITR === 'ITR-3' || selectedITR === 'ITR3') ? {
       hasBalanceSheet: false,
       assets: {
@@ -335,6 +378,25 @@ const ITRComputation = () => {
 
   // Tax regime state
   const [taxRegime, setTaxRegime] = useState('old'); // 'old' or 'new'
+
+  // Automatic ITR type switching for regulatory requirements
+  useEffect(() => {
+    // CRITICAL: Auto-switch to ITR-2 if agricultural income > ₹5,000 (regulatory requirement)
+    const agriIncome = formData?.exemptIncome?.agriculturalIncome?.netAgriculturalIncome
+      || formData?.exemptIncome?.netAgriculturalIncome
+      || formData?.agriculturalIncome
+      || 0;
+
+    if ((selectedITR === 'ITR-1' || selectedITR === 'ITR1') && agriIncome > 5000) {
+      // Automatically switch to ITR-2
+      setSelectedITR('ITR-2');
+      toast.error(
+        `Agricultural income (₹${agriIncome.toLocaleString('en-IN')}) exceeds ₹5,000. ` +
+        'Automatically switched to ITR-2 as required by Income Tax Department rules.',
+        { duration: 6000 },
+      );
+    }
+  }, [formData?.exemptIncome?.agriculturalIncome?.netAgriculturalIncome, formData?.exemptIncome?.netAgriculturalIncome, formData?.agriculturalIncome, selectedITR]);
   const [regimeComparison, setRegimeComparison] = useState(null);
   const [showComparison, setShowComparison] = useState(false);
   const [uploadedData, setUploadedData] = useState(null); // Track uploaded/scanned data
@@ -381,7 +443,7 @@ const ITRComputation = () => {
             setPrefetchSources(prefetchResult.sources);
           }
         } catch (error) {
-          console.warn('AIS/26AS prefetch failed:', error);
+          enterpriseLogger.warn('AIS/26AS prefetch failed', { error });
         }
 
         // 2. Get previous year data if available
@@ -399,7 +461,7 @@ const ITRComputation = () => {
               };
             }
           } catch (error) {
-            console.warn('Previous year data fetch failed:', error);
+            enterpriseLogger.warn('Previous year data fetch failed', { error });
           }
         }
 
@@ -462,7 +524,7 @@ const ITRComputation = () => {
 
         toast.success(`Auto-filled ${summary.autoFilledCount} fields from ${Object.keys(summary.bySource).length} sources`);
       } catch (error) {
-        console.error('Auto-population failed:', error);
+        enterpriseLogger.error('Auto-population failed', { error });
         toast.error('Auto-fill failed: ' + error.message);
       } finally {
         setIsPrefetching(false);
@@ -523,7 +585,7 @@ const ITRComputation = () => {
           navigate('/itr/select-person');
         }
       } catch (error) {
-        console.error('Failed to validate selected person:', error);
+        enterpriseLogger.error('Failed to validate selected person', { error });
         // Don't block user if validation fails, but log it
       }
     };
@@ -534,30 +596,49 @@ const ITRComputation = () => {
   // Load draft on component mount
   useEffect(() => {
     const loadDraft = async () => {
-      // Try to load from localStorage first (for page refresh recovery)
-      const localStorageKey = draftId ? `itr_draft_${draftId}` : 'itr_draft_current';
-      const savedDraft = localStorage.getItem(localStorageKey);
+      // ALWAYS try to load from localStorage first (for page refresh recovery)
+      // Check both draftId-specific and 'current' localStorage keys
+      const localStorageKeys = draftId
+        ? [`itr_draft_${draftId}`, 'itr_draft_current']
+        : ['itr_draft_current'];
 
-      if (savedDraft && !draftId) {
-        // Restore from localStorage if no draftId in URL
-        try {
-          const parsedSavedDraft = JSON.parse(savedDraft);
-          if (parsedSavedDraft.formData) {
-            setFormData(parsedSavedDraft.formData);
-            if (parsedSavedDraft.assessmentYear) setAssessmentYear(parsedSavedDraft.assessmentYear);
-            if (parsedSavedDraft.taxRegime) setTaxRegime(parsedSavedDraft.taxRegime);
-            if (parsedSavedDraft.selectedITR) setSelectedITR(parsedSavedDraft.selectedITR);
-            // If localStorage draft has a draftId, update URL
-            if (parsedSavedDraft.draftId && parsedSavedDraft.draftId !== 'current') {
-              navigate(`/itr/computation?draftId=${parsedSavedDraft.draftId}`, { replace: true });
-            }
-            toast.success('Draft restored from local storage');
+      let savedDraft = null;
+      let savedDraftKey = null;
+
+      // Try to find saved draft in localStorage
+      for (const key of localStorageKeys) {
+        const parsed = safeLocalStorageGet(key, null);
+        if (parsed) {
+          // Prefer draft with actual draftId over 'current'
+          if (!savedDraft || (parsed.draftId && parsed.draftId !== 'current')) {
+            savedDraft = parsed;
+            savedDraftKey = key;
           }
-        } catch (e) {
-          console.warn('Failed to restore draft from localStorage:', e);
         }
       }
 
+      // Restore from localStorage if found
+      if (savedDraft && savedDraft.formData) {
+        try {
+          setFormData(savedDraft.formData);
+          if (savedDraft.assessmentYear) setAssessmentYear(savedDraft.assessmentYear);
+          if (savedDraft.taxRegime) setTaxRegime(savedDraft.taxRegime);
+          if (savedDraft.selectedITR) setSelectedITR(savedDraft.selectedITR);
+
+          // If localStorage draft has a real draftId, update URL
+          if (savedDraft.draftId && savedDraft.draftId !== 'current') {
+            navigate(`/itr/computation?draftId=${savedDraft.draftId}`, { replace: true });
+            toast.success('Draft restored from local storage', { icon: '💾', duration: 2000 });
+          } else if (!draftId) {
+            // Show restoration indicator even if no draftId yet
+            toast('Draft data restored from local storage', { icon: '💾', duration: 2000 });
+          }
+        } catch (e) {
+          enterpriseLogger.warn('Failed to restore draft from localStorage', { error: e });
+        }
+      }
+
+      // If we have a draftId, also try to load from backend
       if (!draftId) return;
 
       setIsPrefetching(true); // Show loading state
@@ -616,14 +697,14 @@ const ITRComputation = () => {
             draftId,
             savedAt: new Date().toISOString(),
           };
-          localStorage.setItem(`itr_draft_${draftId}`, JSON.stringify(draftToSave));
+          safeLocalStorageSet(`itr_draft_${draftId}`, draftToSave);
 
           toast.success('Draft loaded successfully');
         } else {
           toast.error('Draft data not found');
         }
       } catch (error) {
-        console.error('Failed to load draft:', error);
+        enterpriseLogger.error('Failed to load draft', { error });
         toast.error('Failed to load draft: ' + (error.message || 'Unknown error'));
       } finally {
         setIsPrefetching(false);
@@ -636,9 +717,151 @@ const ITRComputation = () => {
   // Tax computation loading state
   const [isComputingTax, setIsComputingTax] = useState(false);
 
+  // Client-side tax calculation (immediate fallback while server computation is in progress)
+  const calculateClientSideTax = useCallback((data, regime) => {
+    if (!data || !data.income) return null;
+
+    const income = data.income || {};
+    const deductions = data.deductions || {};
+    const taxesPaid = data.taxesPaid || {};
+
+    // Calculate gross income - match the same logic as grossIncome useMemo
+    const salaryIncome = parseFloat(income.salary || 0);
+
+    // Business income
+    let businessIncome = 0;
+    if (typeof income.businessIncome === 'object' && income.businessIncome?.businesses) {
+      businessIncome = income.businessIncome.businesses.reduce((sum, biz) =>
+        sum + (parseFloat(biz.pnl?.netProfit || biz.netProfit || 0)), 0);
+    } else {
+      businessIncome = parseFloat(income.businessIncome || 0);
+    }
+
+    // Professional income
+    let professionalIncome = 0;
+    if (typeof income.professionalIncome === 'object' && income.professionalIncome?.professions) {
+      professionalIncome = income.professionalIncome.professions.reduce((sum, prof) =>
+        sum + (parseFloat(prof.pnl?.netIncome || prof.netIncome || prof.netProfit || 0)), 0);
+    } else {
+      professionalIncome = parseFloat(income.professionalIncome || 0);
+    }
+
+    // House property income
+    let housePropertyIncome = 0;
+    if (typeof income.houseProperty === 'object' && income.houseProperty?.properties) {
+      housePropertyIncome = income.houseProperty.properties.reduce((sum, p) => {
+        const rental = parseFloat(p.annualRentalIncome) || 0;
+        const taxes = parseFloat(p.municipalTaxes) || 0;
+        const interest = parseFloat(p.interestOnLoan) || 0;
+        return sum + Math.max(0, rental - taxes - interest);
+      }, 0);
+    } else {
+      housePropertyIncome = parseFloat(income.houseProperty || 0);
+    }
+
+    // Capital gains
+    let capitalGains = 0;
+    if (typeof income.capitalGains === 'object' && income.capitalGains?.stcgDetails) {
+      capitalGains = (income.capitalGains.stcgDetails || []).reduce((sum, e) => sum + (parseFloat(e.gainAmount) || 0), 0) +
+        (income.capitalGains.ltcgDetails || []).reduce((sum, e) => sum + (parseFloat(e.gainAmount) || 0), 0);
+    } else {
+      capitalGains = parseFloat(income.capitalGains || 0);
+    }
+
+    // Other sources income (from OtherSourcesForm - structured format)
+    let otherSourcesIncome = 0;
+    if (typeof income.otherSources === 'object' && income.otherSources) {
+      otherSourcesIncome = parseFloat(income.otherSources.totalOtherSourcesIncome || 0) ||
+        (parseFloat(income.otherSources.totalInterestIncome || 0) +
+         parseFloat(income.otherSources.totalOtherIncome || 0));
+    } else {
+      // Fallback to legacy otherIncome field for backward compatibility
+      otherSourcesIncome = parseFloat(income.otherIncome || 0);
+    }
+
+    // Also check data.otherSources (root level) for backward compatibility
+    if (data?.otherSources && typeof data.otherSources === 'object') {
+      const rootOtherSourcesTotal = parseFloat(data.otherSources.totalOtherSourcesIncome || 0) ||
+        (parseFloat(data.otherSources.totalInterestIncome || 0) +
+         parseFloat(data.otherSources.totalOtherIncome || 0));
+      // Only add if not already included via income.otherSources
+      if (!income.otherSources || !income.otherSources.totalOtherSourcesIncome) {
+        otherSourcesIncome += rootOtherSourcesTotal;
+      }
+    }
+
+    // Foreign income
+    const foreignIncome = (income.foreignIncome?.foreignIncomeDetails || []).reduce((sum, e) =>
+      sum + (parseFloat(e.amountInr) || 0), 0);
+
+    // Director/Partner income
+    const directorPartnerIncome = parseFloat(income.directorPartner?.directorIncome || 0) +
+      parseFloat(income.directorPartner?.partnerIncome || 0);
+
+    const grossIncome = salaryIncome + businessIncome + professionalIncome + housePropertyIncome +
+      capitalGains + otherSourcesIncome + foreignIncome + directorPartnerIncome;
+
+    // Calculate deductions
+    const totalDeductions = regime === 'old'
+      ? (parseFloat(deductions.section80C || 0) +
+         parseFloat(deductions.section80D || 0) +
+         parseFloat(deductions.section80E || 0) +
+         parseFloat(deductions.section80G || 0) +
+         parseFloat(deductions.section80TTA || 0) +
+         parseFloat(deductions.section80TTB || 0) +
+         Object.values(deductions.otherDeductions || {}).reduce((sum, val) => sum + (parseFloat(val) || 0), 0))
+      : 50000; // Standard deduction for new regime
+
+    const taxableIncome = Math.max(0, grossIncome - totalDeductions);
+
+    // Calculate tax based on slabs
+    let taxLiability = 0;
+    if (taxableIncome > 0) {
+      if (taxableIncome <= 250000) {
+        taxLiability = 0;
+      } else if (taxableIncome <= 500000) {
+        taxLiability = (taxableIncome - 250000) * 0.05;
+      } else if (taxableIncome <= 1000000) {
+        taxLiability = 12500 + (taxableIncome - 500000) * 0.2;
+      } else {
+        taxLiability = 112500 + (taxableIncome - 1000000) * 0.3;
+      }
+    }
+
+    // Add 4% cess
+    const totalTax = taxLiability + (taxLiability * 0.04);
+
+    const totalTaxesPaid = (parseFloat(taxesPaid.tds || 0) +
+                            parseFloat(taxesPaid.advanceTax || 0) +
+                            parseFloat(taxesPaid.selfAssessmentTax || 0));
+
+    return {
+      grossIncome,
+      totalDeductions,
+      taxableIncome,
+      taxLiability,
+      totalTax,
+      taxesPaid: totalTaxesPaid,
+      refundOrPayable: totalTaxesPaid - totalTax,
+    };
+  }, []);
+
   // Compute tax function
   const handleComputeTax = useCallback(async () => {
-    if (!formData.personalInfo.pan || !formData.income) return;
+    if (!formData.personalInfo?.pan || !formData.income) {
+      // If no PAN or income, clear tax computation
+      setTaxComputation(null);
+      return;
+    }
+
+    // Immediately update with client-side calculation for instant feedback
+    const clientSideTax = calculateClientSideTax(formData, taxRegime);
+    if (clientSideTax) {
+      setTaxComputation({
+        ...clientSideTax,
+        isClientSide: true, // Flag to indicate this is client-side calculation
+      });
+    }
 
     setIsComputingTax(true);
     try {
@@ -649,7 +872,10 @@ const ITRComputation = () => {
       );
 
       if (taxResult.success && taxResult.data) {
-        setTaxComputation(taxResult.data);
+        setTaxComputation({
+          ...taxResult.data,
+          isClientSide: false, // Server-side calculation
+        });
 
         // Also get regime comparison if available
         if (taxResult.data.comparison) {
@@ -658,19 +884,33 @@ const ITRComputation = () => {
         }
       }
     } catch (error) {
-      console.error('Tax computation failed:', error);
+      enterpriseLogger.error('Tax computation failed', { error });
+      // Keep client-side calculation if server fails
       // Don't show error toast - computation happens frequently
     } finally {
       setIsComputingTax(false);
     }
-  }, [formData, taxRegime, assessmentYear]);
+  }, [formData, taxRegime, assessmentYear, calculateClientSideTax]);
 
   // Compute tax when form data or regime changes - 300ms debounce
+  // Trigger on all relevant form data changes: income, deductions, taxes paid
   useEffect(() => {
+    // Only compute if we have minimum required data (PAN and some income data)
+    if (!formData.personalInfo?.pan || !formData.income) {
+      return;
+    }
+
     // Debounce computation - 300ms for responsive feel
     const timeoutId = setTimeout(handleComputeTax, 300);
     return () => clearTimeout(timeoutId);
-  }, [handleComputeTax, taxRegime]);
+  }, [
+    handleComputeTax,
+    taxRegime,
+    formData.income, // Trigger on any income changes
+    formData.deductions, // Trigger on any deduction changes
+    formData.taxesPaid, // Trigger on any tax paid changes
+    formData.personalInfo?.pan, // Re-trigger if PAN changes (though unlikely)
+  ]);
 
   // Real-time validation on formData changes
   useEffect(() => {
@@ -705,7 +945,7 @@ const ITRComputation = () => {
             allErrors[sectionId] = result.errors;
           }
         } catch (error) {
-          console.warn(`Validation error for section ${sectionId}:`, error);
+          enterpriseLogger.warn('Validation error for section', { sectionId, error });
         }
       }
 
@@ -747,6 +987,52 @@ const ITRComputation = () => {
         };
       }
 
+      // Validate negative income values
+      if (totalIncome < 0) {
+        allErrors.income = {
+          ...allErrors.income,
+          total: 'Total income cannot be negative',
+        };
+      }
+
+      // Validate negative deduction values
+      if (totalDeductions < 0) {
+        allErrors.deductions = {
+          ...allErrors.deductions,
+          total: 'Total deductions cannot be negative',
+        };
+      }
+
+      // Validate PAN format if present
+      if (formData.personalInfo?.pan) {
+        const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+        if (!panRegex.test(formData.personalInfo.pan)) {
+          allErrors.personalInfo = {
+            ...allErrors.personalInfo,
+            pan: 'PAN must be in format: ABCDE1234F',
+          };
+        }
+      }
+
+      // Validate assessment year format
+      if (assessmentYear && !/^\d{4}-\d{2}$/.test(assessmentYear)) {
+        allErrors.personalInfo = {
+          ...allErrors.personalInfo,
+          assessmentYear: 'Assessment year must be in format: YYYY-YY (e.g., 2024-25)',
+        };
+      }
+
+      // Validate ITR type-specific income limits
+      if (selectedITR === 'ITR-1' || selectedITR === 'ITR1') {
+        // ITR-1: Total income should not exceed ₹50L
+        if (totalIncome > 5000000) {
+          allErrors.income = {
+            ...allErrors.income,
+            itrTypeLimit: 'ITR-1 is only for total income up to ₹50 lakhs. Please select ITR-2 or ITR-3.',
+          };
+        }
+      }
+
       // Also run complete form validation for cross-section checks
       // Convert formData to validation engine format
       // eslint-disable-next-line camelcase
@@ -757,8 +1043,8 @@ const ITRComputation = () => {
         deductions: formData.deductions || {},
         // eslint-disable-next-line camelcase
         taxes_paid: formData.taxesPaid || {},
-        businessIncome: formData.businessIncome,
-        professionalIncome: formData.professionalIncome,
+        businessIncome: formData.income?.businessIncome,
+        professionalIncome: formData.income?.professionalIncome,
         balanceSheet: formData.balanceSheet,
         auditInfo: formData.auditInfo,
       };
@@ -792,7 +1078,7 @@ const ITRComputation = () => {
           setValidationErrors({});
         }
       } catch (error) {
-        console.warn('Complete form validation error:', error);
+        enterpriseLogger.warn('Complete form validation error', { error });
       }
     };
 
@@ -842,13 +1128,7 @@ const ITRComputation = () => {
 
   const handleBack = useCallback(() => {
     // Context-aware back navigation based on entry point
-    const currentEntryPoint = entryPoint || (() => {
-      try {
-        return localStorage.getItem('itr_computation_entry_point');
-      } catch {
-        return null;
-      }
-    })();
+    const currentEntryPoint = entryPoint || safeLocalStorageGet('itr_computation_entry_point', null);
 
     switch (currentEntryPoint) {
       case 'form16':
@@ -993,7 +1273,7 @@ const ITRComputation = () => {
 
       toast.success(`Refreshed ${summary.autoFilledCount} fields from ${Object.keys(summary.bySource).length} sources`);
     } catch (error) {
-      console.error('Refresh failed:', error);
+      enterpriseLogger.error('Refresh failed', { error });
       toast.error('Refresh failed: ' + error.message);
     } finally {
       setIsPrefetching(false);
@@ -1546,21 +1826,204 @@ const ITRComputation = () => {
           validatedData[key] = 0;
         }
       });
+    } else if (section === 'otherSources') {
+      // Validate otherSources fields - prevent negative values
+      if (validatedData.interestIncomes) {
+        validatedData.interestIncomes = validatedData.interestIncomes.map(item => ({
+          ...item,
+          amount: Math.max(0, parseFloat(item.amount) || 0),
+          tdsDeducted: Math.max(0, parseFloat(item.tdsDeducted) || 0),
+        }));
+      }
+      if (validatedData.otherIncomes) {
+        validatedData.otherIncomes = validatedData.otherIncomes.map(item => ({
+          ...item,
+          amount: Math.max(0, parseFloat(item.amount) || 0),
+          tdsDeducted: Math.max(0, parseFloat(item.tdsDeducted) || 0),
+        }));
+      }
     }
 
-    setFormData(prev => ({
-      ...prev,
-      [section]: {
-        ...prev[section],
-        ...validatedData,
-      },
-    }));
+    setFormData(prev => {
+      const updated = {
+        ...prev,
+        [section]: {
+          ...prev[section],
+          ...validatedData,
+        },
+      };
+
+      // Sync otherSources to income.otherSources for income aggregation
+      if (section === 'otherSources') {
+        updated.income = {
+          ...prev.income,
+          otherSources: validatedData,
+          // Also update legacy otherIncome field for backward compatibility
+          otherIncome: parseFloat(validatedData.totalOtherSourcesIncome || 0) ||
+            (parseFloat(validatedData.totalInterestIncome || 0) +
+             parseFloat(validatedData.totalOtherIncome || 0)) ||
+            prev.income?.otherIncome || 0,
+        };
+      }
+
+      return updated;
+    });
   }, []);
+
+  // Create draft automatically when user starts entering data
+  const createDraftAutomatically = useCallback(async (dataToSave) => {
+    // Don't create if already creating, if we have a draftId, or if navigation is in progress
+    const currentDraftId = searchParams.get('draftId');
+    if (isCreatingDraftRef.current || currentDraftId || isNavigatingRef.current) {
+      return null;
+    }
+
+    // Don't retry if previous attempt failed (circuit breaker)
+    if (draftCreationErrorRef.current) {
+      return null;
+    }
+
+    // Cooldown: Don't attempt creation within 5 seconds of last attempt
+    const now = Date.now();
+    if (lastCreationAttemptRef.current && (now - lastCreationAttemptRef.current) < 5000) {
+      return null;
+    }
+
+    // Check if there's meaningful data to save (require PAN + at least one income field > 0)
+    const hasData = dataToSave && (
+      dataToSave.personalInfo?.pan &&
+      dataToSave.personalInfo.pan.length === 10 && // Valid PAN format
+      (
+        (dataToSave.income?.salary > 0) ||
+        (dataToSave.income?.otherIncome > 0) ||
+        (dataToSave.income?.otherSources && (
+          (dataToSave.income.otherSources.totalOtherSourcesIncome || 0) > 0 ||
+          (dataToSave.income.otherSources.totalInterestIncome || 0) > 0 ||
+          (dataToSave.income.otherSources.totalOtherIncome || 0) > 0
+        )) ||
+        (dataToSave.income?.businessIncome > 0) ||
+        (dataToSave.income?.professionalIncome > 0) ||
+        (dataToSave.income?.houseProperty > 0) ||
+        (dataToSave.income?.capitalGains > 0)
+      )
+    );
+
+    if (!hasData) {
+      return null;
+    }
+
+    // If there's already a pending creation, return that promise
+    if (pendingDraftCreationRef.current) {
+      return pendingDraftCreationRef.current;
+    }
+
+    // Record attempt timestamp
+    lastCreationAttemptRef.current = now;
+    isCreatingDraftRef.current = true;
+    const creationPromise = (async () => {
+      try {
+        // Create filing and draft (createITR now calls /drafts endpoint which creates both)
+        const response = await itrService.createITR({
+          itrType: selectedITR,
+          formData: dataToSave,
+          assessmentYear,
+          taxRegime,
+        });
+
+        if (response?.draft?.id || response?.id) {
+          const newDraftId = response.draft?.id || response.id;
+          const newFilingId = response.filing?.id || response.filingId;
+
+          // Mark navigation as in progress
+          isNavigatingRef.current = true;
+
+          // Update URL with draft ID
+          navigate(`/itr/computation?draftId=${newDraftId}`, {
+            replace: true,
+            state: { ...location.state, draftId: newDraftId, filingId: newFilingId },
+          });
+
+          // Store draftId in localStorage
+          try {
+            const draftToSave = {
+              formData: dataToSave,
+              assessmentYear,
+              taxRegime,
+              selectedITR,
+              draftId: newDraftId,
+              filingId: newFilingId,
+              savedAt: new Date().toISOString(),
+            };
+            safeLocalStorageSet(`itr_draft_${newDraftId}`, draftToSave);
+          } catch (e) {
+            // Error already handled by safeLocalStorageSet
+          }
+
+          // Reset error flag on success
+          draftCreationErrorRef.current = false;
+          errorDisplayedRef.current = false;
+
+          // Allow navigation to complete
+          setTimeout(() => {
+            isNavigatingRef.current = false;
+          }, 1000);
+
+          return newDraftId;
+        }
+        return null;
+      } catch (error) {
+        console.error('Failed to create draft automatically', { error });
+        // Set error flag to prevent infinite retries
+        draftCreationErrorRef.current = true;
+
+        // Show error only once
+        if (!errorDisplayedRef.current) {
+          errorDisplayedRef.current = true;
+          // Only show error for 404 (endpoint not found) or 500 (server error)
+          // Don't show for 401 (auth) or 400 (validation) as those are handled elsewhere
+          if (error.response?.status === 404 || error.response?.status === 500) {
+            toast.error('Unable to create draft automatically. Your data is saved locally.', {
+              duration: 5000,
+              id: 'draft-creation-error', // Use ID to prevent duplicates
+            });
+          }
+        }
+
+        // Reset error flag after 30 seconds (circuit breaker cooldown)
+        setTimeout(() => {
+          draftCreationErrorRef.current = false;
+          errorDisplayedRef.current = false;
+        }, 30000);
+
+        return null;
+      } finally {
+        isCreatingDraftRef.current = false;
+        pendingDraftCreationRef.current = null;
+      }
+    })();
+
+    pendingDraftCreationRef.current = creationPromise;
+    return creationPromise;
+  }, [searchParams, selectedITR, assessmentYear, taxRegime, navigate, location.state]);
 
   // Enhanced auto-save using useAutoSave hook
   const saveDraftData = useCallback(async (dataToSave) => {
     if (!draftId) {
-      // Save to localStorage only if no draftId
+      // Try to create draft automatically if we have meaningful data
+      const newDraftId = await createDraftAutomatically(dataToSave);
+
+      if (newDraftId) {
+        // Draft was created, now save to backend
+        try {
+          await formDataService.saveFormData('all', dataToSave, newDraftId);
+          return;
+        } catch (error) {
+          enterpriseLogger.error('Auto-save failed after draft creation', { error });
+          throw error;
+        }
+      }
+
+      // Save to localStorage only if no draftId and draft creation failed/not needed
       const localStorageKey = 'itr_draft_current';
       try {
         const draftToSave = {
@@ -1571,10 +2034,10 @@ const ITRComputation = () => {
           draftId: 'current',
           savedAt: new Date().toISOString(),
         };
-        localStorage.setItem(localStorageKey, JSON.stringify(draftToSave));
+        safeLocalStorageSet(localStorageKey, draftToSave);
         lastSavedTimestampRef.current = draftToSave.savedAt;
       } catch (e) {
-        console.warn('Failed to save draft to localStorage:', e);
+        enterpriseLogger.warn('Failed to save draft to localStorage', { error: e });
       }
       return;
     }
@@ -1584,31 +2047,39 @@ const ITRComputation = () => {
       // Use FormDataService to save all form data
       await formDataService.saveFormData('all', dataToSave, draftId);
     } catch (error) {
-      console.error('Auto-save failed:', error);
+      enterpriseLogger.error('Auto-save failed', { error });
       throw error;
     }
-  }, [draftId, assessmentYear, taxRegime, selectedITR]);
+  }, [draftId, assessmentYear, taxRegime, selectedITR, createDraftAutomatically]);
 
-  // Use enhanced auto-save hook
+  // Use enhanced auto-save hook - enabled for all ITR types regardless of PAN status
+  // Auto-save works as long as we have a draftId (or will save to localStorage as fallback)
   const {
     saveStatus: autoSaveStatusFromHook,
     handleSectionChange: autoSaveSectionChange,
     triggerSave: triggerAutoSave,
+    pendingChanges,
   } = useAutoSave({
     saveFn: saveDraftData,
     data: formData,
     debounceMs: 2000,
     localStorageKey: draftId ? `itr_draft_${draftId}` : 'itr_draft_current',
-    enabled: !!formData.personalInfo?.pan && !!draftId,
+    enabled: true, // Always enabled - will save to localStorage if no draftId, or to backend if draftId exists
     onSaveSuccess: () => {
       setAutoSaveStatus('saved');
+      // Reset error flags on successful save
+      draftCreationErrorRef.current = false;
+      errorDisplayedRef.current = false;
       setTimeout(() => {
         setAutoSaveStatus(prev => (prev === 'saved' ? 'idle' : prev));
       }, 2000);
     },
     onSaveError: (error) => {
       setAutoSaveStatus('error');
-      console.warn('Auto-save error (non-blocking):', error);
+      // Only log non-blocking errors (don't spam console)
+      if (error.response?.status !== 404) {
+        enterpriseLogger.warn('Auto-save error (non-blocking)', { error });
+      }
     },
   });
 
@@ -1618,6 +2089,56 @@ const ITRComputation = () => {
       setAutoSaveStatus(autoSaveStatusFromHook);
     }
   }, [autoSaveStatusFromHook]);
+
+  // Track if there are unsaved changes for beforeunload warning
+  // Consider unsaved if status is 'saving' or 'error', or if there are pending changes
+  const hasUnsavedChanges = useMemo(() => {
+    return autoSaveStatusFromHook === 'saving' || autoSaveStatusFromHook === 'error' || pendingChanges;
+  }, [autoSaveStatusFromHook, pendingChanges]);
+
+  // Warn user before leaving page with unsaved changes
+  useEffect(() => {
+    if (!hasUnsavedChanges || isReadOnly) return;
+
+    const handleBeforeUnload = (e) => {
+      // Modern browsers ignore custom messages, but we can still trigger the default dialog
+      e.preventDefault();
+      e.returnValue = ''; // Required for Chrome
+      return ''; // Required for some browsers
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges, isReadOnly]);
+
+  // Cleanup error toasts on unmount to prevent layout distortion
+  useEffect(() => {
+    return () => {
+      // Dismiss any pending error toasts when component unmounts
+      toast.dismiss('draft-creation-error');
+    };
+  }, []);
+
+  // Handle page visibility changes (pause/resume auto-save when tab is hidden/visible)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Tab is hidden - pause auto-save to save resources
+        // The useAutoSave hook will handle this automatically via its internal logic
+        enterpriseLogger.debug('Page hidden - auto-save will pause');
+      } else {
+        // Tab is visible - resume auto-save
+        enterpriseLogger.debug('Page visible - auto-save will resume');
+        // Trigger a save if there are unsaved changes
+        if (hasUnsavedChanges && draftId) {
+          // The useAutoSave hook will handle this automatically
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [hasUnsavedChanges, draftId]);
 
   // Handle section change with immediate save
   useEffect(() => {
@@ -1674,7 +2195,7 @@ const ITRComputation = () => {
             }
           }
         } catch (e) {
-          console.warn('Failed to sync draft from storage event:', e);
+          enterpriseLogger.warn('Failed to sync draft from storage event', { error: e });
         }
       }
     };
@@ -1740,7 +2261,7 @@ const ITRComputation = () => {
         }
       }
     } catch (error) {
-      console.error('Failed to save draft:', error);
+      enterpriseLogger.error('Failed to save draft', { error });
       const errorMessage = error.response?.data?.error || error.message || 'Failed to save draft';
       toast.error(errorMessage, {
         duration: 4000,
@@ -1831,12 +2352,6 @@ const ITRComputation = () => {
         } : undefined,
         otherIncome: 0,
       },
-      businessIncome: (selectedITR === 'ITR-3' || selectedITR === 'ITR3') ? {
-        businesses: [],
-      } : undefined,
-      professionalIncome: (selectedITR === 'ITR-3' || selectedITR === 'ITR3') ? {
-        professions: [],
-      } : undefined,
       balanceSheet: (selectedITR === 'ITR-3' || selectedITR === 'ITR3') ? {
         hasBalanceSheet: false,
         assets: {
@@ -1899,7 +2414,7 @@ const ITRComputation = () => {
             }
           }
         } catch (error) {
-          console.error('Failed to load filing:', error);
+          enterpriseLogger.error('Failed to load filing', { error });
         }
       }
     };
@@ -1940,7 +2455,7 @@ const ITRComputation = () => {
 
       toast.success('JSON file downloaded successfully');
     } catch (error) {
-      console.error('Download error:', error);
+      enterpriseLogger.error('Download error', { error });
       if (error.message && error.message.includes('logged in')) {
         toast.error('Please log in to download JSON file');
       } else if (error.message && error.message.includes('validation')) {
@@ -1965,8 +2480,8 @@ const ITRComputation = () => {
         deductions: formData.deductions || {},
         // eslint-disable-next-line camelcase
         taxes_paid: formData.taxesPaid || {},
-        businessIncome: formData.businessIncome,
-        professionalIncome: formData.professionalIncome,
+        businessIncome: formData.income?.businessIncome,
+        professionalIncome: formData.income?.professionalIncome,
         balanceSheet: formData.balanceSheet,
         auditInfo: formData.auditInfo,
       };
@@ -2085,7 +2600,7 @@ const ITRComputation = () => {
       // Form is valid, show E-verification modal
       setShowEVerificationModal(true);
     } catch (error) {
-      console.error('Validation error:', error);
+      enterpriseLogger.error('Validation error', { error });
       toast.error('Validation failed. Please check your form data.');
     }
   }, [formData, selectedITR, validationEngine]);
@@ -2118,10 +2633,15 @@ const ITRComputation = () => {
 
       if (submitResponse.data.filing) {
         toast.success('ITR submitted successfully!');
-        navigate(`/itr/acknowledgment?filingId=${submitResponse.data.filing.id}`);
+        navigate(`/itr/acknowledgment?filingId=${submitResponse.data.filing.id}`, {
+          state: {
+            ackNumber: submitResponse.data.filing.acknowledgmentNumber,
+            filing: submitResponse.data.filing,
+          },
+        });
       }
     } catch (error) {
-      console.error('ITR submission error:', error);
+      enterpriseLogger.error('ITR submission error', { error });
       toast.error(error.response?.data?.error || 'Failed to submit ITR');
     }
   }, [draftId, formData, navigate]);
@@ -2274,8 +2794,9 @@ const ITRComputation = () => {
 
     // ITR-3 restrictions
     if (itr === 'ITR-3' || itr === 'ITR3') {
+      // Hide businessIncome and professionalIncome as they're now in the income section
       // Show all sections except presumptive income
-      if (['presumptiveIncome', 'goodsCarriage'].includes(sectionId)) {
+      if (['businessIncome', 'professionalIncome', 'presumptiveIncome', 'goodsCarriage'].includes(sectionId)) {
         return false;
       }
       return true;
@@ -2360,8 +2881,28 @@ const ITRComputation = () => {
       total += parseFloat(income.professionalIncome) || 0;
     }
 
-    // Other income
-    total += parseFloat(income.otherIncome) || 0;
+    // Other sources income (from OtherSourcesForm - structured format)
+    if (typeof income.otherSources === 'object' && income.otherSources) {
+      // Use totalOtherSourcesIncome if available, otherwise calculate from components
+      const otherSourcesTotal = parseFloat(income.otherSources.totalOtherSourcesIncome || 0) ||
+        (parseFloat(income.otherSources.totalInterestIncome || 0) +
+         parseFloat(income.otherSources.totalOtherIncome || 0));
+      total += otherSourcesTotal;
+    } else {
+      // Fallback to legacy otherIncome field for backward compatibility
+      total += parseFloat(income.otherIncome) || 0;
+    }
+
+    // Also check formData.otherSources (root level) for backward compatibility
+    if (formData?.otherSources && typeof formData.otherSources === 'object') {
+      const rootOtherSourcesTotal = parseFloat(formData.otherSources.totalOtherSourcesIncome || 0) ||
+        (parseFloat(formData.otherSources.totalInterestIncome || 0) +
+         parseFloat(formData.otherSources.totalOtherIncome || 0));
+      // Only add if not already included via income.otherSources
+      if (!income.otherSources || !income.otherSources.totalOtherSourcesIncome) {
+        total += rootOtherSourcesTotal;
+      }
+    }
 
     // Capital gains
     if (typeof income.capitalGains === 'object' && income.capitalGains?.stcgDetails) {
@@ -2391,8 +2932,47 @@ const ITRComputation = () => {
     total += parseFloat(income.directorPartner?.directorIncome) || 0;
     total += parseFloat(income.directorPartner?.partnerIncome) || 0;
 
+    // Validation: Log warning if income sources might be missing (development only)
+    if (process.env.NODE_ENV === 'development') {
+      const hasOtherSources = (income.otherSources && (
+        (income.otherSources.totalOtherSourcesIncome || 0) > 0 ||
+        (income.otherSources.totalInterestIncome || 0) > 0 ||
+        (income.otherSources.totalOtherIncome || 0) > 0
+      )) || (formData?.otherSources && (
+        (formData.otherSources.totalOtherSourcesIncome || 0) > 0 ||
+        (formData.otherSources.totalInterestIncome || 0) > 0 ||
+        (formData.otherSources.totalOtherIncome || 0) > 0
+      ));
+
+      if (hasOtherSources && total === 0) {
+        enterpriseLogger.warn('[Income Validation] otherSources data exists but grossIncome is 0 - check aggregation logic');
+      }
+
+      // Check if otherSources is in formData but not in income
+      if (formData?.otherSources && !income.otherSources) {
+        enterpriseLogger.warn('[Income Validation] otherSources found at root level but not in income.otherSources - may not be aggregated correctly');
+      }
+
+      // Check for very large numbers that might cause precision issues
+      if (total > 100000000) { // 10 crores
+        enterpriseLogger.warn('[Income Validation] Very large gross income detected', { total });
+      }
+
+      // Check for income structure consistency
+      const hasStructuredBusiness = typeof income.businessIncome === 'object' && income.businessIncome?.businesses;
+      const hasLegacyBusiness = typeof income.businessIncome === 'number' && income.businessIncome > 0;
+      if (hasStructuredBusiness && hasLegacyBusiness) {
+        enterpriseLogger.warn('[Income Validation] Both structured and legacy businessIncome formats detected - potential data inconsistency');
+      }
+
+      // Check for negative income values
+      if (total < 0) {
+        enterpriseLogger.error('[Income Validation] Negative gross income detected', { total });
+      }
+    }
+
     return total;
-  }, [formData?.income]);
+  }, [formData?.income, formData?.otherSources]);
 
   // Memoized deductions calculation
   const deductions = useMemo(() => {
@@ -2595,20 +3175,13 @@ const ITRComputation = () => {
         </div>
       </header>
 
-      {/* Tax Computation Bar - Fixed below header - Compact */}
-      <div className="bg-white border-b border-neutral-200 z-40 flex-shrink-0" style={{ height: '56px' }}>
-        <div className="max-w-[1920px] mx-auto px-3 h-full flex items-center">
-          <TaxComputationBar
-            grossIncome={grossIncome}
-            deductions={deductions}
-            taxableIncome={taxableIncome}
-            taxPayable={taxPayable}
-            tdsPaid={tdsPaid}
-        aiTip={recommendations?.[0]?.description || recommendations?.[0]?.title || null}
-        onDismissTip={() => {
-          // Remove the first recommendation from the list
-          setRecommendations(prev => prev.slice(1));
-        }}
+      {/* Tax Computation Bar - Sticky top (Desktop) / Fixed top (Mobile) */}
+      <TaxComputationBar
+        grossIncome={grossIncome}
+        deductions={deductions}
+        taxableIncome={taxableIncome}
+        taxPayable={taxPayable}
+        tdsPaid={tdsPaid}
         onFileClick={() => {
           // Navigate to review/filing page
           navigate('/itr/review', {
@@ -2628,9 +3201,8 @@ const ITRComputation = () => {
         taxComputation={taxComputation}
         regimeComparison={regimeComparison}
         selectedRegime={taxRegime}
-          />
-        </div>
-      </div>
+        isComputingTax={isComputingTax}
+      />
 
       {/* Resume Modal */}
       {showResumeModal && currentFiling && (
@@ -2643,7 +3215,15 @@ const ITRComputation = () => {
       )}
 
       {/* Main Content - Sidebar + Content Layout */}
-      <main className="flex-1 overflow-hidden flex" style={{ height: 'calc(100vh - 48px - 56px)' }}>
+      {/* Height calculation: 100vh - header (48px) - tax bar (56px desktop, 48px mobile) */}
+      <main
+        className="flex-1 overflow-hidden flex itr-computation-main"
+        style={{
+          // Desktop: header (48px) + tax bar (56px) = 104px
+          // Mobile: header (48px) + tax bar (48px) = 96px
+          height: 'calc(100vh - var(--header-height) - var(--tax-bar-height-desktop))',
+        }}
+      >
         {/* Sidebar Navigation */}
         <div className="hidden lg:block">
           <ComputationSidebar
@@ -2671,7 +3251,7 @@ const ITRComputation = () => {
         />
 
         {/* Main Content Area */}
-        <div className="flex-1 overflow-y-auto bg-neutral-50">
+        <div className="flex-1 overflow-y-auto bg-neutral-50 itr-computation-container">
           {/* Auto-Population Progress Banner - Compact */}
           {(isPrefetching || autoPopulationSummary) && (
             <div className="bg-neutral-50 border-b border-neutral-200 px-3 py-1.5 flex-shrink-0">
@@ -2842,9 +3422,15 @@ const ITRComputation = () => {
             </motion.div>
           </div>
 
-          {/* Read-only notice (minimal) */}
+          {/* Read-only notice (minimal) - Positioned to avoid conflicts with mobile menu button */}
           {isReadOnly && (
-            <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-info-100 text-info-800 px-4 py-2 rounded-full text-sm shadow-md z-40">
+            <div
+              className="fixed left-1/2 -translate-x-1/2 bg-info-100 text-info-800 px-4 py-2 rounded-full text-sm shadow-md z-40"
+              style={{
+                // Position above mobile menu button (bottom-20 = 5rem = 80px)
+                bottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))',
+              }}
+            >
               <Info className="h-4 w-4 inline mr-2" />
               Read-only mode
             </div>

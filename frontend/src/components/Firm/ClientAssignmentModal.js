@@ -4,6 +4,7 @@
 // =====================================================
 
 import React, { useState, useEffect } from 'react';
+import { enterpriseLogger } from '../../utils/logger';
 import { X, User, Save, Loader } from 'lucide-react';
 import Modal from '../common/Modal';
 import Button from '../common/Button';
@@ -33,7 +34,7 @@ const ClientAssignmentModal = ({ isOpen, onClose, clientId, firmId, onAssignment
         setStaff(response.data.data || []);
       }
     } catch (error) {
-      console.error('Failed to fetch staff:', error);
+      enterpriseLogger.error('Failed to fetch staff', { error });
     }
   };
 
@@ -45,7 +46,7 @@ const ClientAssignmentModal = ({ isOpen, onClose, clientId, firmId, onAssignment
         setAssignments(response.data.data || []);
       }
     } catch (error) {
-      console.error('Failed to fetch assignments:', error);
+      enterpriseLogger.error('Failed to fetch assignments', { error });
     }
   };
 
@@ -75,7 +76,7 @@ const ClientAssignmentModal = ({ isOpen, onClose, clientId, firmId, onAssignment
       }
     } catch (error) {
       toast.error(error.response?.data?.error || 'Failed to assign client.');
-      console.error('Assignment error:', error);
+      enterpriseLogger.error('Assignment error', { error });
     } finally {
       setLoading(false);
     }

@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
+import { getAriaLabel, getAriaDescribedBy } from '../../utils/accessibility';
 import {
   User,
   MapPin,
@@ -141,7 +142,7 @@ const PersonalInfoForm = ({ intakeId, defaultValues, onSave, onNext }) => {
         reset(response.data);
       }
     } catch (error) {
-      console.error('Failed to load personal info:', error);
+      enterpriseLogger.error('Failed to load personal info', { error });
     } finally {
       setLoading(false);
     }
@@ -154,7 +155,7 @@ const PersonalInfoForm = ({ intakeId, defaultValues, onSave, onNext }) => {
         setValidation(response.data.validation);
       }
     } catch (error) {
-      console.error('Failed to validate personal info:', error);
+      enterpriseLogger.error('Failed to validate personal info', { error });
     }
   };
 
@@ -172,7 +173,7 @@ const PersonalInfoForm = ({ intakeId, defaultValues, onSave, onNext }) => {
       }
     } catch (error) {
       toast.error('Failed to save personal information');
-      console.error('Save error:', error);
+      enterpriseLogger.error('Save error', { error });
     } finally {
       setLoading(false);
     }
@@ -215,6 +216,9 @@ const PersonalInfoForm = ({ intakeId, defaultValues, onSave, onNext }) => {
                 <select
                   id="gender"
                   {...register('gender')}
+                  aria-label={getAriaLabel('Gender', true, errors.gender?.message)}
+                  aria-describedby={getAriaDescribedBy('gender', null, errors.gender?.message)}
+                  aria-invalid={!!errors.gender}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                 >
                   <option value="">Select Gender</option>
@@ -223,8 +227,8 @@ const PersonalInfoForm = ({ intakeId, defaultValues, onSave, onNext }) => {
                   <option value="OTHER">Other</option>
                 </select>
                 {errors.gender && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center">
-                    <AlertCircle className="h-4 w-4 mr-1" />
+                  <p id="gender-error" role="alert" className="mt-1 text-sm text-red-600 flex items-center" aria-live="polite">
+                    <AlertCircle className="h-4 w-4 mr-1" aria-hidden="true" />
                     {errors.gender.message}
                   </p>
                 )}
@@ -241,11 +245,14 @@ const PersonalInfoForm = ({ intakeId, defaultValues, onSave, onNext }) => {
                   {...register('aadhaar')}
                   placeholder="12-digit Aadhaar number"
                   maxLength="12"
+                  aria-label={getAriaLabel('Aadhaar Number', false, errors.aadhaar?.message)}
+                  aria-describedby={getAriaDescribedBy('aadhaar', null, errors.aadhaar?.message)}
+                  aria-invalid={!!errors.aadhaar}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                 />
                 {errors.aadhaar && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center">
-                    <AlertCircle className="h-4 w-4 mr-1" />
+                  <p id="aadhaar-error" role="alert" className="mt-1 text-sm text-red-600 flex items-center" aria-live="polite">
+                    <AlertCircle className="h-4 w-4 mr-1" aria-hidden="true" />
                     {errors.aadhaar.message}
                   </p>
                 )}

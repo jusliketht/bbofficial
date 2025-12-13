@@ -10,6 +10,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 // Core components (keep synchronous - needed immediately)
 import Layout from './components/Layout.js';
 import ErrorBoundary from './components/ErrorBoundary';
+import { ErrorBoundary as DesignSystemErrorBoundary } from './components/DesignSystem';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import RouteLoader from './components/UI/RouteLoader';
 import { ITRProvider } from './contexts/ITRContext';
@@ -69,6 +70,9 @@ const AdminControlPanel = lazy(() => import('./pages/Admin/AdminControlPanel'));
 const PlatformCompliance = lazy(() => import('./pages/Admin/PlatformCompliance'));
 const InvoiceManagement = lazy(() => import('./pages/Admin/InvoiceManagement'));
 const AdminSettings = lazy(() => import('./pages/Admin/AdminSettings'));
+const AdminAuditLogs = lazy(() => import('./pages/Admin/AdminAuditLogs'));
+const AdminActivityLogs = lazy(() => import('./pages/Admin/AdminActivityLogs'));
+const AdminSecurityLogs = lazy(() => import('./pages/Admin/AdminSecurityLogs'));
 
 // CA Firm components
 const CAFirmAdminDashboard = lazy(() => import('./pages/Dashboard/CAFirmAdminDashboard'));
@@ -85,7 +89,12 @@ const FilingHistory = lazy(() => import('./pages/ITR/FilingHistory'));
 const FilingPersonSelector = lazy(() => import('./components/ITR/FilingPersonSelector'));
 const ITRComputation = lazy(() => import('./pages/ITR/ITRComputation'));
 const RefundTracking = lazy(() => import('./pages/ITR/RefundTracking'));
+const ITRVTracking = lazy(() => import('./pages/ITR/ITRVTracking'));
+const AssessmentNotices = lazy(() => import('./pages/ITR/AssessmentNotices'));
+const TaxDemands = lazy(() => import('./pages/ITR/TaxDemands'));
+const FilingAnalytics = lazy(() => import('./pages/ITR/FilingAnalytics'));
 const EVerification = lazy(() => import('./pages/ITR/EVerification'));
+const Acknowledgment = lazy(() => import('./pages/Acknowledgment'));
 const ITRFormSelection = lazy(() => import('./pages/ITR/ITRFormSelection'));
 const ITRModeSelection = lazy(() => import('./pages/ITR/ITRModeSelection'));
 const ITRDirectSelection = lazy(() => import('./pages/ITR/ITRDirectSelection'));
@@ -578,6 +587,42 @@ const AppContent = () => {
             }
           />
           <Route
+            path="/admin/audit/logs"
+            element={
+              <Suspense fallback={<RouteLoader message="Loading admin panel..." />}>
+                <AdminLayout>
+                  <Suspense fallback={<RouteLoader message="Loading audit logs..." />}>
+                    <AdminAuditLogs />
+                  </Suspense>
+                </AdminLayout>
+              </Suspense>
+            }
+          />
+          <Route
+            path="/admin/audit/admin-activity"
+            element={
+              <Suspense fallback={<RouteLoader message="Loading admin panel..." />}>
+                <AdminLayout>
+                  <Suspense fallback={<RouteLoader message="Loading admin activity..." />}>
+                    <AdminActivityLogs />
+                  </Suspense>
+                </AdminLayout>
+              </Suspense>
+            }
+          />
+          <Route
+            path="/admin/audit/security"
+            element={
+              <Suspense fallback={<RouteLoader message="Loading admin panel..." />}>
+                <AdminLayout>
+                  <Suspense fallback={<RouteLoader message="Loading security logs..." />}>
+                    <AdminSecurityLogs />
+                  </Suspense>
+                </AdminLayout>
+              </Suspense>
+            }
+          />
+          <Route
             path="/firm/dashboard"
             element={
               <Suspense fallback={<RouteLoader message="Loading admin panel..." />}>
@@ -676,7 +721,9 @@ const AppContent = () => {
             element={
               <Layout>
                 <Suspense fallback={<RouteLoader message="Loading ITR computation..." />}>
-                  <ITRComputation />
+                  <DesignSystemErrorBoundary showDetails={process.env.NODE_ENV === 'development'}>
+                    <ITRComputation />
+                  </DesignSystemErrorBoundary>
                 </Suspense>
               </Layout>
             }
@@ -686,7 +733,9 @@ const AppContent = () => {
             element={
               <Layout>
                 <Suspense fallback={<RouteLoader message="Loading ITR filing..." />}>
-                  <ITRComputation />
+                  <DesignSystemErrorBoundary showDetails={process.env.NODE_ENV === 'development'}>
+                    <ITRComputation />
+                  </DesignSystemErrorBoundary>
                 </Suspense>
               </Layout>
             }
@@ -755,11 +804,61 @@ const AppContent = () => {
             }
           />
           <Route
+            path="/itr/itrv-tracking"
+            element={
+              <Layout>
+                <Suspense fallback={<RouteLoader message="Loading ITR-V tracking..." />}>
+                  <ITRVTracking />
+                </Suspense>
+              </Layout>
+            }
+          />
+          <Route
+            path="/itr/assessment-notices"
+            element={
+              <Layout>
+                <Suspense fallback={<RouteLoader message="Loading assessment notices..." />}>
+                  <AssessmentNotices />
+                </Suspense>
+              </Layout>
+            }
+          />
+          <Route
+            path="/itr/tax-demands"
+            element={
+              <Layout>
+                <Suspense fallback={<RouteLoader message="Loading tax demands..." />}>
+                  <TaxDemands />
+                </Suspense>
+              </Layout>
+            }
+          />
+          <Route
+            path="/itr/analytics"
+            element={
+              <Layout>
+                <Suspense fallback={<RouteLoader message="Loading filing analytics..." />}>
+                  <FilingAnalytics />
+                </Suspense>
+              </Layout>
+            }
+          />
+          <Route
             path="/itr/e-verify"
             element={
               <Layout>
                 <Suspense fallback={<RouteLoader message="Loading e-verification..." />}>
                   <EVerification />
+                </Suspense>
+              </Layout>
+            }
+          />
+          <Route
+            path="/itr/acknowledgment"
+            element={
+              <Layout>
+                <Suspense fallback={<RouteLoader message="Loading acknowledgment..." />}>
+                  <Acknowledgment />
                 </Suspense>
               </Layout>
             }

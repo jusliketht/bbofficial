@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import adminService from '../../services/api/adminService';
 import toast from 'react-hot-toast';
+import { enterpriseLogger } from '../../utils/logger';
 
 const InvoiceManagement = () => {
   const [invoices, setInvoices] = useState([]);
@@ -72,7 +73,7 @@ const InvoiceManagement = () => {
 
         setInvoices(transformedInvoices);
       } catch (error) {
-        console.error('Failed to fetch invoices:', error);
+        enterpriseLogger.error('Failed to fetch invoices:', { error });
         toast.error('Failed to load invoices. Please try again.');
         setInvoices([]);
       } finally {
@@ -152,11 +153,11 @@ const InvoiceManagement = () => {
         break;
       case 'resend':
         // Resend invoice email
-        console.log('Resend invoice:', invoice.id);
+        enterpriseLogger.info('Resend invoice:', { invoiceId: invoice.id });
         break;
       case 'mark_paid':
         // Mark invoice as paid
-        console.log('Mark invoice as paid:', invoice.id);
+        enterpriseLogger.info('Mark invoice as paid:', { invoiceId: invoice.id });
         break;
       default:
         break;

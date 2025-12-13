@@ -8,6 +8,7 @@ import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, X, Loader } from 'lu
 import apiClient from '../../services/core/APIClient';
 import toast from 'react-hot-toast';
 import { useAddSTCGEntry, useAddLTCGEntry } from '../../features/income/capital-gains/hooks/use-capital-gains';
+import { enterpriseLogger } from '../../utils/logger';
 
 const BrokerFileUpload = ({ filingId, onImportComplete, className = '' }) => {
   const [isUploading, setIsUploading] = useState(false);
@@ -77,7 +78,7 @@ const BrokerFileUpload = ({ filingId, onImportComplete, className = '' }) => {
         throw new Error(response.data.error || 'Failed to process file');
       }
     } catch (error) {
-      console.error('Broker file upload error:', error);
+      enterpriseLogger.error('Broker file upload error', { error });
       setError(error.response?.data?.details || error.message || 'Failed to process broker file');
       toast.error('Failed to process broker file');
     } finally {
@@ -195,7 +196,7 @@ const BrokerFileUpload = ({ filingId, onImportComplete, className = '' }) => {
         fileInputRef.current.value = '';
       }
     } catch (error) {
-      console.error('Failed to apply import:', error);
+      enterpriseLogger.error('Failed to apply import', { error });
       toast.error('Failed to import capital gains data');
     }
   };

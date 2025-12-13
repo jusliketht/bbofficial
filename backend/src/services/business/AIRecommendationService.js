@@ -19,9 +19,11 @@ class AIRecommendationService {
    * @param {string} assessmentYear - Assessment year
    * @returns {Promise<array>} Array of recommendations
    */
-  async generateRecommendations(formData, itrType, assessmentYear = '2024-25') {
+  async generateRecommendations(formData, itrType, assessmentYear = null) {
+    const { getDefaultAssessmentYear } = require('../../constants/assessmentYears');
+    const finalAssessmentYear = assessmentYear || getDefaultAssessmentYear();
     try {
-      enterpriseLogger.info('Generating AI recommendations', { itrType, assessmentYear });
+      enterpriseLogger.info('Generating AI recommendations', { itrType, assessmentYear: finalAssessmentYear });
 
       const recommendations = [];
 
@@ -273,60 +275,153 @@ class AIRecommendationService {
   }
 
   /**
-   * Generate optimization suggestions for tax optimizer
+   * Generate optimization suggestions for tax optimizer with enhanced context
    * @param {object} formData - Current form data
    * @param {string} itrType - ITR type
-   * @returns {Array} - Array of optimization suggestions
+   * @param {object} userProfile - User profile (age, risk profile, etc.)
+   * @returns {Array} - Array of optimization suggestions with explanations
    */
-  generateOptimizationSuggestions(formData, itrType) {
+  generateOptimizationSuggestions(formData, itrType, userProfile = {}) {
     const suggestions = [];
     const deductions = formData.deductions || {};
     const income = formData.income || {};
     const grossTotalIncome = this.calculateGrossTotalIncome(formData);
+    const personalInfo = formData.personalInfo || {};
+    const age = userProfile.age || this.calculateAge(personalInfo.dateOfBirth) || 30;
+    const riskProfile = userProfile.riskProfile || 'moderate';
 
-    // Section 80C optimization
+    // Section 80C optimization with personalized recommendations
     const current80C = parseFloat(deductions.section80C || 0);
     if (current80C < 150000 && grossTotalIncome > 500000) {
       const remaining80C = 150000 - current80C;
+      const taxSavings = this.estimateTaxSavings(remaining80C, grossTotalIncome);
+      const explanation = this.explainSuggestion({ type: 'section80C' }, formData);
+      
+      // Personalized investment recommendations based on age and risk profile
+      let recommendedInvestments = [];
+      if (age < 35 && riskProfile === 'aggressive') {
+        recommendedInvestments = ['ELSS Mutual Funds (equity exposure)', 'PPF (long-term safety)', 'Life Insurance'];
+      } else if (age < 50 && riskProfile === 'moderate') {
+        recommendedInvestments = ['ELSS Mutual Funds', 'PPF', 'NSC', 'Tax-saving FDs'];
+      } else {
+        recommendedInvestments = ['PPF (safe, long-term)', 'NSC (fixed returns)', 'Tax-saving FDs', 'Life Insurance'];
+      }
+
       suggestions.push({
         type: 'section80C',
         title: 'Maximize Section 80C Deduction',
-        description: `Invest ₹${remaining80C.toLocaleString('en-IN')} more to maximize Section 80C deduction`,
-        potentialSavings: this.estimateTaxSavings(remaining80C, grossTotalIncome),
+        description: `Invest ₹${remaining80C.toLocaleString('en-IN')} more to maximize Section 80C deduction and save ₹${taxSavings.toLocaleString('en-IN')} in taxes`,
+        potentialSavings: taxSavings,
         investmentAmount: remaining80C,
         priority: remaining80C > 50000 ? 'high' : 'medium',
+        impactScore: this.calculateImpactScore({ potentialSavings: taxSavings, priority: remaining80C > 50000 ? 'high' : 'medium' }, grossTotalIncome * 0.3),
+        explanation: explanation.fullExplanation,
+        whyThisSuggestion: explanation.why,
+        howToImplement: explanation.how,
+        impactDetails: explanation.impact,
+        deadline: explanation.deadline,
+        recommendedInvestments: recommendedInvestments,
+        context: {
+          currentIncome: grossTotalIncome,
+          taxBracket: this.getTaxBracket(grossTotalIncome),
+          currentDeduction: current80C,
+          maxDeduction: 150000,
+        },
       });
     }
 
-    // NPS optimization
+    // NPS optimization with context
     const currentNPS = parseFloat(deductions.section80CCD || 0);
-    if (currentNPS < 50000 && grossTotalIncome > 500000) {
+    if (currentNPS < 50000 && grossTotalIncome > 500000 && age < 60) {
       const remainingNPS = 50000 - currentNPS;
+      const taxSavings = this.estimateTaxSavings(remainingNPS, grossTotalIncome);
+      const explanation = this.explainSuggestion({ type: 'section80CCD' }, formData);
+
       suggestions.push({
         type: 'section80CCD',
         title: 'Additional NPS Contribution',
-        description: `Contribute ₹${remainingNPS.toLocaleString('en-IN')} more to NPS for additional deduction`,
-        potentialSavings: this.estimateTaxSavings(remainingNPS, grossTotalIncome),
+        description: `Contribute ₹${remainingNPS.toLocaleString('en-IN')} more to NPS for additional deduction beyond Section 80C`,
+        potentialSavings: taxSavings,
         investmentAmount: remainingNPS,
         priority: 'medium',
+        impactScore: this.calculateImpactScore({ potentialSavings: taxSavings, priority: 'medium' }, grossTotalIncome * 0.3),
+        explanation: explanation.fullExplanation,
+        whyThisSuggestion: explanation.why,
+        howToImplement: explanation.how,
+        impactDetails: explanation.impact,
+        deadline: explanation.deadline,
+        context: {
+          currentIncome: grossTotalIncome,
+          taxBracket: this.getTaxBracket(grossTotalIncome),
+          age: age,
+          retirementBenefit: true,
+        },
       });
     }
 
-    // Health Insurance optimization
+    // Health Insurance optimization with age-based limits
+    const max80D = age >= 60 ? 50000 : 25000;
     const current80D = parseFloat(deductions.section80D || 0);
-    if (current80D < 25000 && grossTotalIncome > 300000) {
-      const remaining80D = 25000 - current80D;
+    if (current80D < max80D && grossTotalIncome > 300000) {
+      const remaining80D = max80D - current80D;
+      const taxSavings = this.estimateTaxSavings(remaining80D, grossTotalIncome);
+      const explanation = this.explainSuggestion({ type: 'section80D' }, formData);
+
       suggestions.push({
         type: 'section80D',
-        title: 'Health Insurance Premium',
-        description: `Purchase health insurance with premium ₹${remaining80D.toLocaleString('en-IN')} for deduction`,
-        potentialSavings: this.estimateTaxSavings(remaining80D, grossTotalIncome),
+        title: age >= 60 ? 'Maximize Health Insurance Deduction (Senior Citizen)' : 'Health Insurance Premium Deduction',
+        description: `Purchase health insurance with premium ₹${remaining80D.toLocaleString('en-IN')} to claim full Section 80D deduction`,
+        potentialSavings: taxSavings,
         investmentAmount: remaining80D,
         priority: 'high',
+        impactScore: this.calculateImpactScore({ potentialSavings: taxSavings, priority: 'high' }, grossTotalIncome * 0.3),
+        explanation: explanation.fullExplanation,
+        whyThisSuggestion: explanation.why,
+        howToImplement: explanation.how,
+        impactDetails: explanation.impact,
+        deadline: explanation.deadline,
+        context: {
+          age: age,
+          maxDeduction: max80D,
+          currentDeduction: current80D,
+          includesParents: true,
+        },
       });
     }
 
-    return suggestions;
+    // Regime comparison suggestion
+    const oldRegimeTax = formData.taxComputation?.oldRegime?.totalTax || 0;
+    const newRegimeTax = formData.taxComputation?.newRegime?.totalTax || 0;
+    if (oldRegimeTax > 0 && newRegimeTax > 0) {
+      const savings = Math.abs(oldRegimeTax - newRegimeTax);
+      const betterRegime = oldRegimeTax < newRegimeTax ? 'old' : 'new';
+      
+      if (savings > 10000) {
+        suggestions.push({
+          type: 'regimeSwitch',
+          title: `Switch to ${betterRegime === 'old' ? 'Old' : 'New'} Regime`,
+          description: `By switching to the ${betterRegime === 'old' ? 'Old' : 'New'} regime, you can save ₹${savings.toLocaleString('en-IN')} in taxes`,
+          potentialSavings: savings,
+          investmentAmount: 0,
+          priority: savings > 50000 ? 'high' : 'medium',
+          impactScore: this.calculateImpactScore({ potentialSavings: savings, priority: savings > 50000 ? 'high' : 'medium' }, Math.max(oldRegimeTax, newRegimeTax)),
+          explanation: `The ${betterRegime === 'old' ? 'Old' : 'New'} regime is more beneficial for your income profile. ${betterRegime === 'old' ? 'Old regime allows deductions under various sections (80C, 80D, etc.) which reduce your taxable income.' : 'New regime offers a flat ₹50,000 standard deduction and lower tax rates, which may be more beneficial if you have limited deductions.'}`,
+          whyThisSuggestion: `Based on your current deductions and income, the ${betterRegime === 'old' ? 'Old' : 'New'} regime results in lower tax liability.`,
+          howToImplement: `Simply select the ${betterRegime === 'old' ? 'Old' : 'New'} regime when filing your ITR.`,
+          impactDetails: `This will reduce your tax liability by ₹${savings.toLocaleString('en-IN')}.`,
+          deadline: 'You can choose the regime at the time of filing.',
+          context: {
+            oldRegimeTax: oldRegimeTax,
+            newRegimeTax: newRegimeTax,
+            currentRegime: formData.regime || 'old',
+            recommendedRegime: betterRegime,
+          },
+        });
+      }
+    }
+
+    // Rank suggestions by impact score
+    return this.rankSuggestionsByImpact(suggestions, Math.max(oldRegimeTax, newRegimeTax));
   }
 
   /**
@@ -351,18 +446,85 @@ class AIRecommendationService {
   }
 
   /**
-   * Explain a suggestion
+   * Explain a suggestion with detailed reasoning
    * @param {object} suggestion - Suggestion object
-   * @returns {string} - Explanation text
+   * @param {object} formData - Form data for context
+   * @returns {object} - Detailed explanation with why, how, and impact
    */
-  explainSuggestion(suggestion) {
+  explainSuggestion(suggestion, formData = {}) {
+    const income = formData.income || {};
+    const deductions = formData.deductions || {};
+    const grossTotalIncome = this.calculateGrossTotalIncome(formData);
+    const personalInfo = formData.personalInfo || {};
+    const age = personalInfo.age || this.calculateAge(personalInfo.dateOfBirth);
+
     const explanations = {
-      section80C: `Section 80C allows deduction up to ₹1.5 lakhs for investments in ELSS, PPF, NSC, Tax-saving FD, Life Insurance, etc.`,
-      section80CCD: `Section 80CCD provides additional deduction up to ₹50,000 for NPS contributions beyond the ₹1.5 lakhs limit of Section 80C.`,
-      section80D: `Section 80D allows deduction for health insurance premiums paid for self, family, and parents.`,
-      hraOptimization: `HRA exemption is calculated as the minimum of: (1) Actual HRA received, (2) Rent paid minus 10% of basic salary, (3) 50% of basic salary.`,
+      section80C: {
+        why: `Based on your income of ₹${grossTotalIncome.toLocaleString('en-IN')}, you're in the ${this.getTaxBracket(grossTotalIncome)} tax bracket. Maximizing Section 80C can significantly reduce your tax liability.`,
+        how: `You can invest in any combination of: ELSS mutual funds (equity exposure + tax benefit), PPF (safe, long-term), NSC (fixed returns), Tax-saving FDs (bank deposits), Life Insurance premiums, or Home Loan principal repayment.`,
+        impact: `By investing ₹${(150000 - (deductions.section80C || 0)).toLocaleString('en-IN')} more, you'll save ₹${this.estimateTaxSavings(150000 - (deductions.section80C || 0), grossTotalIncome).toLocaleString('en-IN')} in taxes (${this.getTaxBracket(grossTotalIncome)} rate).`,
+        deadline: `Investments must be made before March 31st of the financial year to claim deduction.`,
+      },
+      section80CCD: {
+        why: `NPS contributions provide an additional deduction of up to ₹50,000 beyond the ₹1.5 lakhs Section 80C limit. This is especially beneficial for higher income earners.`,
+        how: `Contribute to your NPS Tier-1 account. The contribution is eligible for deduction under Section 80CCD(1B), which is over and above the Section 80C limit.`,
+        impact: `By contributing ₹${(50000 - (deductions.section80CCD || 0)).toLocaleString('en-IN')} more to NPS, you'll save ₹${this.estimateTaxSavings(50000 - (deductions.section80CCD || 0), grossTotalIncome).toLocaleString('en-IN')} in taxes while building retirement corpus.`,
+        deadline: `NPS contributions must be made before March 31st.`,
+      },
+      section80D: {
+        why: age >= 60
+          ? `As a senior citizen, you can claim up to ₹50,000 for health insurance premiums, providing better tax benefits.`
+          : `Health insurance is essential for financial security and provides tax benefits under Section 80D.`,
+        how: `Purchase health insurance for yourself, spouse, children, and parents. Premiums paid are eligible for deduction.`,
+        impact: `By claiming ₹${(age >= 60 ? 50000 : 25000) - (deductions.section80D || 0)} in health insurance premiums, you'll save ₹${this.estimateTaxSavings((age >= 60 ? 50000 : 25000) - (deductions.section80D || 0), grossTotalIncome).toLocaleString('en-IN')} in taxes while protecting your family's health.`,
+        deadline: `Premium must be paid before March 31st.`,
+      },
+      hraOptimization: {
+        why: `HRA exemption can significantly reduce your taxable salary income if you're paying rent.`,
+        how: `HRA exemption is calculated as the minimum of: (1) Actual HRA received, (2) Rent paid minus 10% of basic salary, (3) 50% of basic salary (metro) or 40% (non-metro).`,
+        impact: `Optimizing HRA can reduce your taxable income by up to the exempt amount, saving taxes at your applicable rate.`,
+        deadline: `Rent receipts and rental agreement must be maintained for the full year.`,
+      },
     };
-    return explanations[suggestion.type] || 'This optimization can help reduce your tax liability.';
+
+    const baseExplanation = explanations[suggestion.type] || {
+      why: 'This optimization can help reduce your tax liability based on your current financial situation.',
+      how: 'Follow the suggested action to implement this optimization.',
+      impact: `This can save you approximately ₹${(suggestion.potentialSavings || 0).toLocaleString('en-IN')} in taxes.`,
+      deadline: 'Ensure actions are completed before March 31st of the financial year.',
+    };
+
+    return {
+      why: baseExplanation.why,
+      how: baseExplanation.how,
+      impact: baseExplanation.impact,
+      deadline: baseExplanation.deadline,
+      fullExplanation: `${baseExplanation.why}\n\n${baseExplanation.how}\n\n${baseExplanation.impact}\n\nNote: ${baseExplanation.deadline}`,
+    };
+  }
+
+  /**
+   * Calculate age from date of birth
+   */
+  calculateAge(dateOfBirth) {
+    if (!dateOfBirth) return null;
+    const dob = new Date(dateOfBirth);
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+      age--;
+    }
+    return age;
+  }
+
+  /**
+   * Get tax bracket description
+   */
+  getTaxBracket(income) {
+    if (income > 1000000) return '30%';
+    if (income > 500000) return '20%';
+    return '5%';
   }
 
   /**

@@ -3,17 +3,81 @@
 // Component for building tax-saving simulation scenarios
 // =====================================================
 
-import React, { useState } from 'react';
-import { Plus, X, TrendingUp, Building2, Heart, Home, Calculator } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, X, TrendingUp, Building2, Heart, Home, Calculator, Save, FolderOpen, Star, Download } from 'lucide-react';
 import Button from '../../../components/common/Button';
+import apiClient from '../../../services/core/APIClient';
+import toast from 'react-hot-toast';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const ScenarioBuilder = ({ filingId, onSimulate, onCompare }) => {
+  const queryClient = useQueryClient();
   const [scenarios, setScenarios] = useState([]);
   const [currentScenario, setCurrentScenario] = useState({
     type: 'section80C',
     name: '',
+    description: '',
     changes: {},
   });
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showLoadModal, setShowLoadModal] = useState(false);
+
+  // Fetch saved scenarios
+  const { data: savedScenariosData, refetch: refetchScenarios } = useQuery({
+    queryKey: ['scenarios', filingId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filingId) params.append('filingId', filingId);
+      const response = await apiClient.get(`/itr/scenarios?${params.toString()}`);
+      return response.data.data;
+    },
+    enabled: !!filingId,
+  });
+
+  const savedScenarios = savedScenariosData?.scenarios || [];
+
+  // Save scenario mutation
+  const saveScenarioMutation = useMutation({
+    mutationFn: async (scenarioData) => {
+      const response = await apiClient.post('/itr/scenarios', {
+        filingId,
+        ...scenarioData,
+      });
+      return response.data.data;
+    },
+    onSuccess: () => {
+      toast.success('Scenario saved successfully!');
+      setShowSaveModal(false);
+      queryClient.invalidateQueries(['scenarios', filingId]);
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || 'Failed to save scenario');
+    },
+  });
+
+  const handleSaveScenario = () => {
+    if (!currentScenario.name || !currentScenario.changes.amount) {
+      toast.error('Please provide a scenario name and amount');
+      return;
+    }
+    saveScenarioMutation.mutate({
+      name: currentScenario.name,
+      description: currentScenario.description,
+      scenarioType: currentScenario.type,
+      changes: currentScenario.changes,
+    });
+  };
+
+  const handleLoadScenario = (savedScenario) => {
+    setCurrentScenario({
+      type: savedScenario.scenarioType,
+      name: savedScenario.name,
+      description: savedScenario.description || '',
+      changes: savedScenario.changes,
+    });
+    setShowLoadModal(false);
+    toast.success('Scenario loaded!');
+  };
 
   const scenarioTypes = [
     {
@@ -335,7 +399,25 @@ const ScenarioBuilder = ({ filingId, onSimulate, onCompare }) => {
       )}
 
       {/* Actions */}
-      <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+      <div className="flex justify-between items-center pt-4 border-t border-gray-200">
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowLoadModal(true)}
+            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center"
+          >
+            <FolderOpen className="h-4 w-4 mr-2" />
+            Load Saved
+          </button>
+          {scenarios.length > 0 || (currentScenario.changes.amount && currentScenario.name) ? (
+            <button
+              onClick={() => setShowSaveModal(true)}
+              className="px-4 py-2 bg-info-500 text-white rounded-lg hover:bg-info-600 flex items-center"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              Save Scenario
+            </button>
+          ) : null}
+        </div>
         <button
           onClick={handleSimulate}
           disabled={scenarios.length === 0 && (!currentScenario.changes.amount && currentScenario.type !== 'hraOptimization')}
@@ -345,6 +427,115 @@ const ScenarioBuilder = ({ filingId, onSimulate, onCompare }) => {
           {scenarios.length > 1 ? 'Compare Scenarios' : 'Simulate Scenario'}
         </button>
       </div>
+
+      {/* Save Modal */}
+      {showSaveModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Save Scenario</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Scenario Name <span className="text-error-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={currentScenario.name}
+                  onChange={(e) => setCurrentScenario({ ...currentScenario, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  placeholder="e.g., Max 80C Investment"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description (Optional)
+                </label>
+                <textarea
+                  value={currentScenario.description}
+                  onChange={(e) => setCurrentScenario({ ...currentScenario, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  rows={3}
+                  placeholder="Add a description..."
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={() => setShowSaveModal(false)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveScenario}
+                disabled={!currentScenario.name || saveScenarioMutation.isPending}
+                className="px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 disabled:bg-gray-300"
+              >
+                {saveScenarioMutation.isPending ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Load Modal */}
+      {showLoadModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Load Saved Scenario</h3>
+            {savedScenarios.length === 0 ? (
+              <div className="text-center py-8">
+                <FolderOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">No saved scenarios found</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {savedScenarios.map((scenario) => (
+                  <div
+                    key={scenario.id}
+                    className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer"
+                    onClick={() => handleLoadScenario(scenario)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-medium text-gray-900">{scenario.name}</h4>
+                          {scenario.isFavorite && (
+                            <Star className="h-4 w-4 text-gold-500 fill-current" />
+                          )}
+                        </div>
+                        {scenario.description && (
+                          <p className="text-sm text-gray-600 mt-1">{scenario.description}</p>
+                        )}
+                        <p className="text-xs text-gray-500 mt-1">
+                          Type: {scenario.scenarioType} • Created: {new Date(scenario.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleLoadScenario(scenario);
+                        }}
+                        className="ml-4 px-3 py-1 bg-gold-500 text-white rounded hover:bg-gold-600 text-sm"
+                      >
+                        Load
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => setShowLoadModal(false)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -5,7 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
-import StatusBadge from '../../components/common/StatusBadge';
+import StatusBadge from '../../components/DesignSystem/StatusBadge';
 import Modal from '../../components/common/Modal';
 import FileUpload from '../Documents/FileUpload';
 import FileManager from '../Documents/FileManager';

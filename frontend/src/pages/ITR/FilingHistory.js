@@ -8,13 +8,15 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useITR } from '../../contexts/ITRContext';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
-import StatusBadge from '../../components/common/StatusBadge';
+import StatusBadge from '../../components/DesignSystem/StatusBadge';
+import { LoadingState } from '../../components/DesignSystem';
 import FilingStatusBadge from '../../components/ITR/FilingStatusBadge';
 import InvoiceBadge from '../../components/ITR/InvoiceBadge';
 import PauseResumeButton from '../../components/ITR/PauseResumeButton';
 import { FileText, Eye, Download, Calendar, User, Building2, IndianRupee } from 'lucide-react';
 import toast from 'react-hot-toast';
 import itrService from '../../services/api/itrService';
+import { enterpriseLogger } from '../../utils/logger';
 
 const FilingHistory = () => {
   const { user } = useAuth();
@@ -130,7 +132,7 @@ const FilingHistory = () => {
         toast.error(response.error || 'Failed to download acknowledgment');
       }
     } catch (error) {
-      console.error('Error downloading acknowledgment:', error);
+      enterpriseLogger.error('Error downloading acknowledgment', { error });
       toast.error(error.response?.data?.error || 'Failed to download acknowledgment');
     }
   };
@@ -146,7 +148,7 @@ const FilingHistory = () => {
         toast.error(response.error || 'Failed to download ITR');
       }
     } catch (error) {
-      console.error('Error downloading ITR:', error);
+      enterpriseLogger.error('Error downloading ITR', { error });
       toast.error(error.response?.data?.error || 'Failed to download ITR');
     }
   };
@@ -171,12 +173,7 @@ const FilingHistory = () => {
     return (
       <div className="min-h-screen bg-neutral-50 p-4 lg:p-6">
         <div className="max-w-6xl mx-auto">
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
-              <p className="text-neutral-600">Loading filing history...</p>
-            </div>
-          </div>
+          <LoadingState message="Loading filing history..." fullScreen={false} />
         </div>
       </div>
     );

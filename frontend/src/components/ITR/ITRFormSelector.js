@@ -4,6 +4,7 @@
 // =====================================================
 
 import React, { useState, useEffect } from 'react';
+import { enterpriseLogger } from '../../utils/logger';
 import { FileText, TrendingUp, Building2, Calculator, Info, CheckCircle, Loader } from 'lucide-react';
 import ITRAutoDetector from '../../services/ITRAutoDetector';
 import apiClient from '../../services/core/APIClient';
@@ -83,14 +84,14 @@ const ITRFormSelector = ({ selectedPerson, verificationResult, onITRSelect, init
         }
       } catch (apiError) {
         // Backend API is optional, continue with frontend recommendation
-        console.warn('Backend recommendation API not available, using frontend analysis');
+        enterpriseLogger.warn('Backend recommendation API not available, using frontend analysis');
       }
 
       if (onITRSelect) {
         onITRSelect(recommendedITR);
       }
     } catch (err) {
-      console.error('Analysis error:', err);
+      enterpriseLogger.error('Analysis error', { error: err });
       setError('Failed to analyze and recommend ITR form');
       setSelectedITR('ITR-1');
       if (onITRSelect) {

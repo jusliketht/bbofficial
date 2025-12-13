@@ -12,7 +12,7 @@ import AnimatedNumber from '../UI/AnimatedNumber';
 import { formatIndianCurrency } from '../../lib/format';
 
 // Compact flow item for the summary bar
-const CompactFlowItem = ({ label, value, isLast = false, highlight = false }) => (
+const CompactFlowItem = ({ label, value, isLast = false, highlight = false, isLoading = false }) => (
   <div className="flex items-center gap-3">
     <motion.div
       className="flex flex-col"
@@ -22,9 +22,20 @@ const CompactFlowItem = ({ label, value, isLast = false, highlight = false }) =>
       <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">
         {label}
       </span>
-      <span className="text-base font-bold text-slate-900 tabular-nums">
-        <AnimatedNumber value={value} format="currency" compact />
-      </span>
+      {isLoading ? (
+        <div className="flex items-center gap-1.5">
+          <motion.div
+            className="w-3 h-3 border-2 border-primary-500 border-t-transparent rounded-full"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          />
+          <span className="text-xs text-slate-500">Calculating...</span>
+        </div>
+      ) : (
+        <span className="text-base font-bold text-slate-900 tabular-nums">
+          <AnimatedNumber value={value} format="currency" compact />
+        </span>
+      )}
     </motion.div>
     {!isLast && (
       <motion.div
@@ -116,7 +127,7 @@ const RegimeBadge = ({ regime, isRecommended, savings, onClick, isOpen }) => (
 );
 
 // Glassmorphism dropdown for regime comparison
-const RegimeComparisonDropdown = ({ computedValues, recommendedRegime, savings, onClose }) => {
+const RegimeComparisonDropdown = ({ computedValues, recommendedRegime, savings, onClose, isMobile = false }) => {
   const oldRefund = Math.max(0, computedValues.tdsPaid - computedValues.taxPayableOld);
   const newRefund = Math.max(0, computedValues.tdsPaid - computedValues.taxPayableNew);
   const oldDue = Math.max(0, computedValues.taxPayableOld - computedValues.tdsPaid);
@@ -128,10 +139,14 @@ const RegimeComparisonDropdown = ({ computedValues, recommendedRegime, savings, 
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -10, scale: 0.95 }}
       transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-      className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[560px] max-w-[95vw]"
+      className={`absolute top-full left-1/2 -translate-x-1/2 mt-3 z-[70] ${isMobile ? 'w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)]' : 'w-[560px] max-w-[95vw]'}`}
     >
       {/* Backdrop blur container */}
-      <div className="bg-white/95 backdrop-blur-xl rounded-2xl border border-slate-200 shadow-2xl shadow-slate-900/10 overflow-hidden">
+      <div className="bg-white/95 backdrop-blur-xl rounded-2xl border border-slate-200 shadow-2xl shadow-slate-900/10 overflow-hidden overflow-y-auto"
+        style={{
+          maxHeight: isMobile ? 'calc(100vh - 200px)' : '80vh',
+        }}
+      >
         {/* Header */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
           <div className="flex items-center gap-2">
@@ -150,7 +165,7 @@ const RegimeComparisonDropdown = ({ computedValues, recommendedRegime, savings, 
 
         {/* Comparison Cards */}
         <div className="p-6">
-          <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-2'} gap-4 mb-6`}>
             {/* Old Regime Card */}
             <motion.div
               className={`
@@ -282,6 +297,7 @@ const TaxComputationBar = ({
   taxComputation,
   regimeComparison,
   selectedRegime = 'old', // Current selected regime from header
+  isComputingTax = false, // Loading state for tax computation
   className = '',
 }) => {
   const [isMobile, setIsMobile] = useState(false);
@@ -467,52 +483,58 @@ const TaxComputationBar = ({
   const netResult = computedValues.tdsPaid - netTax;
   const isRecommended = currentRegime === recommendedRegime;
 
-  // DESKTOP: Compact 60px bar with glassmorphism
+  // DESKTOP: Fixed top bar with horizontal format per wireframe
   if (!isMobile) {
     return (
       <div
         ref={dropdownRef}
-        className={`tax-computation-bar-desktop z-40 flex-shrink-0 ${className}`}
+        className={`tax-computation-bar-desktop sticky top-0 z-40 flex-shrink-0 ${className}`}
         role="region"
         aria-label="Tax computation summary"
       >
-        {/* Glassmorphism background */}
-        <div className="bg-white/80 backdrop-blur-xl border-b border-slate-200/50 shadow-sm">
-          <div className="max-w-[1440px] mx-auto px-4 md:px-8 lg:px-12 h-[60px]">
-            <div className="flex items-center justify-between h-full gap-6">
-              {/* Flow Indicator */}
-              <div className="flex items-center gap-4">
-                <CompactFlowItem label="Income" value={computedValues.grossIncome} />
-                <CompactFlowItem label="Deductions" value={currentRegime === 'old' ? computedValues.deductionsOld : computedValues.deductionsNew} />
-                <CompactFlowItem label="Tax" value={netTax} isLast />
-              </div>
-
-              {/* Result Badge */}
-              <ResultBadge isRefund={netResult >= 0} amount={netResult} />
-
-              {/* Regime Display (read-only, shows current selection) */}
-              <RegimeBadge
-                regime={currentRegime}
-                isRecommended={isRecommended}
-                savings={isRecommended ? savings : 0}
-                onClick={() => setShowDropdown(!showDropdown)}
-                isOpen={showDropdown}
-              />
-
-              {/* File ITR Button */}
-              <motion.button
-                onClick={onFileClick}
-                className="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold text-sm shadow-lg shadow-primary-500/25 hover:shadow-xl hover:shadow-primary-500/30 transition-shadow"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                Review & File
-              </motion.button>
+        {/* Background with subtle border */}
+        <div className="bg-white border-b border-slate-200 shadow-sm">
+          <div className="max-w-[1440px] mx-auto px-4 md:px-8 lg:px-12">
+            <div className="flex items-center justify-center h-16 gap-8">
+              {/* Horizontal format: TOTAL INCOME | DEDUCTIONS | TAX */}
+              {isComputingTax && !taxComputation?.isClientSide ? (
+                <div className="flex items-center gap-2 text-slate-600">
+                  <motion.div
+                    className="w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                  />
+                  <span className="text-sm">Calculating tax...</span>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-slate-600">TOTAL INCOME:</span>
+                    <span className="text-base font-bold text-slate-900 tabular-nums">
+                      {formatIndianCurrency(computedValues.grossIncome)}
+                    </span>
+                  </div>
+                  <span className="text-slate-300">|</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-slate-600">DEDUCTIONS:</span>
+                    <span className="text-base font-bold text-slate-900 tabular-nums">
+                      {formatIndianCurrency(currentRegime === 'old' ? computedValues.deductionsOld : computedValues.deductionsNew)}
+                    </span>
+                  </div>
+                  <span className="text-slate-300">|</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-slate-600">TAX:</span>
+                    <span className="text-base font-bold text-slate-900 tabular-nums">
+                      {formatIndianCurrency(netTax)}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Dropdown */}
+        {/* Dropdown for regime comparison (optional, can be triggered elsewhere) */}
         <AnimatePresence>
           {showDropdown && (
             <RegimeComparisonDropdown
@@ -520,6 +542,7 @@ const TaxComputationBar = ({
               recommendedRegime={recommendedRegime}
               savings={savings}
               onClose={() => setShowDropdown(false)}
+              isMobile={isMobile}
             />
           )}
         </AnimatePresence>
@@ -527,123 +550,45 @@ const TaxComputationBar = ({
     );
   }
 
-  // MOBILE: Fixed bottom bar
+  // MOBILE: Fixed top bar with compact format per wireframe
   return (
-    <motion.div
-      className={`tax-computation-bar-mobile fixed bottom-0 left-0 right-0 z-50 ${className}`}
-      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0)' }}
-      animate={{ height: isExpanded ? 320 : 88 }}
-      transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+    <div
+      className={`tax-computation-bar-mobile fixed top-0 left-0 right-0 z-50 ${className}`}
       role="region"
       aria-label="Tax computation summary"
     >
-      {/* Glassmorphism background */}
-      <div className="h-full bg-white/95 backdrop-blur-xl border-t border-slate-200 shadow-2xl shadow-slate-900/10 rounded-t-3xl overflow-hidden">
-        {/* Drag Handle */}
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="w-full flex justify-center py-3 cursor-pointer"
-          aria-label={isExpanded ? 'Collapse tax bar' : 'Expand tax bar'}
-        >
-          <motion.div
-            className="w-12 h-1.5 bg-slate-300 rounded-full"
-            animate={{ backgroundColor: isExpanded ? '#94a3b8' : '#cbd5e1' }}
-          />
-        </button>
-
-        {!isExpanded ? (
-          // Collapsed: Key info
-          <div className="px-4 pb-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className={`text-lg font-bold ${netResult >= 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
-                  {netResult >= 0 ? 'Refund' : 'Due'}: {formatIndianCurrency(Math.abs(netResult))}
-                </div>
-                <div className="flex items-center gap-1 text-sm text-emerald-600">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>{recommendedRegime.toUpperCase()} saves {formatIndianCurrency(savings)}</span>
-                </div>
-              </div>
-              <motion.button
-                onClick={onFileClick}
-                className="px-5 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold text-sm shadow-lg"
-                whileTap={{ scale: 0.95 }}
-              >
-                File ITR →
-              </motion.button>
+      {/* Background with border */}
+      <div className="bg-white border-b border-slate-200 shadow-sm">
+        <div className="px-4 py-3">
+          {isComputingTax && !taxComputation?.isClientSide ? (
+            <div className="flex items-center justify-center gap-2 text-slate-600">
+              <motion.div
+                className="w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+              />
+              <span className="text-sm">Calculating tax...</span>
             </div>
-          </div>
-        ) : (
-          // Expanded: Full comparison
-          <div className="px-4 pb-4 overflow-y-auto" style={{ maxHeight: '280px' }}>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-slate-900">Tax Summary</h3>
-              <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-full">AY 2024-25</span>
-            </div>
-
-            {/* Regime Cards */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className={`p-3 rounded-xl ${recommendedRegime === 'old' ? 'bg-emerald-50 border-2 border-emerald-300' : 'bg-slate-50 border border-slate-200'}`}>
-                <div className="text-xs font-medium text-slate-500 mb-1">Old Regime</div>
-                <div className="text-lg font-bold text-slate-900 tabular-nums">{formatIndianCurrency(computedValues.taxPayableOld)}</div>
-                {recommendedRegime === 'old' && (
-                  <span className="text-[10px] font-bold text-emerald-600">✓ BEST</span>
-                )}
+          ) : (
+            <div className="flex items-center justify-center gap-4 text-sm">
+              <div className="flex items-center gap-1.5">
+                <span className="font-medium text-slate-600">TOTAL:</span>
+                <span className="font-bold text-slate-900 tabular-nums">
+                  {formatIndianCurrency(computedValues.grossIncome)}
+                </span>
               </div>
-              <div className={`p-3 rounded-xl ${recommendedRegime === 'new' ? 'bg-emerald-50 border-2 border-emerald-300' : 'bg-slate-50 border border-slate-200'}`}>
-                <div className="text-xs font-medium text-slate-500 mb-1">New Regime</div>
-                <div className="text-lg font-bold text-slate-900 tabular-nums">{formatIndianCurrency(computedValues.taxPayableNew)}</div>
-                {recommendedRegime === 'new' && (
-                  <span className="text-[10px] font-bold text-emerald-600">✓ BEST</span>
-                )}
+              <span className="text-slate-300">|</span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-medium text-slate-600">TAX:</span>
+                <span className="font-bold text-slate-900 tabular-nums">
+                  {formatIndianCurrency(netTax)}
+                </span>
               </div>
             </div>
-
-            {/* Breakdown */}
-            <div className="space-y-2 text-sm mb-4">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Gross Income</span>
-                <span className="font-medium text-slate-900 tabular-nums">{formatIndianCurrency(computedValues.grossIncome)}</span>
-              </div>
-              {computedValues.agriculturalIncome > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Agricultural Income <span className="text-xs text-slate-400">(exempt)</span></span>
-                  <span className="font-medium text-slate-900 tabular-nums">{formatIndianCurrency(computedValues.agriculturalIncome)}</span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-slate-500">Deductions</span>
-                <span className="font-medium text-slate-900 tabular-nums">{formatIndianCurrency(computedValues.deductionsOld)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">TDS Paid</span>
-                <span className="font-medium text-slate-900 tabular-nums">{formatIndianCurrency(computedValues.tdsPaid)}</span>
-              </div>
-            </div>
-
-            {/* Savings Banner */}
-            {savings > 0 && (
-              <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl p-3 mb-4 flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-white" />
-                <div className="text-white">
-                  <p className="text-xs font-medium text-emerald-100">You save with {recommendedRegime === 'old' ? 'Old' : 'New'} Regime</p>
-                  <p className="text-lg font-bold">{formatIndianCurrency(savings)}</p>
-                </div>
-              </div>
-            )}
-
-            {/* CTA */}
-            <motion.button
-              onClick={onFileClick}
-              className="w-full py-3.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg"
-              whileTap={{ scale: 0.98 }}
-            >
-              Review & File ITR →
-            </motion.button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </motion.div>
+    </div>
   );
 };
 

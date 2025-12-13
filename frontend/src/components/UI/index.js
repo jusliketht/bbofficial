@@ -8,8 +8,8 @@ export { default as BreakdownList } from './BreakdownList/BreakdownList';
 export { default as ComparisonTable } from './ComparisonTable/ComparisonTable';
 
 // Status & Feedback Components
-export { default as StatusBadge, StatusDot } from '../common/StatusBadge';
-export { default as EmptyState, NoDataEmptyState, UploadEmptyState, ErrorEmptyState, NoResultsEmptyState } from './EmptyState/EmptyState';
+export { default as StatusBadge, StatusDot } from '../DesignSystem/StatusBadge';
+export { default as EmptyState, NoDataEmptyState, UploadEmptyState, ErrorEmptyState, NoResultsEmptyState } from '../DesignSystem/EmptyState';
 
 // Source & Data Provenance
 export { default as SourceChip } from './SourceChip/SourceChip';

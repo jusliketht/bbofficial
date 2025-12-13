@@ -4,6 +4,7 @@
 // =====================================================
 
 import React, { useState, useEffect } from 'react';
+import { enterpriseLogger } from '../../utils/logger';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
@@ -68,7 +69,7 @@ const FilingPersonSelector = () => {
         });
         setMemberFilingStats(statsMap);
       } catch (error) {
-        console.error('Failed to load member filing stats:', error);
+        enterpriseLogger.error('Failed to load member filing stats', { error });
       } finally {
         setIsLoadingFilings(false);
       }

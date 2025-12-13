@@ -16,15 +16,19 @@ class UserController {
     enterpriseLogger.info('UserController initialized');
 
     // Bind methods to preserve 'this' context
-    if (this.getUserDashboard) {this.getUserDashboard = this.getUserDashboard.bind(this);}
-    if (this.getUserProfile) {this.getUserProfile = this.getUserProfile.bind(this);}
-    if (this.updateUserProfile) {this.updateUserProfile = this.updateUserProfile.bind(this);}
-    if (this.getUserSettings) {this.getUserSettings = this.getUserSettings.bind(this);}
-    if (this.updateUserSettings) {this.updateUserSettings = this.updateUserSettings.bind(this);}
-    if (this.getUserNotifications) {this.getUserNotifications = this.getUserNotifications.bind(this);}
-    if (this.markNotificationAsRead) {this.markNotificationAsRead = this.markNotificationAsRead.bind(this);}
-    if (this.markAllNotificationsAsRead) {this.markAllNotificationsAsRead = this.markAllNotificationsAsRead.bind(this);}
-    if (this.changePassword) {this.changePassword = this.changePassword.bind(this);}
+    this.getUserDashboard = this.getUserDashboard.bind(this);
+    this.getUserProfile = this.getUserProfile.bind(this);
+    this.updateUserProfile = this.updateUserProfile.bind(this);
+    this.getUserSettings = this.getUserSettings.bind(this);
+    this.updateUserSettings = this.updateUserSettings.bind(this);
+    this.getUserNotifications = this.getUserNotifications.bind(this);
+    this.markNotificationAsRead = this.markNotificationAsRead.bind(this);
+    this.markAllNotificationsAsRead = this.markAllNotificationsAsRead.bind(this);
+    this.changePassword = this.changePassword.bind(this);
+    this.verifyAadhaar = this.verifyAadhaar.bind(this);
+    this.linkAadhaar = this.linkAadhaar.bind(this);
+    this.unlinkAadhaar = this.unlinkAadhaar.bind(this);
+    this.getAadhaarStatus = this.getAadhaarStatus.bind(this);
   }
 
   // =====================================================
@@ -43,7 +47,7 @@ class UserController {
         attributes: [
           'id', 'userId', 'fullName', 'email', 'phone', 'role', 'status',
           'emailVerified', 'phoneVerified', 'createdAt', 'updatedAt',
-          'lastLoginAt', 'loginCount', 'metadata', 'authProvider', 'passwordHash', 'dateOfBirth',
+          'lastLoginAt', 'metadata', 'authProvider', 'passwordHash', 'dateOfBirth',
           'panNumber', 'panVerified', 'panVerifiedAt',
         ],
       });
@@ -81,7 +85,6 @@ class UserController {
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
             lastLoginAt: user.lastLoginAt,
-            loginCount: user.loginCount,
             metadata: user.metadata,
             dateOfBirth: user.dateOfBirth,
             panNumber: user.panNumber,
@@ -641,33 +644,22 @@ class UserController {
       const whereClause = { userId };
 
       if (unreadOnly === 'true') {
-        whereClause.isRead = false;
+        whereClause.read = false;
       }
 
-      // This would typically query a notifications table
-      // For now, return mock data
-      const notifications = [
-        {
-          id: '1',
-          type: 'filing_status_update',
-          title: 'ITR Filing Status Update',
-          message: 'Your ITR-1 filing has been submitted successfully',
-          isRead: false,
-          createdAt: new Date().toISOString(),
-          data: { filingId: 'filing-123', status: 'submitted' },
-        },
-        {
-          id: '2',
-          type: 'document_verification',
-          title: 'Document Verification Complete',
-          message: 'Your Form 16 has been verified and processed',
-          isRead: true,
-          createdAt: new Date(Date.now() - 3600000).toISOString(),
-          data: { documentId: 'doc-456', status: 'verified' },
-        },
-      ];
+      // Query notifications from database
+      const { Notification } = require('../models');
 
-      const unreadCount = notifications.filter(n => !n.isRead).length;
+      const { count, rows: notifications } = await Notification.findAndCountAll({
+        where: whereClause,
+        order: [['createdAt', 'DESC']],
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+      });
+
+      const unreadCount = await Notification.count({
+        where: { ...whereClause, read: false },
+      });
 
       enterpriseLogger.info('User notifications retrieved', { userId, count: notifications.length });
 
@@ -675,12 +667,20 @@ class UserController {
         success: true,
         message: 'Notifications retrieved successfully',
         data: {
-          notifications,
+          notifications: notifications.map(n => ({
+            id: n.id,
+            type: n.type,
+            title: n.title,
+            message: n.message,
+            isRead: n.read,
+            createdAt: n.createdAt,
+            data: n.metadata || {},
+          })),
           pagination: {
-            currentPage: parseInt(page),
-            totalPages: 1,
-            totalItems: notifications.length,
-            itemsPerPage: parseInt(limit),
+            total: count,
+            page: parseInt(page),
+            limit: parseInt(limit),
+            totalPages: Math.ceil(count / limit),
           },
           unreadCount,
         },
@@ -1206,6 +1206,246 @@ class UserController {
       });
     } catch (error) {
       enterpriseLogger.error('Failed to set primary bank account', {
+        error: error.message,
+        userId: req.user?.userId,
+      });
+      next(error);
+    }
+  }
+
+  // =====================================================
+  // AADHAAR LINKING MANAGEMENT
+  // =====================================================
+
+  /**
+   * Verify Aadhaar number
+   * POST /api/users/aadhaar/verify
+   */
+  async verifyAadhaar(req, res, next) {
+    try {
+      const userId = req.user.userId;
+      const { aadhaarNumber } = req.body;
+
+      if (!aadhaarNumber) {
+        return res.status(400).json({
+          success: false,
+          error: 'Aadhaar number is required',
+        });
+      }
+
+      const aadhaarVerificationService = require('../services/business/AadhaarVerificationService');
+      const verificationResult = await aadhaarVerificationService.verifyAadhaar(aadhaarNumber, userId);
+
+      if (!verificationResult.success || !verificationResult.verified) {
+        return res.status(400).json({
+          success: false,
+          error: 'Aadhaar verification failed',
+        });
+      }
+
+      // Log audit event
+      await auditService.logEvent(
+        userId,
+        'aadhaar_verified',
+        'user_profile',
+        { aadhaar: aadhaarVerificationService.maskAadhaar(aadhaarNumber) },
+        req.ip,
+        req.headers['user-agent'],
+      );
+
+      res.status(200).json({
+        success: true,
+        message: 'Aadhaar verified successfully',
+        data: {
+          verified: true,
+          aadhaarNumber: aadhaarVerificationService.maskAadhaar(aadhaarNumber),
+          name: verificationResult.name,
+          dateOfBirth: verificationResult.dateOfBirth,
+          gender: verificationResult.gender,
+          address: verificationResult.address,
+          verificationData: verificationResult,
+        },
+      });
+    } catch (error) {
+      enterpriseLogger.error('Aadhaar verification failed', {
+        error: error.message,
+        userId: req.user?.userId,
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Link verified Aadhaar to user profile
+   * POST /api/users/aadhaar/link
+   */
+  async linkAadhaar(req, res, next) {
+    try {
+      const userId = req.user.userId;
+      const { aadhaarNumber, verificationData } = req.body;
+
+      if (!aadhaarNumber) {
+        return res.status(400).json({
+          success: false,
+          error: 'Aadhaar number is required',
+        });
+      }
+
+      // Verify Aadhaar first
+      const aadhaarVerificationService = require('../services/business/AadhaarVerificationService');
+      const verificationResult = await aadhaarVerificationService.verifyAadhaar(aadhaarNumber, userId);
+
+      if (!verificationResult.success || !verificationResult.verified) {
+        return res.status(400).json({
+          success: false,
+          error: 'Aadhaar verification failed. Please verify Aadhaar first.',
+        });
+      }
+
+      // Get or create user profile
+      let userProfile = await UserProfile.findOne({ where: { userId } });
+      if (!userProfile) {
+        userProfile = await UserProfile.create({ userId });
+      }
+
+      // Check if Aadhaar is already linked to another user
+      const existingProfile = await UserProfile.findOne({
+        where: {
+          aadhaarNumber: aadhaarNumber.replace(/\s/g, ''),
+          userId: { [Op.ne]: userId },
+        },
+      });
+
+      if (existingProfile) {
+        return res.status(409).json({
+          success: false,
+          error: 'This Aadhaar number is already linked to another account',
+        });
+      }
+
+      // Update user profile with Aadhaar information
+      await userProfile.update({
+        aadhaarNumber: aadhaarNumber.replace(/\s/g, ''),
+        aadhaarLinked: true,
+        aadhaarVerifiedAt: new Date(),
+        aadhaarVerificationData: verificationResult.rawData || verificationData || {},
+      });
+
+      // Log audit event
+      await auditService.logEvent(
+        userId,
+        'aadhaar_linked',
+        'user_profile',
+        { aadhaar: aadhaarVerificationService.maskAadhaar(aadhaarNumber) },
+        req.ip,
+        req.headers['user-agent'],
+      );
+
+      enterpriseLogger.info('Aadhaar linked to user profile', {
+        userId,
+        aadhaar: aadhaarVerificationService.maskAadhaar(aadhaarNumber),
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'Aadhaar linked successfully',
+        data: {
+          aadhaarLinked: true,
+          aadhaarNumber: aadhaarVerificationService.maskAadhaar(aadhaarNumber),
+          verifiedAt: userProfile.aadhaarVerifiedAt,
+        },
+      });
+    } catch (error) {
+      enterpriseLogger.error('Aadhaar linking failed', {
+        error: error.message,
+        userId: req.user?.userId,
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Unlink Aadhaar from user profile
+   * DELETE /api/users/aadhaar/unlink
+   */
+  async unlinkAadhaar(req, res, next) {
+    try {
+      const userId = req.user.userId;
+
+      const userProfile = await UserProfile.findOne({ where: { userId } });
+      if (!userProfile || !userProfile.aadhaarNumber) {
+        return res.status(404).json({
+          success: false,
+          error: 'Aadhaar is not linked to your account',
+        });
+      }
+
+      const maskedAadhaar = userProfile.aadhaarNumber.substring(0, 4) + '****' + userProfile.aadhaarNumber.substring(8);
+
+      // Unlink Aadhaar
+      await userProfile.update({
+        aadhaarNumber: null,
+        aadhaarLinked: false,
+        aadhaarVerifiedAt: null,
+        aadhaarVerificationData: null,
+      });
+
+      // Log audit event
+      await auditService.logEvent(
+        userId,
+        'aadhaar_unlinked',
+        'user_profile',
+        { aadhaar: maskedAadhaar },
+        req.ip,
+        req.headers['user-agent'],
+      );
+
+      enterpriseLogger.info('Aadhaar unlinked from user profile', {
+        userId,
+        aadhaar: maskedAadhaar,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'Aadhaar unlinked successfully',
+      });
+    } catch (error) {
+      enterpriseLogger.error('Aadhaar unlinking failed', {
+        error: error.message,
+        userId: req.user?.userId,
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Get Aadhaar linking status
+   * GET /api/users/aadhaar/status
+   */
+  async getAadhaarStatus(req, res, next) {
+    try {
+      const userId = req.user.userId;
+
+      const userProfile = await UserProfile.findOne({
+        where: { userId },
+        attributes: ['aadhaarNumber', 'aadhaarLinked', 'aadhaarVerifiedAt'],
+      });
+
+      const aadhaarVerificationService = require('../services/business/AadhaarVerificationService');
+      const maskedAadhaar = userProfile?.aadhaarNumber
+        ? aadhaarVerificationService.maskAadhaar(userProfile.aadhaarNumber)
+        : null;
+
+      res.status(200).json({
+        success: true,
+        data: {
+          aadhaarLinked: userProfile?.aadhaarLinked || false,
+          aadhaarNumber: maskedAadhaar,
+          verifiedAt: userProfile?.aadhaarVerifiedAt || null,
+        },
+      });
+    } catch (error) {
+      enterpriseLogger.error('Get Aadhaar status failed', {
         error: error.message,
         userId: req.user?.userId,
       });

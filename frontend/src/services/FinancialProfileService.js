@@ -6,6 +6,7 @@
 import { apiClient } from './core/APIClient';
 import { taxSavingsService } from './taxSavingsService';
 import { dataIntegrationService } from './DataIntegrationService';
+import { enterpriseLogger } from '../utils/logger';
 
 class FinancialProfileService {
   constructor() {
@@ -49,7 +50,7 @@ class FinancialProfileService {
    */
   async createFinancialProfile(userId, profileData) {
     try {
-      console.log('📊 Creating comprehensive financial profile...');
+      enterpriseLogger.info('Creating comprehensive financial profile');
 
       const profile = {
         userId,
@@ -137,7 +138,7 @@ class FinancialProfileService {
       const response = await apiClient.post('/financial-profile/create', profile);
 
       if (response.success) {
-        console.log('✅ Financial profile created successfully');
+        enterpriseLogger.info('Financial profile created successfully');
         await this.performInitialAnalysis(userId);
         return { success: true, profileId: response.data.profileId, profile };
       }
@@ -145,7 +146,7 @@ class FinancialProfileService {
       return { success: false, error: 'Failed to create profile' };
 
     } catch (error) {
-      console.error('❌ Error creating financial profile:', error);
+      enterpriseLogger.error('Error creating financial profile', { error });
       return { success: false, error: error.message };
     }
   }
@@ -155,7 +156,7 @@ class FinancialProfileService {
    */
   async updateFinancialProfile(userId, updates) {
     try {
-      console.log('📝 Updating financial profile...');
+      enterpriseLogger.info('Updating financial profile');
 
       const currentProfile = await this.getFinancialProfile(userId);
       if (!currentProfile.success) {
@@ -187,14 +188,14 @@ class FinancialProfileService {
       const response = await apiClient.put(`/financial-profile/${userId}`, updatedProfile);
 
       if (response.success) {
-        console.log('✅ Financial profile updated successfully');
+        enterpriseLogger.info('Financial profile updated successfully');
         return { success: true, profile: updatedProfile };
       }
 
       return { success: false, error: 'Failed to update profile' };
 
     } catch (error) {
-      console.error('❌ Error updating financial profile:', error);
+      enterpriseLogger.error('Error updating financial profile', { error });
       return { success: false, error: error.message };
     }
   }
@@ -219,7 +220,7 @@ class FinancialProfileService {
       return { success: false, error: 'Profile not found' };
 
     } catch (error) {
-      console.error('❌ Error fetching financial profile:', error);
+      enterpriseLogger.error('Error fetching financial profile', { error });
       return { success: false, error: error.message };
     }
   }
@@ -229,7 +230,7 @@ class FinancialProfileService {
    */
   async generateTaxPlan(userId, planningHorizon = 12) {
     try {
-      console.log('🎯 Generating comprehensive tax plan...');
+      enterpriseLogger.info('Generating comprehensive tax plan');
 
       const profile = await this.getFinancialProfile(userId);
       if (!profile.success) {
@@ -285,11 +286,11 @@ class FinancialProfileService {
       // Save tax plan
       await apiClient.post('/financial-profile/tax-plan', taxPlan);
 
-      console.log('✅ Tax plan generated successfully');
+      enterpriseLogger.info('Tax plan generated successfully');
       return { success: true, taxPlan };
 
     } catch (error) {
-      console.error('❌ Error generating tax plan:', error);
+      enterpriseLogger.error('Error generating tax plan', { error });
       return { success: false, error: error.message };
     }
   }
@@ -299,7 +300,7 @@ class FinancialProfileService {
    */
   async optimizePortfolio(userId, constraints = {}) {
     try {
-      console.log('📈 Optimizing investment portfolio...');
+      enterpriseLogger.info('Optimizing investment portfolio');
 
       const profile = await this.getFinancialProfile(userId);
       if (!profile.success) {
@@ -346,11 +347,11 @@ class FinancialProfileService {
         implementationTimeline: this.createImplementationTimeline(rebalancingRecommendations),
       };
 
-      console.log('✅ Portfolio optimization completed');
+      enterpriseLogger.info('Portfolio optimization completed');
       return { success: true, optimizationPlan };
 
     } catch (error) {
-      console.error('❌ Error optimizing portfolio:', error);
+      enterpriseLogger.error('Error optimizing portfolio', { error });
       return { success: false, error: error.message };
     }
   }
@@ -360,7 +361,7 @@ class FinancialProfileService {
    */
   async generateTaxSavingInvestments(userId, availableAmount = null) {
     try {
-      console.log('💰 Generating tax-saving investment recommendations...');
+      enterpriseLogger.info('Generating tax-saving investment recommendations');
 
       const profile = await this.getFinancialProfile(userId);
       if (!profile.success) {
@@ -417,11 +418,11 @@ class FinancialProfileService {
         riskAnalysis: this.analyzeInvestmentRisks(prioritizedRecommendations, riskProfile),
       };
 
-      console.log('✅ Tax-saving investment recommendations generated');
+      enterpriseLogger.info('Tax-saving investment recommendations generated');
       return { success: true, investmentPlan };
 
     } catch (error) {
-      console.error('❌ Error generating tax-saving investments:', error);
+      enterpriseLogger.error('Error generating tax-saving investments', { error });
       return { success: false, error: error.message };
     }
   }
@@ -431,7 +432,7 @@ class FinancialProfileService {
    */
   async performPeriodicReview(userId) {
     try {
-      console.log('🔍 Performing periodic portfolio review...');
+      enterpriseLogger.info('Performing periodic portfolio review');
 
       const profile = await this.getFinancialProfile(userId);
       if (!profile.success) {
@@ -487,11 +488,11 @@ class FinancialProfileService {
         lastReviewResults: reviewResults,
       });
 
-      console.log('✅ Periodic review completed');
+      enterpriseLogger.info('Periodic review completed');
       return { success: true, reviewResults };
 
     } catch (error) {
-      console.error('❌ Error performing periodic review:', error);
+      enterpriseLogger.error('Error performing periodic review', { error });
       return { success: false, error: error.message };
     }
   }
@@ -666,7 +667,7 @@ class FinancialProfileService {
   }
 
   async performInitialAnalysis(userId) {
-    console.log('🔍 Performing initial financial analysis...');
+    enterpriseLogger.info('Performing initial financial analysis');
 
     // Trigger comprehensive data sync
     await dataIntegrationService.syncAllFinancialData(userId);
@@ -674,7 +675,7 @@ class FinancialProfileService {
     // Generate initial tax plan
     await this.generateTaxPlan(userId);
 
-    console.log('✅ Initial analysis completed');
+    enterpriseLogger.info('Initial analysis completed');
   }
 }
 

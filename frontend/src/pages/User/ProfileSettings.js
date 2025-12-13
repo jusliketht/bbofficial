@@ -11,6 +11,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import authService from '../../services/api/authService';
 import toast from 'react-hot-toast';
 import PANVerificationInline from '../../components/ITR/PANVerificationInline';
+import AadhaarLinking from '../../components/ITR/AadhaarLinking';
 import apiClient from '../../services/core/APIClient';
 import bankAccountService from '../../services/api/bankAccountService';
 import itrService from '../../services/api/itrService';
@@ -871,6 +872,28 @@ const ProfileTab = ({ user, onSave, isLoading }) => {
               </p>
             )}
           </div>
+        </div>
+
+        {/* Aadhaar Linking Section */}
+        <div className="mt-8 pt-6 border-t border-gray-200">
+          <h3 className="text-lg font-semibold text-black mb-4">Aadhaar Linking</h3>
+          <AadhaarLinking
+            userId={user?.id || user?.userId}
+            onLinked={() => {
+              // Refresh user profile after linking
+              if (onSave) {
+                // Trigger a profile refresh
+                window.location.reload();
+              }
+            }}
+            onUnlinked={() => {
+              // Refresh user profile after unlinking
+              if (onSave) {
+                // Trigger a profile refresh
+                window.location.reload();
+              }
+            }}
+          />
         </div>
 
         {/* Address Section */}

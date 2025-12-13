@@ -4,6 +4,7 @@
 // =====================================================
 
 import React, { useState, useEffect } from 'react';
+import { enterpriseLogger } from '../../utils/logger';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -99,11 +100,11 @@ const ITRFormRecommender = () => {
         }
       } catch (apiError) {
         // Backend API is optional, continue with frontend recommendation
-        console.warn('Backend recommendation API not available, using frontend analysis');
+        enterpriseLogger.warn('Backend recommendation API not available, using frontend analysis');
       }
 
     } catch (err) {
-      console.error('Analysis error:', err);
+      enterpriseLogger.error('Analysis error', { error: err });
       setError('Failed to analyze and recommend ITR form');
       // Default to ITR-1
       setRecommendation({

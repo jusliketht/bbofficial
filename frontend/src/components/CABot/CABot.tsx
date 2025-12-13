@@ -206,7 +206,7 @@ const CABot: React.FC = () => {
       }, 1000 + Math.random() * 2000);
       
     } catch (error) {
-      console.error('Error processing user input:', error);
+      enterpriseLogger.error('Error processing user input', { error });
       setIsTyping(false);
       addMessage('bot', 'Sorry, I encountered an error. Please try again.');
     }

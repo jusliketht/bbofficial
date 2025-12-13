@@ -20,6 +20,7 @@ import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import toast from 'react-hot-toast';
 import apiClient from '../../services/core/APIClient';
+import { enterpriseLogger } from '../../utils/logger';
 
 const FirmDashboard = () => {
   const navigate = useNavigate();
@@ -59,7 +60,7 @@ const FirmDashboard = () => {
       }
     } catch (error) {
       toast.error(error.response?.data?.error || 'Failed to load dashboard.');
-      console.error('Dashboard fetch error:', error);
+      enterpriseLogger.error('Dashboard fetch error:', { error });
     } finally {
       setLoading(false);
     }

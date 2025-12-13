@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { AlertCircle, CheckCircle, Info, RefreshCw, IndianRupee } from 'lucide-react';
 import { validationEngine } from '../utils/validation';
+import { getAriaLabel, getAriaDescribedBy } from '../../utils/accessibility';
 
 const ValidatedNumberInput = ({
   name,
@@ -75,7 +76,7 @@ const ValidatedNumberInput = ({
           isTouched: true,
         });
       } catch (error) {
-        console.error('Validation error:', error);
+        enterpriseLogger.error('Validation error', { error });
       } finally {
         setIsValidating(false);
       }
@@ -219,12 +220,18 @@ const ValidatedNumberInput = ({
     return 'text-gray-500';
   };
 
+  const fieldId = `input-${name}`;
+  const errorId = validationState.errors.length > 0 ? `${fieldId}-error` : undefined;
+  const warningId = validationState.warnings.length > 0 ? `${fieldId}-warning` : undefined;
+  const suggestionId = validationState.suggestions.length > 0 ? `${fieldId}-suggestion` : undefined;
+  const describedBy = getAriaDescribedBy(fieldId, undefined, validationState.errors[0]?.message);
+
   return (
     <div className={`space-y-1 ${className}`}>
       {label && (
-        <label className="block text-sm font-medium text-gray-700">
+        <label htmlFor={fieldId} className="block text-sm font-medium text-gray-700">
           {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
+          {required && <span className="text-red-500 ml-1" aria-label="required">*</span>}
         </label>
       )}
 
@@ -232,6 +239,7 @@ const ValidatedNumberInput = ({
         <input
           type="text"
           inputMode="numeric"
+          id={fieldId}
           name={name}
           value={displayValue}
           onChange={handleChange}
@@ -239,6 +247,11 @@ const ValidatedNumberInput = ({
           onBlur={handleBlur}
           placeholder={placeholder}
           disabled={disabled}
+          required={required}
+          aria-label={!label ? getAriaLabel(name, required, validationState.errors[0]?.message) : undefined}
+          aria-describedby={describedBy}
+          aria-invalid={validationState.errors.length > 0}
+          aria-required={required}
           className={`${getInputClassName()} ${showCurrencyIcon ? 'pl-10' : ''}`}
           {...props}
         />
@@ -258,7 +271,12 @@ const ValidatedNumberInput = ({
 
       {/* Helper Text */}
       {getHelperText() && (
-        <p className={`text-xs ${getHelperTextColor()}`}>
+        <p
+          id={validationState.errors.length > 0 ? errorId : validationState.warnings.length > 0 ? warningId : undefined}
+          role={validationState.errors.length > 0 ? 'alert' : undefined}
+          aria-live={validationState.errors.length > 0 ? 'polite' : undefined}
+          className={`text-xs ${getHelperTextColor()}`}
+        >
           {getHelperText()}
         </p>
       )}
@@ -305,15 +323,15 @@ const ValidatedNumberInput = ({
 
       {/* Errors */}
       {validationState.errors.length > 0 && validationState.isTouched && (
-        <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+        <div id={errorId} role="alert" aria-live="polite" className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
           <div className="flex items-start space-x-2">
-            <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+            <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" aria-hidden="true" />
             <div>
               <p className="text-sm font-medium text-red-900 mb-1">Please Fix:</p>
               <ul className="text-xs text-red-800 space-y-1">
                 {validationState.errors.map((error, index) => (
                   <li key={index} className="flex items-start">
-                    <span className="mr-2">•</span>
+                    <span className="mr-2" aria-hidden="true">•</span>
                     <span>{error.message}</span>
                   </li>
                 ))}

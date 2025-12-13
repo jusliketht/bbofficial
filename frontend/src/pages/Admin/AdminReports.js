@@ -27,6 +27,7 @@ import {
 import { Card, CardHeader, CardTitle, CardContent, Typography, Button } from '../../components/DesignSystem/DesignSystem';
 import { PageTransition, StaggerContainer, StaggerItem } from '../../components/DesignSystem/Animations';
 import api from '../../services/api';
+import ReportBuilder from '../../features/admin/reports/components/ReportBuilder';
 
 const AdminReports = () => {
   const { user } = useAuth();
@@ -393,6 +394,16 @@ const AdminReports = () => {
                 </CardContent>
               </Card>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Custom Report Builder */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Custom Report Builder</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ReportBuilder />
           </CardContent>
         </Card>
 

@@ -5,7 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import Card from '../common/Card';
 import Button from '../common/Button';
-import StatusBadge from '../common/StatusBadge';
+import StatusBadge from '../DesignSystem/StatusBadge';
 import Modal from '../common/Modal';
 import documentService from '../../services/documentService';
 import { enterpriseLogger } from '../../utils/logger';

@@ -4,6 +4,7 @@
 // Essential for ITR submission and government compliance
 
 import React, { useState } from 'react';
+import { enterpriseLogger } from '../../utils/logger';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
@@ -109,7 +110,7 @@ const VerificationForm = ({ onSubmit, initialData = {}, isReadOnly = false }) =>
     try {
       await onSubmit(data);
     } catch (error) {
-      console.error('Error submitting verification details:', error);
+      enterpriseLogger.error('Error submitting verification details', { error });
     } finally {
       setIsSubmitting(false);
     }
@@ -122,7 +123,7 @@ const VerificationForm = ({ onSubmit, initialData = {}, isReadOnly = false }) =>
       await new Promise(resolve => setTimeout(resolve, 2000));
       setOtpSent(true);
     } catch (error) {
-      console.error('Error sending Aadhaar OTP:', error);
+      enterpriseLogger.error('Error sending Aadhaar OTP', { error });
     } finally {
       setIsVerifying(false);
     }
@@ -137,7 +138,7 @@ const VerificationForm = ({ onSubmit, initialData = {}, isReadOnly = false }) =>
       setValue('verificationDate', new Date());
       await trigger();
     } catch (error) {
-      console.error('Error verifying OTP:', error);
+      enterpriseLogger.error('Error verifying OTP', { error });
     } finally {
       setIsVerifying(false);
     }

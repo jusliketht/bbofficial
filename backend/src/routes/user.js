@@ -62,6 +62,41 @@ router.put('/set-password', sensitiveOperationLimit, userController.setPassword)
 router.put('/password', sensitiveOperationLimit, userController.changePassword);
 
 // =====================================================
+// AADHAAR LINKING
+// =====================================================
+
+/**
+ * @route POST /api/users/aadhaar/verify
+ * @description Verify Aadhaar number using SurePass API
+ * @access Private
+ * @body {string} aadhaarNumber - Aadhaar number to verify
+ */
+router.post('/aadhaar/verify', sensitiveOperationLimit, userController.verifyAadhaar);
+
+/**
+ * @route POST /api/users/aadhaar/link
+ * @description Link verified Aadhaar to user profile
+ * @access Private
+ * @body {string} aadhaarNumber - Verified Aadhaar number
+ * @body {object} verificationData - Verification result data (optional)
+ */
+router.post('/aadhaar/link', sensitiveOperationLimit, userController.linkAadhaar);
+
+/**
+ * @route DELETE /api/users/aadhaar/unlink
+ * @description Unlink Aadhaar from user profile
+ * @access Private
+ */
+router.delete('/aadhaar/unlink', sensitiveOperationLimit, userController.unlinkAadhaar);
+
+/**
+ * @route GET /api/users/aadhaar/status
+ * @description Get Aadhaar linking status
+ * @access Private
+ */
+router.get('/aadhaar/status', userController.getAadhaarStatus);
+
+// =====================================================
 // PAN MANAGEMENT
 // =====================================================
 

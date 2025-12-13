@@ -27,47 +27,28 @@ const SessionManagement = () => {
     setError('');
 
     try {
-      // TODO: Implement API call to get active sessions
-      // const response = await apiClient.get('/auth/sessions');
-
-      // Mock data for now
-      const mockSessions = [
-        {
-          id: '1',
-          deviceType: 'desktop',
-          deviceName: 'Windows PC',
-          browser: 'Chrome',
-          location: 'Mumbai, India',
-          ipAddress: '192.168.1.1',
-          lastActive: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
-          isCurrent: true,
-        },
-        {
-          id: '2',
-          deviceType: 'mobile',
-          deviceName: 'iPhone 13',
-          browser: 'Safari',
-          location: 'Delhi, India',
-          ipAddress: '192.168.1.2',
-          lastActive: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-          isCurrent: false,
-        },
-        {
-          id: '3',
-          deviceType: 'tablet',
-          deviceName: 'iPad Pro',
-          browser: 'Safari',
-          location: 'Bangalore, India',
-          ipAddress: '192.168.1.3',
-          lastActive: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
-          isCurrent: false,
-        },
-      ];
-
-      setSessions(mockSessions);
+      const response = await apiClient.get('/auth/sessions');
+      if (response.data.success) {
+        // Transform API response to match component expectations
+        const formattedSessions = response.data.sessions.map(session => ({
+          id: session.id,
+          deviceType: session.deviceType || 'desktop',
+          deviceName: session.deviceName || 'Unknown Device',
+          browser: session.browser || 'Unknown',
+          os: session.os || 'Unknown',
+          location: session.location || 'Unknown',
+          ipAddress: session.ipAddress || 'Unknown',
+          lastActive: new Date(session.lastActive),
+          isCurrent: session.isCurrent || false,
+        }));
+        setSessions(formattedSessions);
+      } else {
+        throw new Error(response.data.error || 'Failed to load sessions');
+      }
     } catch (error) {
-      setError('Failed to load sessions');
-      toast.error('Failed to load active sessions');
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to load sessions';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -84,32 +65,34 @@ const SessionManagement = () => {
   const confirmLogout = async () => {
     try {
       if (logoutConfirm.isAll) {
-        // TODO: Implement API call to logout all sessions
-        // await apiClient.post('/auth/sessions/logout-all');
+        const response = await apiClient.post('/auth/sessions/logout-all');
 
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        toast.success('Logged out from all devices');
-        logout();
-      } else if (logoutConfirm.sessionId) {
-        // TODO: Implement API call to logout specific session
-        // await apiClient.post(`/auth/sessions/${logoutConfirm.sessionId}/logout`);
-
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        setSessions(sessions.filter(s => s.id !== logoutConfirm.sessionId));
-        toast.success('Logged out from device successfully');
-
-        // If current session, redirect to login
-        const session = sessions.find(s => s.id === logoutConfirm.sessionId);
-        if (session?.isCurrent) {
+        if (response.data.success) {
+          toast.success('Logged out from all devices');
           logout();
+        } else {
+          throw new Error(response.data.error || 'Failed to logout from all devices');
+        }
+      } else if (logoutConfirm.sessionId) {
+        const response = await apiClient.delete(`/auth/sessions/${logoutConfirm.sessionId}`);
+
+        if (response.data.success) {
+          setSessions(sessions.filter(s => s.id !== logoutConfirm.sessionId));
+          toast.success('Logged out from device successfully');
+
+          // If current session, redirect to login
+          const session = sessions.find(s => s.id === logoutConfirm.sessionId);
+          if (session?.isCurrent) {
+            logout();
+          }
+        } else {
+          throw new Error(response.data.error || 'Failed to logout from device');
         }
       }
     } catch (error) {
-      toast.error(logoutConfirm.isAll ? 'Failed to logout from all devices' : 'Failed to logout from device');
+      const errorMessage = error.response?.data?.error || error.message ||
+        (logoutConfirm.isAll ? 'Failed to logout from all devices' : 'Failed to logout from device');
+      toast.error(errorMessage);
     } finally {
       setLogoutConfirm({ isOpen: false, sessionId: null, isAll: false });
     }

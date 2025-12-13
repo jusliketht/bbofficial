@@ -16,11 +16,24 @@ export const useUserDashboardStats = (userId, enabled = true) => {
   return useQuery({
     queryKey: ['dashboardStats', userId],
     queryFn: async () => {
-      const response = await apiClient.get('/users/dashboard');
-      if (response.data?.success && response.data?.data) {
-        return validateDashboardStats(response.data.data);
+      try {
+        const response = await apiClient.get('/users/dashboard');
+        // Handle error response format
+        if (response.data?.success === false && response.data?.error) {
+          throw new Error(response.data.error.message || 'Failed to fetch dashboard stats');
+        }
+        if (response.data?.success && response.data?.data) {
+          return validateDashboardStats(response.data.data);
+        }
+        throw new Error('Failed to fetch dashboard stats');
+      } catch (error) {
+        // Ensure we throw a proper Error object with a message string
+        const errorMessage = error?.response?.data?.error?.message ||
+                            error?.response?.data?.message ||
+                            error?.message ||
+                            'Failed to fetch dashboard stats';
+        throw new Error(errorMessage);
       }
-      throw new Error('Failed to fetch dashboard stats');
     },
     enabled: enabled && !!userId,
     staleTime: 30 * 1000, // 30 seconds
@@ -50,13 +63,26 @@ export const useUserFilings = (userId, enabled = true) => {
   return useQuery({
     queryKey: ['userFilings', userId],
     queryFn: async () => {
-      const response = await itrService.getUserITRs();
-      const filings = validateFilings(response.data || response);
-      return {
-        all: filings,
-        ongoing: filings.filter(f => ['draft', 'paused'].includes(f.status)),
-        completed: filings.filter(f => ['submitted', 'acknowledged', 'processed'].includes(f.status)),
-      };
+      try {
+        const response = await itrService.getUserITRs();
+        // Handle both success and error response formats
+        if (response?.success === false && response?.error) {
+          throw new Error(response.error.message || 'Failed to fetch filings');
+        }
+        const filings = validateFilings(response?.data || response?.filings || response);
+        return {
+          all: filings,
+          ongoing: filings.filter(f => ['draft', 'paused'].includes(f.status)),
+          completed: filings.filter(f => ['submitted', 'acknowledged', 'processed'].includes(f.status)),
+        };
+      } catch (error) {
+        // Ensure we throw a proper Error object with a message string
+        const errorMessage = error?.response?.data?.error?.message ||
+                            error?.response?.data?.message ||
+                            error?.message ||
+                            'Failed to fetch filings';
+        throw new Error(errorMessage);
+      }
     },
     enabled: enabled && !!userId,
     staleTime: 30 * 1000, // 30 seconds

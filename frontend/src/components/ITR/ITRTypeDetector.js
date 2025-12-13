@@ -6,7 +6,7 @@ import React, { useState, useEffect } from 'react';
 import Card from '../common/Card';
 import Button from '../common/Button';
 import Modal from '../common/Modal';
-import StatusBadge from '../common/StatusBadge';
+import StatusBadge from '../DesignSystem/StatusBadge';
 import { enterpriseLogger } from '../../utils/logger';
 
 const ITRTypeDetector = ({
@@ -113,8 +113,9 @@ const ITRTypeDetector = ({
   };
 
   const performITRDetection = async (memberData) => {
-    // Mock income data - in real implementation, this would come from user input
-    const mockIncomeData = {
+    // Use income data from memberData (provided by user input or financial profile)
+    // This data comes from the member profile, previous filings, or user-provided information
+    const incomeData = {
       salary: memberData.hasSalary || false,
       houseProperty: memberData.housePropertyCount || 0,
       capitalGains: memberData.hasCapitalGains || false,
@@ -135,7 +136,7 @@ const ITRTypeDetector = ({
 
       // Check income sources
       rule.incomeSources.forEach(source => {
-        if (mockIncomeData[source] || (source === 'house_property' && mockIncomeData.houseProperty > 0)) {
+        if (incomeData[source] || (source === 'house_property' && incomeData.houseProperty > 0)) {
           score += 20;
           typeReasons.push(`Has ${source.replace('_', ' ')} income`);
         }
@@ -143,14 +144,14 @@ const ITRTypeDetector = ({
 
       // Check exclusions
       rule.exclusions.forEach(exclusion => {
-        if (mockIncomeData[exclusion]) {
+        if (incomeData[exclusion]) {
           score -= 30; // Heavy penalty for exclusions
           typeReasons.push(`Cannot use ${itrType} - has ${exclusion.replace('_', ' ')} income`);
         }
       });
 
       // Check income limits
-      if (mockIncomeData.totalIncome > 5000000) {
+      if (incomeData.totalIncome > 5000000) {
         score -= 20;
         typeReasons.push('Income exceeds ₹50 lakhs limit');
       }

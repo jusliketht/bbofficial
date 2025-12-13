@@ -5,12 +5,18 @@
 const enterpriseLogger = require('../../utils/logger');
 const { AppError } = require('../../middleware/errorHandler');
 const BusinessIncomeCalculator = require('../business/BusinessIncomeCalculator');
+const {
+  DEFAULT_ASSESSMENT_YEAR,
+  getDefaultAssessmentYear,
+} = require('../../constants/assessmentYears');
 const ProfessionalIncomeCalculator = require('../business/ProfessionalIncomeCalculator');
 
 class TaxComputationEngine {
   constructor() {
+    // Initialize with current assessment year tax slabs
+    // Tax slabs can be extended for multiple years
     this.taxSlabs = {
-      '2024-25': {
+      [DEFAULT_ASSESSMENT_YEAR]: {
         individual: [
           { min: 0, max: 250000, rate: 0, cess: 0 },
           { min: 250001, max: 500000, rate: 5, cess: 4 },
@@ -41,7 +47,7 @@ class TaxComputationEngine {
     };
 
     this.deductionLimits = {
-      '2024-25': {
+      [DEFAULT_ASSESSMENT_YEAR]: {
         section80C: 150000,
         section80D: 25000,
         section80E: Infinity, // No limit
@@ -208,9 +214,11 @@ class TaxComputationEngine {
     }
 
     // Business income - Handle ITR-3, ITR-4, and simple structures
-    if (filingData.businessIncome?.businesses && Array.isArray(filingData.businessIncome.businesses)) {
-      // ITR-3: Multiple businesses with P&L (top-level businessIncome)
-      totalIncome += BusinessIncomeCalculator.calculateTotalBusinessIncome(filingData.businessIncome.businesses);
+    // Use consolidated structure: filingData.income.businessIncome (with fallback for backward compatibility)
+    const businessIncome = filingData.income?.businessIncome || filingData.businessIncome;
+    if (businessIncome?.businesses && Array.isArray(businessIncome.businesses)) {
+      // ITR-3: Multiple businesses with P&L
+      totalIncome += BusinessIncomeCalculator.calculateTotalBusinessIncome(businessIncome.businesses);
     } else if (filingData.income?.businessIncome?.businesses && Array.isArray(filingData.income.businessIncome.businesses)) {
       // ITR-3: Multiple businesses with P&L (inside income object)
       totalIncome += BusinessIncomeCalculator.calculateTotalBusinessIncome(filingData.income.businessIncome.businesses);
@@ -233,9 +241,11 @@ class TaxComputationEngine {
     }
 
     // Professional income - Handle ITR-3, ITR-4, and simple structures
-    if (filingData.professionalIncome?.professions && Array.isArray(filingData.professionalIncome.professions)) {
-      // ITR-3: Multiple professions with P&L (top-level professionalIncome)
-      totalIncome += ProfessionalIncomeCalculator.calculateTotalProfessionalIncome(filingData.professionalIncome.professions);
+    // Use consolidated structure: filingData.income.professionalIncome (with fallback for backward compatibility)
+    const professionalIncome = filingData.income?.professionalIncome || filingData.professionalIncome;
+    if (professionalIncome?.professions && Array.isArray(professionalIncome.professions)) {
+      // ITR-3: Multiple professions with P&L
+      totalIncome += ProfessionalIncomeCalculator.calculateTotalProfessionalIncome(professionalIncome.professions);
     } else if (filingData.income?.professionalIncome?.professions && Array.isArray(filingData.income.professionalIncome.professions)) {
       // ITR-3: Multiple professions with P&L (inside income object)
       totalIncome += ProfessionalIncomeCalculator.calculateTotalProfessionalIncome(filingData.income.professionalIncome.professions);

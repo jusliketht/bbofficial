@@ -124,6 +124,21 @@ const ComputationSidebar = ({
     setIsMobileOpen(isOpen);
   }, [isOpen]);
 
+  // Handle Escape key to close drawer
+  useEffect(() => {
+    if (!isMobile || !isMobileOpen) return;
+
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        setIsMobileOpen(false);
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isMobile, isMobileOpen, onClose]);
+
   const handleSectionClick = (sectionId) => {
     onSectionSelect(sectionId);
     if (isMobile) {
@@ -133,7 +148,7 @@ const ComputationSidebar = ({
   };
 
   const sidebarContent = (
-    <div className="h-full flex flex-col bg-white border-r border-neutral-200">
+    <div id="computation-sidebar" className="h-full flex flex-col bg-white border-r border-neutral-200">
       {/* Sidebar Header - Compact */}
       <div className="px-2 py-2 border-b border-neutral-200 flex items-center justify-between">
         <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-wider">
@@ -145,8 +160,10 @@ const ComputationSidebar = ({
               setIsMobileOpen(false);
               onClose();
             }}
-            className="p-1 rounded-lg hover:bg-neutral-100 transition-colors"
+            className="p-1 rounded-lg hover:bg-neutral-100 transition-colors touch-manipulation"
+            style={{ minWidth: '44px', minHeight: '44px' }}
             aria-label="Close sidebar"
+            aria-controls="computation-sidebar"
           >
             <X className="w-4 h-4 text-neutral-600" />
           </button>
@@ -214,11 +231,18 @@ const ComputationSidebar = ({
   // Mobile: Drawer
   return (
     <>
-      {/* Mobile Menu Button */}
+      {/* Mobile Menu Button - Positioned to avoid conflicts with other floating elements */}
       <button
         onClick={() => setIsMobileOpen(true)}
-        className="fixed bottom-4 right-4 z-40 w-14 h-14 rounded-full bg-gold-500 text-white shadow-lg flex items-center justify-center hover:bg-gold-600 transition-colors"
+        className="fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-gold-500 text-white shadow-lg flex items-center justify-center hover:bg-gold-600 transition-colors touch-manipulation"
+        style={{
+          // Account for safe-area-inset on iOS devices
+          bottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))',
+          right: 'calc(1rem + env(safe-area-inset-right, 0px))',
+        }}
         aria-label="Open sections menu"
+        aria-expanded={isMobileOpen}
+        aria-controls="computation-sidebar"
       >
         <Menu className="w-6 h-6" />
       </button>
@@ -235,14 +259,19 @@ const ComputationSidebar = ({
                 setIsMobileOpen(false);
                 onClose();
               }}
-              className="fixed inset-0 bg-black/50 z-50"
+              className="fixed inset-0 bg-black/50 z-[60]"
             />
             <motion.div
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="fixed right-0 top-0 bottom-0 w-[320px] max-w-[85vw] z-50"
+              className="fixed right-0 top-0 bottom-0 w-[320px] max-w-[85vw] z-[60]"
+              style={{
+                // Account for safe-area-inset on iOS devices
+                paddingTop: 'env(safe-area-inset-top, 0px)',
+                paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+              }}
             >
               {sidebarContent}
             </motion.div>

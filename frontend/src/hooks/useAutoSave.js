@@ -4,6 +4,7 @@
 // =====================================================
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { enterpriseLogger } from '../utils/logger';
 import toast from 'react-hot-toast';
 
 /**
@@ -73,7 +74,7 @@ const useAutoSave = ({
         };
         localStorage.setItem(localStorageKey, JSON.stringify(backupData));
       } catch (error) {
-        console.warn('Failed to save to localStorage:', error);
+        enterpriseLogger.warn('Failed to save to localStorage', { error });
       }
     }
   }, [localStorageKey]);
@@ -88,7 +89,7 @@ const useAutoSave = ({
           return parsed;
         }
       } catch (error) {
-        console.warn('Failed to load from localStorage:', error);
+        enterpriseLogger.warn('Failed to load from localStorage', { error });
       }
     }
     return null;
@@ -100,7 +101,7 @@ const useAutoSave = ({
       try {
         localStorage.removeItem(localStorageKey);
       } catch (error) {
-        console.warn('Failed to clear localStorage:', error);
+        enterpriseLogger.warn('Failed to clear localStorage', { error });
       }
     }
   }, [localStorageKey]);
@@ -144,10 +145,12 @@ const useAutoSave = ({
         setSaveStatus((current) => (current === 'saved' ? 'idle' : current));
       }, 2000);
     } catch (error) {
-      console.error('Auto-save error:', error);
+      enterpriseLogger.error('Auto-save error', { error });
 
-      // Retry on network errors
-      const isRetryable = !error.response || (error.response?.status >= 500);
+      // Don't retry on 404 errors (endpoint not found - permanent failure)
+      // Don't retry on 401 errors (auth issues - user needs to login)
+      // Don't retry on 400 errors (validation errors - data issue)
+      const isRetryable = !error.response || (error.response?.status >= 500 && error.response?.status < 600);
       if (isRetryable && retryCountRef.current < maxRetries) {
         retryCountRef.current += 1;
         const retryDelay = Math.pow(2, retryCountRef.current) * 1000;

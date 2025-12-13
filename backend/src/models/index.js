@@ -24,6 +24,11 @@ const DataSource = require('./DataSource');
 const TaxPayment = require('./TaxPayment');
 const ForeignAsset = require('./ForeignAsset');
 const RefundTracking = require('./RefundTracking');
+const ITRVProcessing = require('./ITRVProcessing');
+const AssessmentNotice = require('./AssessmentNotice');
+const TaxDemand = require('./TaxDemand');
+const Scenario = require('./Scenario');
+const DocumentTemplate = require('./DocumentTemplate');
 const Notification = require('./Notification');
 const HelpArticle = require('./HelpArticle');
 const CAMarketplaceInquiry = require('./CAMarketplaceInquiry');
@@ -61,6 +66,11 @@ module.exports = {
   TaxPayment,
   ForeignAsset,
   RefundTracking,
+  ITRVProcessing,
+  AssessmentNotice,
+  TaxDemand,
+  Scenario,
+  DocumentTemplate,
   Notification,
   HelpArticle,
   CAMarketplaceInquiry,

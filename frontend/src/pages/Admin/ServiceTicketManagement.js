@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import adminService from '../../services/api/adminService';
 import toast from 'react-hot-toast';
+import { enterpriseLogger } from '../../utils/logger';
 
 const ServiceTicketManagement = () => {
   const [tickets, setTickets] = useState([]);
@@ -72,7 +73,7 @@ const ServiceTicketManagement = () => {
 
         setTickets(transformedTickets);
       } catch (error) {
-        console.error('Failed to fetch tickets:', error);
+        enterpriseLogger.error('Failed to fetch tickets:', { error });
         toast.error('Failed to load tickets. Please try again.');
         setTickets([]);
       } finally {
@@ -154,15 +155,15 @@ const ServiceTicketManagement = () => {
         break;
       case 'assign':
         // Assign ticket to admin
-        console.log('Assign ticket:', ticket.id);
+        enterpriseLogger.info('Assign ticket:', { ticketId: ticket.id });
         break;
       case 'resolve':
         // Resolve ticket
-        console.log('Resolve ticket:', ticket.id);
+        enterpriseLogger.info('Resolve ticket:', { ticketId: ticket.id });
         break;
       case 'close':
         // Close ticket
-        console.log('Close ticket:', ticket.id);
+        enterpriseLogger.info('Close ticket:', { ticketId: ticket.id });
         break;
       default:
         break;
@@ -188,7 +189,7 @@ const ServiceTicketManagement = () => {
 
     setReplyText('');
     // API call to send reply
-    console.log('Sending reply:', replyText);
+    enterpriseLogger.info('Sending reply:', { replyText: replyText.substring(0, 50) });
   };
 
   if (loading) {

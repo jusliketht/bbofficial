@@ -656,11 +656,25 @@ const ITR3IncomeForm = ({ data, onUpdate, selectedITR, fullFormData, formData, o
   };
 
   const handleBusinessIncomeUpdate = (updates) => {
-    onUpdate({ businessIncome: { ...data.businessIncome, ...updates } });
+    // Update income.businessIncome structure
+    const currentIncome = data.income || {};
+    onUpdate({
+      income: {
+        ...currentIncome,
+        businessIncome: { ...(currentIncome.businessIncome || data.businessIncome || {}), ...updates },
+      },
+    });
   };
 
   const handleProfessionalIncomeUpdate = (updates) => {
-    onUpdate({ professionalIncome: { ...data.professionalIncome, ...updates } });
+    // Update income.professionalIncome structure
+    const currentIncome = data.income || {};
+    onUpdate({
+      income: {
+        ...currentIncome,
+        professionalIncome: { ...(currentIncome.professionalIncome || data.professionalIncome || {}), ...updates },
+      },
+    });
   };
 
   return (
@@ -685,7 +699,7 @@ const ITR3IncomeForm = ({ data, onUpdate, selectedITR, fullFormData, formData, o
         <SubSection title="Business Income" icon={IndianRupee}>
           <BusinessIncomeForm
             filingId={fullFormData?.filingId || fullFormData?.id || formData?.filingId || formData?.id}
-            data={data.businessIncome || {}}
+            data={data.income?.businessIncome || data.businessIncome || {}}
             onUpdate={handleBusinessIncomeUpdate}
             selectedITR={selectedITR}
             onDataUploaded={onDataUploaded}
@@ -697,7 +711,7 @@ const ITR3IncomeForm = ({ data, onUpdate, selectedITR, fullFormData, formData, o
         <SubSection title="Professional Income" icon={IndianRupee}>
           <ProfessionalIncomeForm
             filingId={fullFormData?.filingId || fullFormData?.id || formData?.filingId || formData?.id}
-            data={data.professionalIncome || {}}
+            data={data.income?.professionalIncome || data.professionalIncome || {}}
             onUpdate={handleProfessionalIncomeUpdate}
             selectedITR={selectedITR}
             onDataUploaded={onDataUploaded}

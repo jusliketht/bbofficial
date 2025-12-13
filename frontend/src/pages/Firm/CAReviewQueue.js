@@ -18,6 +18,7 @@ import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import toast from 'react-hot-toast';
 import apiClient from '../../services/core/APIClient';
+import { enterpriseLogger } from '../../utils/logger';
 
 const CAReviewQueue = () => {
   const navigate = useNavigate();
@@ -42,7 +43,7 @@ const CAReviewQueue = () => {
       }
     } catch (error) {
       toast.error(error.response?.data?.error || 'Failed to load review queue.');
-      console.error('Queue fetch error:', error);
+      enterpriseLogger.error('Queue fetch error:', { error });
     } finally {
       setLoading(false);
     }

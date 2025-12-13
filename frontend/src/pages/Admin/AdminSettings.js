@@ -1,79 +1,93 @@
 // =====================================================
 // ADMIN SETTINGS - SYSTEM CONFIGURATION
-// Placeholder page for system settings (to be expanded in Phase 2)
+// Tabbed interface for all system settings
 // =====================================================
 
-import { Card, CardHeader, CardTitle, CardContent, Typography } from '../../components/DesignSystem/DesignSystem';
-import { PageTransition } from '../../components/DesignSystem/Animations';
-import { Settings, AlertCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Settings, Shield, DollarSign, Bell, Plug, Flag } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import apiClient from '../../services/core/APIClient';
+import toast from 'react-hot-toast';
+import GeneralSettings from '../../features/admin/settings/components/GeneralSettings';
+import TaxSettings from '../../features/admin/settings/components/TaxSettings';
+import SecuritySettings from '../../features/admin/settings/components/SecuritySettings';
+import IntegrationSettings from '../../features/admin/settings/components/IntegrationSettings';
+import NotificationSettings from '../../features/admin/settings/components/NotificationSettings';
+import FeatureFlagsSettings from '../../features/admin/settings/components/FeatureFlagsSettings';
 
 const AdminSettings = () => {
+  const [activeTab, setActiveTab] = useState('general');
+  const queryClient = useQueryClient();
+
+  const tabs = [
+    { id: 'general', label: 'General', icon: Settings },
+    { id: 'tax', label: 'Tax', icon: DollarSign },
+    { id: 'security', label: 'Security', icon: Shield },
+    { id: 'integrations', label: 'Integrations', icon: Plug },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'feature-flags', label: 'Feature Flags', icon: Flag },
+  ];
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'general':
+        return <GeneralSettings />;
+      case 'tax':
+        return <TaxSettings />;
+      case 'security':
+        return <SecuritySettings />;
+      case 'integrations':
+        return <IntegrationSettings />;
+      case 'notifications':
+        return <NotificationSettings />;
+      case 'feature-flags':
+        return <FeatureFlagsSettings />;
+      default:
+        return null;
+    }
+  };
+
   return (
-    <PageTransition className="min-h-screen bg-neutral-50 py-8">
+    <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <Typography.H1 className="mb-2">System Settings</Typography.H1>
-          <Typography.Body className="text-neutral-600">
-            Configure platform settings and preferences
-          </Typography.Body>
+          <h1 className="text-3xl font-bold text-black">System Settings</h1>
+          <p className="text-gray-700 mt-2">Configure platform settings and preferences</p>
         </div>
 
-        {/* Coming Soon Card */}
-        <Card className="border-warning-200 bg-warning-50">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <AlertCircle className="w-5 h-5 text-warning-600" />
-              <span>Settings Under Development</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <Typography.Body className="text-neutral-700">
-                System settings configuration is currently under development.
-                This page will include:
-              </Typography.Body>
-              <ul className="list-disc list-inside space-y-2 text-neutral-600">
-                <li>General application settings</li>
-                <li>Tax configuration</li>
-                <li>Integration settings</li>
-                <li>Notification settings</li>
-                <li>Security settings</li>
-                <li>Feature flags</li>
-              </ul>
-              <Typography.Small className="text-neutral-500">
-                Expected completion: Phase 2
-              </Typography.Small>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          {/* Tab Navigation */}
+          <div className="border-b border-gray-200">
+            <nav className="flex space-x-8 px-6">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center transition-colors ${
+                      activeTab === tab.id
+                        ? 'border-gold-500 text-gold-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4 mr-2" />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
 
-        {/* Settings Categories Placeholder */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
-          {[
-            { name: 'General Settings', icon: Settings },
-            { name: 'Tax Configuration', icon: Settings },
-            { name: 'Integrations', icon: Settings },
-            { name: 'Notifications', icon: Settings },
-            { name: 'Security', icon: Settings },
-            { name: 'Feature Flags', icon: Settings },
-          ].map((category, index) => (
-            <Card key={index} className="opacity-50 cursor-not-allowed">
-              <CardContent className="p-6">
-                <div className="flex items-center space-x-3">
-                  <category.icon className="w-6 h-6 text-neutral-400" />
-                  <Typography.Small className="font-medium text-neutral-500">
-                    {category.name}
-                  </Typography.Small>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          {/* Tab Content */}
+          <div className="p-6">
+            {renderTabContent()}
+          </div>
         </div>
       </div>
-    </PageTransition>
+    </div>
   );
 };
 
 export default AdminSettings;
-

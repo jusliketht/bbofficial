@@ -9,6 +9,7 @@ import { motion } from 'framer-motion';
 import { useITR } from '../../../contexts';
 import { validationService, form16ExtractionService, bankStatementService } from '../../../services';
 import { ProgressStepper, Card, Button, Input } from '../../DesignSystem';
+import { enterpriseLogger } from '../../../utils/logger';
 import ITRJsonDownload from './ITRJsonDownload';
 import Form16Upload from './Form16Upload';
 import BankStatementUpload from './BankStatementUpload';
@@ -31,7 +32,7 @@ const ITRFormRenderer = ({ itrType, initialData = null, onSubmit, onSaveDraft })
         const configModule = await import(`../config/${itrType}Config.js`);
         setConfig(configModule.default);
       } catch (error) {
-        console.error(`Failed to load ITR config for ${itrType}:`, error);
+        enterpriseLogger.error('Failed to load ITR config', { itrType, error });
       }
     };
 
@@ -264,7 +265,7 @@ const ITRFormRenderer = ({ itrType, initialData = null, onSubmit, onSaveDraft })
       // Show download section after successful submission
       setShowDownloadSection(true);
     } catch (error) {
-      console.error('Form submission error:', error);
+      enterpriseLogger.error('Form submission error', { error });
     } finally {
       setIsLoading(false);
     }
@@ -340,7 +341,7 @@ const ITRFormRenderer = ({ itrType, initialData = null, onSubmit, onSaveDraft })
           {/* Form 16 Upload */}
           <Form16Upload
             onExtractionComplete={(result) => {
-              console.log('Form 16 extracted:', result);
+              enterpriseLogger.info('Form 16 extracted', { result });
             }}
             onAutoPopulate={handleForm16AutoPopulate}
           />
@@ -348,7 +349,7 @@ const ITRFormRenderer = ({ itrType, initialData = null, onSubmit, onSaveDraft })
           {/* Bank Statement Upload */}
           <BankStatementUpload
             onAnalysisComplete={(result) => {
-              console.log('Bank statement analyzed:', result);
+              enterpriseLogger.info('Bank statement analyzed', { result });
             }}
             onAutoPopulate={handleBankStatementAutoPopulate}
           />
@@ -445,7 +446,7 @@ const ITRFormRenderer = ({ itrType, initialData = null, onSubmit, onSaveDraft })
             itrType={itrType}
             assessmentYear="2024-25"
             onDownloadComplete={(result) => {
-              console.log('JSON download completed:', result);
+              enterpriseLogger.info('JSON download completed', { result });
             }}
           />
         </motion.div>

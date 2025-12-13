@@ -273,6 +273,146 @@ ITRFiling.hasMany(ITRFiling, {
 });
 
 // =====================================================
+// DOCUMENT ASSOCIATIONS
+// =====================================================
+
+// Document belongs to User
+Document.belongsTo(User, {
+  foreignKey: 'userId',
+  as: 'user',
+  onDelete: 'CASCADE',
+});
+
+// User has many Documents
+User.hasMany(Document, {
+  foreignKey: 'userId',
+  as: 'documents',
+  onDelete: 'CASCADE',
+});
+
+// =====================================================
+// ITR-V PROCESSING ASSOCIATIONS
+// =====================================================
+
+const ITRVProcessing = require('./ITRVProcessing');
+
+// ITRVProcessing belongs to ITRFiling
+ITRVProcessing.belongsTo(ITRFiling, {
+  foreignKey: 'filingId',
+  as: 'filing',
+  onDelete: 'CASCADE',
+});
+
+// ITRFiling has one ITRVProcessing
+ITRFiling.hasOne(ITRVProcessing, {
+  foreignKey: 'filingId',
+  as: 'itrvProcessing',
+  onDelete: 'CASCADE',
+});
+
+// =====================================================
+// ASSESSMENT NOTICE ASSOCIATIONS
+// =====================================================
+
+const AssessmentNotice = require('./AssessmentNotice');
+
+// AssessmentNotice belongs to User
+AssessmentNotice.belongsTo(User, {
+  foreignKey: 'userId',
+  as: 'user',
+  onDelete: 'CASCADE',
+});
+
+// AssessmentNotice belongs to ITRFiling
+AssessmentNotice.belongsTo(ITRFiling, {
+  foreignKey: 'filingId',
+  as: 'filing',
+  onDelete: 'SET NULL',
+});
+
+// User has many AssessmentNotices
+User.hasMany(AssessmentNotice, {
+  foreignKey: 'userId',
+  as: 'assessmentNotices',
+  onDelete: 'CASCADE',
+});
+
+// ITRFiling has many AssessmentNotices
+ITRFiling.hasMany(AssessmentNotice, {
+  foreignKey: 'filingId',
+  as: 'assessmentNotices',
+  onDelete: 'SET NULL',
+});
+
+// =====================================================
+// TAX DEMAND ASSOCIATIONS
+// =====================================================
+
+const TaxDemand = require('./TaxDemand');
+
+// TaxDemand belongs to User
+TaxDemand.belongsTo(User, {
+  foreignKey: 'userId',
+  as: 'user',
+  onDelete: 'CASCADE',
+});
+
+// TaxDemand belongs to ITRFiling
+TaxDemand.belongsTo(ITRFiling, {
+  foreignKey: 'filingId',
+  as: 'filing',
+  onDelete: 'SET NULL',
+});
+
+// User has many TaxDemands
+User.hasMany(TaxDemand, {
+  foreignKey: 'userId',
+  as: 'taxDemands',
+  onDelete: 'CASCADE',
+});
+
+// ITRFiling has many TaxDemands
+ITRFiling.hasMany(TaxDemand, {
+  foreignKey: 'filingId',
+  as: 'taxDemands',
+  onDelete: 'SET NULL',
+});
+
+// =====================================================
+// SCENARIO ASSOCIATIONS
+// =====================================================
+
+const Scenario = require('./Scenario');
+
+// Scenario belongs to User
+Scenario.belongsTo(User, {
+  foreignKey: 'userId',
+  as: 'user',
+  onDelete: 'CASCADE',
+});
+
+// Scenario belongs to ITRFiling
+Scenario.belongsTo(ITRFiling, {
+  foreignKey: 'filingId',
+  as: 'filing',
+  onDelete: 'SET NULL',
+});
+
+// User has many Scenarios
+User.hasMany(Scenario, {
+  foreignKey: 'userId',
+  as: 'scenarios',
+  onDelete: 'CASCADE',
+});
+
+// ITRFiling has many Scenarios
+ITRFiling.hasMany(Scenario, {
+  foreignKey: 'filingId',
+  as: 'scenarios',
+  onDelete: 'SET NULL',
+});
+
+// =====================================================
 // SERVICE TICKET ASSOCIATIONS
 // =====================================================
 

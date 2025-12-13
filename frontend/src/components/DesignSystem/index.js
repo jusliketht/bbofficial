@@ -18,6 +18,13 @@ export {
   Badge,
 } from './components';
 
+// Enhanced components
+export { default as StatusBadge, StatusDot } from './StatusBadge';
+export { default as EmptyState, NoDataEmptyState, UploadEmptyState, ErrorEmptyState, NoResultsEmptyState } from './EmptyState';
+export { default as DataProvenanceIndicator } from './DataProvenanceIndicator';
+export { default as LoadingState, SkeletonLoader, InlineLoader } from './LoadingState';
+export { default as ErrorBoundary } from './ErrorBoundary';
+
 // Legacy exports for backward compatibility
 import DESIGN_TOKENS from './tokens';
 import Components from './components';

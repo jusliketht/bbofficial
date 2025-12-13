@@ -1,9 +1,10 @@
 // =====================================================
 // ITR COMPUTATION CONTENT
 // Main content area with section rendering
+// Responsive: Desktop shows active section, Mobile shows all sections with progressive disclosure
 // =====================================================
 
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Info } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -11,6 +12,8 @@ import ComputationSection from './ComputationSection';
 import AutoPopulationActions from './AutoPopulationActions';
 import { ScheduleFA } from '../../features/foreign-assets';
 import { TaxOptimizer } from '../../features/tax-optimizer';
+import ResponsiveSection from '../DesignSystem/ResponsiveSection';
+import { useResponsiveBreakpoint } from '../../utils/responsive';
 
 const ITRComputationContent = ({
   activeSectionId,
@@ -34,110 +37,212 @@ const ITRComputationContent = ({
   filingId,
   draftId,
 }) => {
+  const { isMobile, isTablet } = useResponsiveBreakpoint();
+  const [expandedSections, setExpandedSections] = useState({});
   const activeSection = sections.find(s => s.id === activeSectionId) || sections[0];
   const Icon = activeSection?.icon;
 
+  // Helper to get section total for display
+  const getSectionTotal = (sectionId) => {
+    const sectionData = formData[sectionId] || {};
+    if (sectionId === 'income') {
+      return (parseFloat(sectionData.salary) || 0) +
+        (parseFloat(sectionData.otherIncome) || 0);
+    }
+    if (sectionId === 'deductions') {
+      return (parseFloat(sectionData.section80C) || 0) +
+        (parseFloat(sectionData.section80D) || 0);
+    }
+    return 0;
+  };
+
+  // Desktop: Show only active section
+  if (!isMobile && !isTablet) {
+    return (
+      <div className="max-w-[1200px] mx-auto px-6 py-6">
+        {/* Auto-Population Actions */}
+        {Object.keys(autoFilledFields).some(section => autoFilledFields[section]?.length > 0) && (
+          <div className="mb-4">
+            <AutoPopulationActions
+              autoFilledFields={autoFilledFields}
+              onAcceptAll={() => {
+                toast.success('All auto-filled values accepted');
+              }}
+              onOverrideAll={() => {
+                toast.info('You can now manually edit all fields');
+                setAutoFilledFields({});
+              }}
+            />
+          </div>
+        )}
+
+        {/* Section Header */}
+        <div className="mb-4">
+          <div className="flex items-center gap-3 mb-2">
+            {Icon && (
+              <div className="w-10 h-10 rounded-lg bg-primary-100 flex items-center justify-center">
+                <Icon className="w-5 h-5 text-primary-600" />
+              </div>
+            )}
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">
+                {activeSection?.title || 'Section'}
+              </h2>
+              {activeSection?.description && (
+                <p className="text-sm text-slate-600 mt-1">
+                  {activeSection.description}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Section Content */}
+        <motion.div
+          key={activeSectionId}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+          className="bg-white rounded-lg border border-slate-200 shadow-sm p-6"
+        >
+          {activeSection?.id === 'scheduleFA' ? (
+            <ScheduleFA
+              key={activeSection.id}
+              filingId={filingId || draftId}
+              onUpdate={() => {}}
+            />
+          ) : activeSection?.id === 'taxOptimizer' ? (
+            <TaxOptimizer
+              key={activeSection.id}
+              filingId={filingId || draftId}
+              currentTaxComputation={taxComputation}
+              onUpdate={() => {
+                if (filingId || draftId) {
+                  handleComputeTax();
+                }
+              }}
+            />
+          ) : (
+            <ComputationSection
+              key={activeSection?.id}
+              id={activeSection?.id}
+              title={activeSection?.title}
+              icon={Icon}
+              description={activeSection?.description}
+              isExpanded={true}
+              onToggle={() => {}}
+              formData={formData[activeSection?.id] || {}}
+              fullFormData={formData || {}}
+              readOnly={isReadOnly}
+              onUpdate={(data) => updateFormData(activeSection?.id, data)}
+              selectedITR={selectedITR}
+              taxComputation={taxComputation}
+              onTaxComputed={setTaxComputation}
+              regime={taxRegime}
+              assessmentYear={assessmentYear}
+              onDataUploaded={handleDataUploaded}
+              renderContentOnly={true}
+              validationErrors={validationErrors[activeSection?.id] || {}}
+              autoFilledFields={autoFilledFields}
+              prefetchSources={prefetchSources}
+              fieldVerificationStatuses={fieldVerificationStatuses}
+              fieldSources={fieldSources}
+            />
+          )}
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Mobile/Tablet: Show all sections with progressive disclosure
   return (
-    <div className="max-w-[1200px] mx-auto px-3 py-3">
-      {/* Auto-Population Actions - Compact */}
+    <div className="max-w-full mx-auto px-4 py-4 space-y-4">
+      {/* Auto-Population Actions */}
       {Object.keys(autoFilledFields).some(section => autoFilledFields[section]?.length > 0) && (
-        <div className="mb-3">
+        <div className="mb-4">
           <AutoPopulationActions
             autoFilledFields={autoFilledFields}
             onAcceptAll={() => {
               toast.success('All auto-filled values accepted');
-              // Values are already in formData, just acknowledge
             }}
             onOverrideAll={() => {
               toast.info('You can now manually edit all fields');
-              // Clear auto-filled tracking to allow manual edits
               setAutoFilledFields({});
             }}
           />
         </div>
       )}
 
-      {/* Section Header - Compact */}
-      <div className="mb-3">
-        <div className="flex items-center gap-2 mb-1">
-          {Icon && (
-            <div className="w-8 h-8 rounded-lg bg-gold-100 flex items-center justify-center flex-shrink-0">
-              <Icon className="w-4 h-4 text-gold-700" />
-            </div>
-          )}
-          <div>
-            <h2 className="text-lg font-bold font-display text-neutral-900">
-              {activeSection?.title || 'Section'}
-            </h2>
-            {activeSection?.description && (
-              <p className="text-xs text-neutral-600 mt-0.5">
-                {activeSection.description}
-              </p>
+      {/* All Sections with Progressive Disclosure */}
+      {sections.map((section) => {
+        const sectionIcon = section.icon;
+        const isExpanded = expandedSections[section.id] || false;
+        const sectionTotal = getSectionTotal(section.id);
+
+        return (
+          <ResponsiveSection
+            key={section.id}
+            id={section.id}
+            title={section.title}
+            icon={sectionIcon}
+            description={section.description}
+            isExpanded={isExpanded}
+            onToggle={(expanded) => {
+              setExpandedSections(prev => ({
+                ...prev,
+                [section.id]: expanded,
+              }));
+            }}
+            showTotal={section.id === 'income' || section.id === 'deductions'}
+            totalValue={sectionTotal}
+            totalLabel={section.id === 'income' ? 'Total Income' : 'Total Deductions'}
+          >
+            {section.id === 'scheduleFA' ? (
+              <ScheduleFA
+                filingId={filingId || draftId}
+                onUpdate={() => {}}
+              />
+            ) : section.id === 'taxOptimizer' ? (
+              <TaxOptimizer
+                filingId={filingId || draftId}
+                currentTaxComputation={taxComputation}
+                onUpdate={() => {
+                  if (filingId || draftId) {
+                    handleComputeTax();
+                  }
+                }}
+              />
+            ) : (
+              <ComputationSection
+                id={section.id}
+                title={section.title}
+                icon={sectionIcon}
+                description={section.description}
+                isExpanded={true}
+                onToggle={() => {}}
+                formData={formData[section.id] || {}}
+                fullFormData={formData || {}}
+                readOnly={isReadOnly}
+                onUpdate={(data) => updateFormData(section.id, data)}
+                selectedITR={selectedITR}
+                taxComputation={taxComputation}
+                onTaxComputed={setTaxComputation}
+                regime={taxRegime}
+                assessmentYear={assessmentYear}
+                onDataUploaded={handleDataUploaded}
+                renderContentOnly={true}
+                validationErrors={validationErrors[section.id] || {}}
+                autoFilledFields={autoFilledFields}
+                prefetchSources={prefetchSources}
+                fieldVerificationStatuses={fieldVerificationStatuses}
+                fieldSources={fieldSources}
+              />
             )}
-          </div>
-        </div>
-      </div>
+          </ResponsiveSection>
+        );
+      })}
 
-      {/* Section Content Card - Compact */}
-      <motion.div
-        key={activeSectionId}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-        className="bg-white rounded-lg border border-neutral-200 shadow-sm p-4"
-        style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
-      >
-        {activeSection?.id === 'scheduleFA' ? (
-          <ScheduleFA
-            key={activeSection.id}
-            filingId={filingId || draftId}
-            onUpdate={() => {
-              if (filingId || draftId) {
-                // Trigger refetch if needed
-              }
-            }}
-          />
-        ) : activeSection?.id === 'taxOptimizer' ? (
-          <TaxOptimizer
-            key={activeSection.id}
-            filingId={filingId || draftId}
-            currentTaxComputation={taxComputation}
-            onUpdate={() => {
-              if (filingId || draftId) {
-                handleComputeTax();
-              }
-            }}
-          />
-        ) : (
-          <ComputationSection
-            key={activeSection?.id}
-            id={activeSection?.id}
-            title={activeSection?.title}
-            icon={Icon}
-            description={activeSection?.description}
-            isExpanded={true}
-            onToggle={() => {}}
-            formData={formData[activeSection?.id] || {}}
-            fullFormData={formData || {}}
-            readOnly={isReadOnly}
-            onUpdate={(data) => updateFormData(activeSection?.id, data)}
-            selectedITR={selectedITR}
-            taxComputation={taxComputation}
-            onTaxComputed={setTaxComputation}
-            regime={taxRegime}
-            assessmentYear={assessmentYear}
-            onDataUploaded={handleDataUploaded}
-            renderContentOnly={true}
-            validationErrors={validationErrors[activeSection?.id] || {}}
-            autoFilledFields={autoFilledFields}
-            prefetchSources={prefetchSources}
-            fieldVerificationStatuses={fieldVerificationStatuses}
-            fieldSources={fieldSources}
-          />
-        )}
-      </motion.div>
-
-      {/* Read-only notice (minimal) */}
+      {/* Read-only notice */}
       {isReadOnly && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-info-100 text-info-800 px-4 py-2 rounded-full text-sm shadow-md z-40">
           <Info className="h-4 w-4 inline mr-2" />

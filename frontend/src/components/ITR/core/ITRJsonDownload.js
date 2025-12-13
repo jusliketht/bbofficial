@@ -59,7 +59,7 @@ const ITRJsonDownload = ({
       }
 
     } catch (err) {
-      console.error('Download error:', err);
+      enterpriseLogger.error('Download error', { error: err });
       setError(err.message);
     } finally {
       setIsDownloading(false);
@@ -94,7 +94,7 @@ const ITRJsonDownload = ({
       });
 
     } catch (err) {
-      console.error('Government format download error:', err);
+      enterpriseLogger.error('Government format download error', { error: err });
       setError(err.message);
     } finally {
       setIsDownloading(false);
@@ -139,7 +139,7 @@ const ITRJsonDownload = ({
       });
 
     } catch (err) {
-      console.error('Simple format download error:', err);
+      enterpriseLogger.error('Simple format download error', { error: err });
       setError(err.message);
     } finally {
       setIsDownloading(false);

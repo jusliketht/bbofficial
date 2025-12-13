@@ -4,7 +4,7 @@
 // Code splitting with React.lazy() for optimal performance
 // =====================================================
 
-import React, { Suspense, lazy, useEffect } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Core components (keep synchronous - needed immediately)

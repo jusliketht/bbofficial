@@ -53,10 +53,21 @@ If you need to separate frontend and backend in the future:
 3. Frontend is built using `npm run build`
 4. Both are deployed together
 
+## Function Configuration
+
+When using the `builds` API (version 2), function settings like `maxDuration` and `memory` cannot be set in `vercel.json`. Configure these in the Vercel Dashboard:
+
+1. Go to **Project Settings** → **Functions**
+2. Set **Max Duration** (default: 10s for Hobby, 60s for Pro)
+3. Set **Memory** (default: 1024MB)
+
+Or upgrade to Vercel Pro plan for longer execution times (up to 60s).
+
 ## Troubleshooting
 
 - **Build fails**: Check that both `backend/package.json` and `frontend/package.json` exist
 - **API not working**: Verify `backend/api/index.js` exists and exports the app correctly
 - **Frontend not loading**: Check that `frontend/build` directory is generated during build
 - **Environment variables**: Ensure all required variables are set in Vercel dashboard
+- **Function timeout**: Increase max duration in Vercel Dashboard → Functions (requires Pro plan for >10s)
 

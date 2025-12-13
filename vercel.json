@@ -41,12 +41,6 @@
       "dest": "frontend/build/index.html"
     }
   ],
-  "functions": {
-    "backend/api/index.js": {
-      "maxDuration": 30,
-      "memory": 1024
-    }
-  },
   "regions": ["bom1"],
   "env": {
     "NODE_ENV": "production"

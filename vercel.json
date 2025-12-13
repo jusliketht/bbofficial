@@ -20,17 +20,15 @@
       }
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/api/(.*)",
-      "dest": "backend/api/index.js"
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
     },
     {
-      "src": "/health",
-      "dest": "backend/api/index.js"
-    }
-  ],
-  "rewrites": [
+      "source": "/health",
+      "destination": "/api/health"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"

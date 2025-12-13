@@ -62,6 +62,11 @@ BurnBlack/
 - [x] Document management with OCR
 - [x] Payment integration (Razorpay/Stripe) with bypass mode for development
 - [x] Enhanced Profile Settings with comprehensive validation
+- [x] Enhanced Component Library (DesignSystem)
+  - StatusBadge with animations and backward compatibility
+  - EmptyState with multiple variants and helper exports
+  - DataProvenanceIndicator for data source display
+  - DiscrepancyHandlingPattern for discrepancy resolution
   - Profile Tab: Address fields, real-time validation, completion indicator
   - Bank Accounts Tab: IFSC validation, auto-lookup, account masking
   - Filings Tab: Filtering, sorting, enhanced UX
@@ -81,6 +86,11 @@ BurnBlack/
 - [x] Family member management with deletion handling
 - [x] CA firm administration
 - [x] Previous year data copy with compatibility validation
+- [x] Enhanced AI-powered tax suggestions with context-aware recommendations
+  - Personalized suggestions based on user profile
+  - Detailed explanations (why, how, impact, deadline)
+  - Impact scoring and priority ranking
+  - Regime comparison suggestions
 - [x] ERI (e-Return Intermediary) integration setup (in progress)
   - ERI signing service with CMS/PKCS#7 signatures
   - ERI controller with basic endpoints

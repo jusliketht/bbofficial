@@ -32,6 +32,10 @@ Technical reference materials and analysis documents.
 - **[Alignment Review](./reference/alignment-review.md)** - Current implementation vs blueprint alignment
 - **[ITR Flow Analysis](./reference/itr-flow-analysis.md)** - Comprehensive ITR flow analysis
 - **[Business Logic](./reference/business-logic.md)** - Business logic sequence diagrams
+- **[UX Guidelines](./reference/UX.md)** - User experience guidelines
+
+### [Archive](./archive/)
+Historical documentation and completed implementation plans (for reference only).
 
 ### [Changelog](./changelog/)
 Project changelog and historical changes.

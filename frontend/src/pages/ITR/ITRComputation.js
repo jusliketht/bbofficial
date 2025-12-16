@@ -781,7 +781,6 @@ const ITRComputation = () => {
           if (draftResponse.draft?.itrType || parsedData.selectedITR) {
             restoredITR = draftResponse.draft?.itrType || parsedData.selectedITR;
             setSelectedITR(restoredITR);
-            
             // Ensure ITR-1 data structure is correct when loading
             if (restoredITR === 'ITR-1' || restoredITR === 'ITR1') {
               setFormData(prev => {

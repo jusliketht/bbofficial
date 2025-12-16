@@ -5,8 +5,9 @@
 const rateLimit = require('express-rate-limit');
 const { AuditLog } = require('../models');
 const enterpriseLogger = require('../utils/logger');
+const redisService = require('../services/core/RedisService');
 
-// Store failed attempts in memory (in production, use Redis)
+// Fallback in-memory stores (used when Redis unavailable)
 const failedAttempts = new Map();
 const lockouts = new Map();
 
@@ -25,9 +26,36 @@ const progressiveRateLimit = (options = {}) => {
     const key = req.ip || req.connection.remoteAddress;
     const now = Date.now();
 
-    // Check if IP is currently locked out
-    if (lockouts.has(key) && lockouts.get(key) > now) {
-      const remainingTime = Math.ceil((lockouts.get(key) - now) / 1000 / 60);
+    // Check if IP is currently locked out (Redis or fallback)
+    let isLockedOut = false;
+    let lockoutExpiry = null;
+
+    if (redisService.isReady()) {
+      try {
+        const client = redisService.getClient();
+        const lockoutKey = `rate_limit:lockout:${key}`;
+        const lockoutValue = await client.get(lockoutKey);
+        if (lockoutValue) {
+          lockoutExpiry = parseInt(lockoutValue);
+          isLockedOut = lockoutExpiry > now;
+        }
+      } catch (error) {
+        enterpriseLogger.error('Redis lockout check error', { error: error.message });
+        // Fallback to in-memory
+        isLockedOut = lockouts.has(key) && lockouts.get(key) > now;
+        if (isLockedOut) {
+          lockoutExpiry = lockouts.get(key);
+        }
+      }
+    } else {
+      isLockedOut = lockouts.has(key) && lockouts.get(key) > now;
+      if (isLockedOut) {
+        lockoutExpiry = lockouts.get(key);
+      }
+    }
+
+    if (isLockedOut && lockoutExpiry) {
+      const remainingTime = Math.ceil((lockoutExpiry - now) / 1000 / 60);
 
       await AuditLog.logAuthEvent({
         userId: null,
@@ -45,29 +73,87 @@ const progressiveRateLimit = (options = {}) => {
 
       return res.status(429).json({
         error: `Too many failed attempts. Try again in ${remainingTime} minutes.`,
-        retryAfter: Math.ceil((lockouts.get(key) - now) / 1000),
+        retryAfter: Math.ceil((lockoutExpiry - now) / 1000),
       });
     }
 
     // Clean up expired lockouts
-    if (lockouts.has(key) && lockouts.get(key) <= now) {
-      lockouts.delete(key);
+    if (redisService.isReady()) {
+      try {
+        const client = redisService.getClient();
+        const lockoutKey = `rate_limit:lockout:${key}`;
+        const lockoutValue = await client.get(lockoutKey);
+        if (lockoutValue && parseInt(lockoutValue) <= now) {
+          await client.del(lockoutKey);
+        }
+      } catch (error) {
+        enterpriseLogger.error('Redis lockout cleanup error', { error: error.message });
+      }
+    } else {
+      if (lockouts.has(key) && lockouts.get(key) <= now) {
+        lockouts.delete(key);
+      }
     }
 
-    // Get current failed attempts
-    const attempts = failedAttempts.get(key) || { count: 0, firstAttempt: now };
+    // Get current failed attempts (Redis or fallback)
+    let attempts = { count: 0, firstAttempt: now };
 
-    // Reset if window has passed
-    if (now - attempts.firstAttempt > windowMs) {
-      attempts.count = 0;
-      attempts.firstAttempt = now;
+    if (redisService.isReady()) {
+      try {
+        const client = redisService.getClient();
+        const attemptsKey = `rate_limit:attempts:${key}`;
+        const attemptsData = await client.get(attemptsKey);
+        
+        if (attemptsData) {
+          attempts = JSON.parse(attemptsData);
+        }
+        
+        // Reset if window has passed
+        if (now - attempts.firstAttempt > windowMs) {
+          attempts.count = 0;
+          attempts.firstAttempt = now;
+        }
+      } catch (error) {
+        enterpriseLogger.error('Redis attempts get error', { error: error.message });
+        // Fallback to in-memory
+        attempts = failedAttempts.get(key) || { count: 0, firstAttempt: now };
+        if (now - attempts.firstAttempt > windowMs) {
+          attempts.count = 0;
+          attempts.firstAttempt = now;
+        }
+      }
+    } else {
+      attempts = failedAttempts.get(key) || { count: 0, firstAttempt: now };
+      if (now - attempts.firstAttempt > windowMs) {
+        attempts.count = 0;
+        attempts.firstAttempt = now;
+      }
     }
 
     // Check if max attempts exceeded
     if (attempts.count >= maxAttempts) {
-      // Lock out the IP
-      lockouts.set(key, now + lockoutDuration);
-      failedAttempts.delete(key);
+      // Lock out the IP (Redis or fallback)
+      const lockoutExpiry = now + lockoutDuration;
+      
+      if (redisService.isReady()) {
+        try {
+          const client = redisService.getClient();
+          const lockoutKey = `rate_limit:lockout:${key}`;
+          await client.setex(lockoutKey, Math.ceil(lockoutDuration / 1000), lockoutExpiry.toString());
+          
+          // Clear attempts
+          const attemptsKey = `rate_limit:attempts:${key}`;
+          await client.del(attemptsKey);
+        } catch (error) {
+          enterpriseLogger.error('Redis lockout set error', { error: error.message });
+          // Fallback
+          lockouts.set(key, lockoutExpiry);
+          failedAttempts.delete(key);
+        }
+      } else {
+        lockouts.set(key, lockoutExpiry);
+        failedAttempts.delete(key);
+      }
 
       await AuditLog.logAuthEvent({
         userId: null,
@@ -95,8 +181,24 @@ const progressiveRateLimit = (options = {}) => {
       });
     }
 
-    // Store the attempt
-    failedAttempts.set(key, attempts);
+    // Store the attempt (Redis or fallback)
+    if (redisService.isReady()) {
+      try {
+        const client = redisService.getClient();
+        const attemptsKey = `rate_limit:attempts:${key}`;
+        await client.setex(
+          attemptsKey,
+          Math.ceil(windowMs / 1000),
+          JSON.stringify(attempts)
+        );
+      } catch (error) {
+        enterpriseLogger.error('Redis attempts set error', { error: error.message });
+        // Fallback
+        failedAttempts.set(key, attempts);
+      }
+    } else {
+      failedAttempts.set(key, attempts);
+    }
 
     // Continue to next middleware
     next();
@@ -110,16 +212,50 @@ const recordFailedAttempt = async (req, res, next) => {
   const key = req.ip || req.connection.remoteAddress;
   const now = Date.now();
 
-  // Get current attempts
-  const attempts = failedAttempts.get(key) || { count: 0, firstAttempt: now };
+  // Get current attempts (Redis or fallback)
+  let attempts = { count: 0, firstAttempt: now };
 
-  // Increment failed attempts
-  attempts.count++;
-  if (attempts.count === 1) {
-    attempts.firstAttempt = now;
+  if (redisService.isReady()) {
+    try {
+      const client = redisService.getClient();
+      const attemptsKey = `rate_limit:attempts:${key}`;
+      const attemptsData = await client.get(attemptsKey);
+      
+      if (attemptsData) {
+        attempts = JSON.parse(attemptsData);
+      }
+      
+      // Increment failed attempts
+      attempts.count++;
+      if (attempts.count === 1) {
+        attempts.firstAttempt = now;
+      }
+      
+      // Store back to Redis
+      const windowMs = 15 * 60 * 1000;
+      await client.setex(
+        attemptsKey,
+        Math.ceil(windowMs / 1000),
+        JSON.stringify(attempts)
+      );
+    } catch (error) {
+      enterpriseLogger.error('Redis record failed attempt error', { error: error.message });
+      // Fallback
+      attempts = failedAttempts.get(key) || { count: 0, firstAttempt: now };
+      attempts.count++;
+      if (attempts.count === 1) {
+        attempts.firstAttempt = now;
+      }
+      failedAttempts.set(key, attempts);
+    }
+  } else {
+    attempts = failedAttempts.get(key) || { count: 0, firstAttempt: now };
+    attempts.count++;
+    if (attempts.count === 1) {
+      attempts.firstAttempt = now;
+    }
+    failedAttempts.set(key, attempts);
   }
-
-  failedAttempts.set(key, attempts);
 
   await AuditLog.logAuthEvent({
     userId: null,
@@ -150,8 +286,32 @@ const recordFailedAttempt = async (req, res, next) => {
 const clearFailedAttempts = async (req, res, next) => {
   const key = req.ip || req.connection.remoteAddress;
 
-  if (failedAttempts.has(key)) {
-    failedAttempts.delete(key);
+  let hasAttempts = false;
+
+  if (redisService.isReady()) {
+    try {
+      const client = redisService.getClient();
+      const attemptsKey = `rate_limit:attempts:${key}`;
+      const exists = await client.exists(attemptsKey);
+      if (exists) {
+        hasAttempts = true;
+        await client.del(attemptsKey);
+      }
+    } catch (error) {
+      enterpriseLogger.error('Redis clear failed attempts error', { error: error.message });
+      hasAttempts = failedAttempts.has(key);
+      if (hasAttempts) {
+        failedAttempts.delete(key);
+      }
+    }
+  } else {
+    hasAttempts = failedAttempts.has(key);
+    if (hasAttempts) {
+      failedAttempts.delete(key);
+    }
+  }
+
+  if (hasAttempts) {
 
     await AuditLog.logAuthEvent({
       userId: req.user?.userId || null,
@@ -175,11 +335,27 @@ const clearFailedAttempts = async (req, res, next) => {
 };
 
 /**
+ * Create Redis store for express-rate-limit
+ */
+const createRedisStore = () => {
+  if (!redisService.isReady()) {
+    return undefined; // Use default in-memory store
+  }
+
+  const RedisStore = require('rate-limit-redis');
+  return new RedisStore({
+    client: redisService.getClient(),
+    prefix: 'rl:',
+  });
+};
+
+/**
  * Standard rate limiting for general endpoints
  */
 const standardRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // Limit each IP to 100 requests per windowMs
+  store: createRedisStore(), // Use Redis if available, fallback to memory
   message: {
     error: 'Too many requests from this IP, please try again later.',
   },
@@ -212,6 +388,7 @@ const standardRateLimit = rateLimit({
 const strictRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // Limit each IP to 5 requests per windowMs
+  store: createRedisStore(), // Use Redis if available, fallback to memory
   message: {
     error: 'Too many requests to sensitive endpoint, please try again later.',
   },

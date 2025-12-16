@@ -1,15 +1,20 @@
 // =====================================================
 // WEBSOCKET MANAGER SERVICE
 // Manages WebSocket connections and event broadcasting
+// Uses Redis pub/sub for cross-instance messaging
 // =====================================================
 
 const enterpriseLogger = require('../../utils/logger');
+const redisService = require('../core/RedisService');
 
 class WebSocketManager {
   constructor() {
     this.connections = new Map(); // userId -> Set of WebSocket connections
     this.adminConnections = new Set(); // Admin WebSocket connections
     this.isInitialized = false;
+    this.redisSubscriber = null;
+    this.redisPublisher = null;
+    this.instanceId = require('crypto').randomUUID(); // Unique instance ID
   }
 
   /**
@@ -88,8 +93,59 @@ class WebSocketManager {
         }));
       });
 
+      // Initialize Redis pub/sub for cross-instance messaging
+      if (redisService.isReady()) {
+        try {
+          this.redisSubscriber = redisService.getSubscriber();
+          this.redisPublisher = redisService.getPublisher();
+
+          // Subscribe to user-specific channels
+          await this.redisSubscriber.psubscribe('ws:user:*');
+          await this.redisSubscriber.psubscribe('ws:admin:*');
+          await this.redisSubscriber.psubscribe('ws:all:*');
+
+          // Handle messages from other instances
+          this.redisSubscriber.on('pmessage', (pattern, channel, message) => {
+            try {
+              const data = JSON.parse(message);
+              // Ignore messages from this instance
+              if (data.instanceId === this.instanceId) {
+                return;
+              }
+
+              // Route message to local connections
+              if (channel.startsWith('ws:user:')) {
+                const userId = channel.replace('ws:user:', '');
+                this._broadcastToLocalUser(userId, data.eventType, data.payload);
+              } else if (channel.startsWith('ws:admin:')) {
+                this._broadcastToLocalAdmins(data.eventType, data.payload);
+              } else if (channel === 'ws:all:*') {
+                this._broadcastToLocalAll(data.eventType, data.payload);
+              }
+            } catch (error) {
+              enterpriseLogger.error('Error processing Redis pub/sub message', {
+                error: error.message,
+                channel,
+              });
+            }
+          });
+
+          enterpriseLogger.info('Redis pub/sub initialized for WebSocket', {
+            instanceId: this.instanceId,
+          });
+        } catch (error) {
+          enterpriseLogger.warn('Redis pub/sub initialization failed', {
+            error: error.message,
+            note: 'WebSocket will work but cross-instance messaging disabled',
+          });
+        }
+      }
+
       this.isInitialized = true;
-      enterpriseLogger.info('WebSocket server initialized successfully');
+      enterpriseLogger.info('WebSocket server initialized successfully', {
+        instanceId: this.instanceId,
+        redisPubSub: !!this.redisPublisher,
+      });
     } catch (error) {
       enterpriseLogger.error('Failed to initialize WebSocket server', {
         error: error.message,
@@ -119,15 +175,12 @@ class WebSocketManager {
   }
 
   /**
-   * Broadcast event to specific user
-   * @param {string} userId - User ID
-   * @param {string} eventType - Event type
-   * @param {Object} payload - Event payload
+   * Broadcast event to specific user (local connections only)
    */
-  broadcastToUser(userId, eventType, payload) {
+  _broadcastToLocalUser(userId, eventType, payload) {
     const userConnections = this.connections.get(userId);
     if (!userConnections || userConnections.size === 0) {
-      return; // User not connected
+      return;
     }
 
     const message = JSON.stringify({
@@ -141,7 +194,7 @@ class WebSocketManager {
 
     let sentCount = 0;
     userConnections.forEach((ws) => {
-      if (ws.readyState === 1) { // WebSocket.OPEN
+      if (ws.readyState === 1) {
         try {
           ws.send(message);
           sentCount++;
@@ -155,7 +208,7 @@ class WebSocketManager {
     });
 
     if (sentCount > 0) {
-      enterpriseLogger.debug('Broadcasted event to user', {
+      enterpriseLogger.debug('Broadcasted event to local user', {
         userId,
         eventType,
         connections: sentCount,
@@ -164,13 +217,40 @@ class WebSocketManager {
   }
 
   /**
-   * Broadcast event to all admins
+   * Broadcast event to specific user (all instances via Redis)
+   * @param {string} userId - User ID
    * @param {string} eventType - Event type
    * @param {Object} payload - Event payload
    */
-  broadcastToAdmins(eventType, payload) {
+  broadcastToUser(userId, eventType, payload) {
+    // Broadcast to local connections
+    this._broadcastToLocalUser(userId, eventType, payload);
+
+    // Publish to Redis for other instances
+    if (this.redisPublisher) {
+      try {
+        const channel = `ws:user:${userId}`;
+        const message = JSON.stringify({
+          instanceId: this.instanceId,
+          eventType,
+          payload,
+        });
+        this.redisPublisher.publish(channel, message);
+      } catch (error) {
+        enterpriseLogger.error('Failed to publish WebSocket message to Redis', {
+          userId,
+          error: error.message,
+        });
+      }
+    }
+  }
+
+  /**
+   * Broadcast event to all admins (local connections only)
+   */
+  _broadcastToLocalAdmins(eventType, payload) {
     if (this.adminConnections.size === 0) {
-      return; // No admins connected
+      return;
     }
 
     const message = JSON.stringify({
@@ -183,7 +263,7 @@ class WebSocketManager {
 
     let sentCount = 0;
     this.adminConnections.forEach((ws) => {
-      if (ws.readyState === 1) { // WebSocket.OPEN
+      if (ws.readyState === 1) {
         try {
           ws.send(message);
           sentCount++;
@@ -196,7 +276,7 @@ class WebSocketManager {
     });
 
     if (sentCount > 0) {
-      enterpriseLogger.debug('Broadcasted event to admins', {
+      enterpriseLogger.debug('Broadcasted event to local admins', {
         eventType,
         connections: sentCount,
       });
@@ -204,11 +284,36 @@ class WebSocketManager {
   }
 
   /**
-   * Broadcast event to all connected users (platform-wide)
+   * Broadcast event to all admins (all instances via Redis)
    * @param {string} eventType - Event type
    * @param {Object} payload - Event payload
    */
-  broadcastToAll(eventType, payload) {
+  broadcastToAdmins(eventType, payload) {
+    // Broadcast to local connections
+    this._broadcastToLocalAdmins(eventType, payload);
+
+    // Publish to Redis for other instances
+    if (this.redisPublisher) {
+      try {
+        const channel = 'ws:admin:all';
+        const message = JSON.stringify({
+          instanceId: this.instanceId,
+          eventType,
+          payload,
+        });
+        this.redisPublisher.publish(channel, message);
+      } catch (error) {
+        enterpriseLogger.error('Failed to publish admin message to Redis', {
+          error: error.message,
+        });
+      }
+    }
+  }
+
+  /**
+   * Broadcast event to all connected users (local connections only)
+   */
+  _broadcastToLocalAll(eventType, payload) {
     const message = JSON.stringify({
       type: eventType,
       payload: {
@@ -236,13 +341,40 @@ class WebSocketManager {
     });
 
     // Also broadcast to admins
-    this.broadcastToAdmins(eventType, payload);
+    this._broadcastToLocalAdmins(eventType, payload);
 
     if (sentCount > 0) {
-      enterpriseLogger.debug('Broadcasted event to all users', {
+      enterpriseLogger.debug('Broadcasted event to local all users', {
         eventType,
         connections: sentCount,
       });
+    }
+  }
+
+  /**
+   * Broadcast event to all connected users (platform-wide, all instances)
+   * @param {string} eventType - Event type
+   * @param {Object} payload - Event payload
+   */
+  broadcastToAll(eventType, payload) {
+    // Broadcast to local connections
+    this._broadcastToLocalAll(eventType, payload);
+
+    // Publish to Redis for other instances
+    if (this.redisPublisher) {
+      try {
+        const channel = 'ws:all:platform';
+        const message = JSON.stringify({
+          instanceId: this.instanceId,
+          eventType,
+          payload,
+        });
+        this.redisPublisher.publish(channel, message);
+      } catch (error) {
+        enterpriseLogger.error('Failed to publish platform message to Redis', {
+          error: error.message,
+        });
+      }
     }
   }
 
@@ -256,10 +388,12 @@ class WebSocketManager {
     });
 
     return {
+      instanceId: this.instanceId,
       totalUsers: this.connections.size,
       totalUserConnections,
       totalAdminConnections: this.adminConnections.size,
       isInitialized: this.isInitialized,
+      redisPubSub: !!this.redisPublisher,
     };
   }
 }

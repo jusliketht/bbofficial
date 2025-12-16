@@ -560,7 +560,221 @@ const ITRComputation = () => {
         return hasChanges ? updated : prev;
       });
     }
-  }, [selectedITR, formData?.income?.businessIncome, formData?.income?.professionalIncome, formData?.income?.capitalGains, formData?.income?.houseProperty?.properties?.length, formData?.income?.foreignIncome, formData?.income?.directorPartner]);
+
+    // Enforce ITR-3 data structure constraints when formData changes
+    if (selectedITR === 'ITR-3' || selectedITR === 'ITR3') {
+      setFormData(prev => {
+        let updated = { ...prev };
+        let hasChanges = false;
+
+        // Ensure businessIncome is an object with businesses array (not a number)
+        if (typeof updated.income?.businessIncome === 'number') {
+          updated.income = {
+            ...updated.income,
+            businessIncome: {
+              businesses: [],
+            },
+          };
+          hasChanges = true;
+        }
+
+        // Ensure professionalIncome is an object with professions array (not a number)
+        if (typeof updated.income?.professionalIncome === 'number') {
+          updated.income = {
+            ...updated.income,
+            professionalIncome: {
+              professions: [],
+            },
+          };
+          hasChanges = true;
+        }
+
+        // Ensure capitalGains is an object (not 0) for ITR-3
+        if (typeof updated.income?.capitalGains === 'number' && updated.income.capitalGains === 0) {
+          updated.income = {
+            ...updated.income,
+            capitalGains: {
+              hasCapitalGains: false,
+              stcgDetails: [],
+              ltcgDetails: [],
+            },
+          };
+          hasChanges = true;
+        }
+
+        // Ensure foreignIncome is an object (not undefined) for ITR-3
+        if (updated.income?.foreignIncome === undefined) {
+          updated.income = {
+            ...updated.income,
+            foreignIncome: {
+              hasForeignIncome: false,
+              foreignIncomeDetails: [],
+            },
+          };
+          hasChanges = true;
+        }
+
+        // Ensure directorPartner is an object (not undefined) for ITR-3
+        if (updated.income?.directorPartner === undefined) {
+          updated.income = {
+            ...updated.income,
+            directorPartner: {
+              isDirector: false,
+              directorIncome: 0,
+              isPartner: false,
+              partnerIncome: 0,
+            },
+          };
+          hasChanges = true;
+        }
+
+        // Ensure balanceSheet is an object (not undefined) for ITR-3
+        if (updated.balanceSheet === undefined) {
+          updated.balanceSheet = {
+            hasBalanceSheet: false,
+            assets: {
+              currentAssets: { total: 0 },
+              fixedAssets: { total: 0 },
+              investments: 0,
+              loansAdvances: 0,
+              total: 0,
+            },
+            liabilities: {
+              currentLiabilities: { total: 0 },
+              longTermLiabilities: { total: 0 },
+              capital: 0,
+              total: 0,
+            },
+          };
+          hasChanges = true;
+        }
+
+        // Ensure auditInfo is an object (not undefined) for ITR-3
+        if (updated.auditInfo === undefined) {
+          updated.auditInfo = {
+            isAuditApplicable: false,
+            auditReportNumber: '',
+            auditReportDate: '',
+            caDetails: {},
+          };
+          hasChanges = true;
+        }
+
+        // Remove ITR-4 specific fields if they exist
+        if (updated.presumptiveIncome !== undefined) {
+          const { presumptiveIncome, ...rest } = updated;
+          updated = rest;
+          hasChanges = true;
+        }
+        if (updated.goodsCarriage !== undefined) {
+          const { goodsCarriage, ...rest } = updated;
+          updated = rest;
+          hasChanges = true;
+        }
+        if (updated.presumptiveBusiness !== undefined) {
+          const { presumptiveBusiness, ...rest } = updated;
+          updated = rest;
+          hasChanges = true;
+        }
+        if (updated.presumptiveProfessional !== undefined) {
+          const { presumptiveProfessional, ...rest } = updated;
+          updated = rest;
+          hasChanges = true;
+        }
+
+        return hasChanges ? updated : prev;
+      });
+    }
+
+    // Enforce ITR-4 data structure constraints when formData changes
+    if (selectedITR === 'ITR-4' || selectedITR === 'ITR4') {
+      setFormData(prev => {
+        let updated = { ...prev };
+        let hasChanges = false;
+
+        // Ensure businessIncome is 0 (not an object) for ITR-4
+        if (typeof updated.income?.businessIncome === 'object') {
+          updated.income = { ...updated.income, businessIncome: 0 };
+          hasChanges = true;
+        }
+
+        // Ensure professionalIncome is 0 (not an object) for ITR-4
+        if (typeof updated.income?.professionalIncome === 'object') {
+          updated.income = { ...updated.income, professionalIncome: 0 };
+          hasChanges = true;
+        }
+
+        // Ensure capitalGains is 0 (not an object) for ITR-4
+        if (typeof updated.income?.capitalGains === 'object') {
+          updated.income = { ...updated.income, capitalGains: 0 };
+          hasChanges = true;
+        }
+
+        // Ensure foreignIncome is undefined (not an object) for ITR-4
+        if (updated.income?.foreignIncome !== undefined) {
+          const { foreignIncome, ...restIncome } = updated.income;
+          updated.income = restIncome;
+          hasChanges = true;
+        }
+
+        // Ensure directorPartner is undefined (not an object) for ITR-4
+        if (updated.income?.directorPartner !== undefined) {
+          const { directorPartner, ...restIncome } = updated.income;
+          updated.income = restIncome;
+          hasChanges = true;
+        }
+
+        // Ensure presumptiveBusiness is an object (not undefined) for ITR-4
+        if (updated.income?.presumptiveBusiness === undefined) {
+          updated.income = {
+            ...updated.income,
+            presumptiveBusiness: {
+              hasPresumptiveBusiness: false,
+              grossReceipts: 0,
+              presumptiveRate: 8,
+              presumptiveIncome: 0,
+              optedOut: false,
+            },
+          };
+          hasChanges = true;
+        }
+
+        // Ensure presumptiveProfessional is an object (not undefined) for ITR-4
+        if (updated.income?.presumptiveProfessional === undefined) {
+          updated.income = {
+            ...updated.income,
+            presumptiveProfessional: {
+              hasPresumptiveProfessional: false,
+              grossReceipts: 0,
+              presumptiveRate: 50,
+              presumptiveIncome: 0,
+              optedOut: false,
+            },
+          };
+          hasChanges = true;
+        }
+
+        // Remove ITR-3 specific fields if they exist
+        if (updated.balanceSheet !== undefined) {
+          const { balanceSheet, ...rest } = updated;
+          updated = rest;
+          hasChanges = true;
+        }
+        if (updated.auditInfo !== undefined) {
+          const { auditInfo, ...rest } = updated;
+          updated = rest;
+          hasChanges = true;
+        }
+        if (updated.scheduleFA !== undefined) {
+          const { scheduleFA, ...rest } = updated;
+          updated = rest;
+          hasChanges = true;
+        }
+
+        return hasChanges ? updated : prev;
+      });
+    }
+  }, [selectedITR, formData?.income?.businessIncome, formData?.income?.professionalIncome, formData?.income?.capitalGains, formData?.income?.houseProperty?.properties?.length, formData?.income?.foreignIncome, formData?.income?.directorPartner, formData?.balanceSheet, formData?.auditInfo, formData?.income?.presumptiveBusiness, formData?.income?.presumptiveProfessional]);
   const [regimeComparison, setRegimeComparison] = useState(null);
   const [showComparison, setShowComparison] = useState(false);
   const [uploadedData, setUploadedData] = useState(null); // Track uploaded/scanned data
@@ -936,6 +1150,137 @@ const ITRComputation = () => {
                 return updated;
               });
             }
+
+            // Ensure ITR-3 data structure is correct when loading
+            if (restoredITR === 'ITR-3' || restoredITR === 'ITR3') {
+              setFormData(prev => {
+                const updated = { ...prev };
+                // Ensure businessIncome is an object (not a number)
+                if (typeof updated.income?.businessIncome === 'number') {
+                  updated.income.businessIncome = {
+                    businesses: [],
+                  };
+                }
+                // Ensure professionalIncome is an object (not a number)
+                if (typeof updated.income?.professionalIncome === 'number') {
+                  updated.income.professionalIncome = {
+                    professions: [],
+                  };
+                }
+                // Ensure capitalGains is an object (not 0)
+                if (typeof updated.income?.capitalGains === 'number' && updated.income.capitalGains === 0) {
+                  updated.income.capitalGains = {
+                    hasCapitalGains: false,
+                    stcgDetails: [],
+                    ltcgDetails: [],
+                  };
+                }
+                // Ensure foreignIncome is an object (not undefined)
+                if (updated.income?.foreignIncome === undefined) {
+                  updated.income.foreignIncome = {
+                    hasForeignIncome: false,
+                    foreignIncomeDetails: [],
+                  };
+                }
+                // Ensure directorPartner is an object (not undefined)
+                if (updated.income?.directorPartner === undefined) {
+                  updated.income.directorPartner = {
+                    isDirector: false,
+                    directorIncome: 0,
+                    isPartner: false,
+                    partnerIncome: 0,
+                  };
+                }
+                // Ensure balanceSheet is an object (not undefined)
+                if (updated.balanceSheet === undefined) {
+                  updated.balanceSheet = {
+                    hasBalanceSheet: false,
+                    assets: {
+                      currentAssets: { total: 0 },
+                      fixedAssets: { total: 0 },
+                      investments: 0,
+                      loansAdvances: 0,
+                      total: 0,
+                    },
+                    liabilities: {
+                      currentLiabilities: { total: 0 },
+                      longTermLiabilities: { total: 0 },
+                      capital: 0,
+                      total: 0,
+                    },
+                  };
+                }
+                // Ensure auditInfo is an object (not undefined)
+                if (updated.auditInfo === undefined) {
+                  updated.auditInfo = {
+                    isAuditApplicable: false,
+                    auditReportNumber: '',
+                    auditReportDate: '',
+                    caDetails: {},
+                  };
+                }
+                // Remove ITR-4 specific fields
+                delete updated.presumptiveIncome;
+                delete updated.goodsCarriage;
+                delete updated.presumptiveBusiness;
+                delete updated.presumptiveProfessional;
+                return updated;
+              });
+            }
+
+            // Ensure ITR-4 data structure is correct when loading
+            if (restoredITR === 'ITR-4' || restoredITR === 'ITR4') {
+              setFormData(prev => {
+                const updated = { ...prev };
+                // Ensure businessIncome is 0 (not an object)
+                if (typeof updated.income?.businessIncome === 'object') {
+                  updated.income.businessIncome = 0;
+                }
+                // Ensure professionalIncome is 0 (not an object)
+                if (typeof updated.income?.professionalIncome === 'object') {
+                  updated.income.professionalIncome = 0;
+                }
+                // Ensure capitalGains is 0 (not an object)
+                if (typeof updated.income?.capitalGains === 'object') {
+                  updated.income.capitalGains = 0;
+                }
+                // Ensure foreignIncome is undefined
+                if (updated.income?.foreignIncome !== undefined) {
+                  const { foreignIncome, ...restIncome } = updated.income;
+                  updated.income = restIncome;
+                }
+                // Ensure directorPartner is undefined
+                if (updated.income?.directorPartner !== undefined) {
+                  const { directorPartner, ...restIncome } = updated.income;
+                  updated.income = restIncome;
+                }
+                // Ensure presumptiveBusiness is an object (not undefined)
+                if (updated.income?.presumptiveBusiness === undefined) {
+                  updated.income.presumptiveBusiness = {
+                    hasPresumptiveBusiness: false,
+                    grossReceipts: 0,
+                    presumptiveRate: 8,
+                    presumptiveIncome: 0,
+                    optedOut: false,
+                  };
+                }
+                // Ensure presumptiveProfessional is an object (not undefined)
+                if (updated.income?.presumptiveProfessional === undefined) {
+                  updated.income.presumptiveProfessional = {
+                    hasPresumptiveProfessional: false,
+                    grossReceipts: 0,
+                    presumptiveRate: 50,
+                    presumptiveIncome: 0,
+                    optedOut: false,
+                  };
+                }
+                // Remove ITR-3 specific fields
+                delete updated.balanceSheet;
+                delete updated.auditInfo;
+                delete updated.scheduleFA;
+                return updated;
+              });
+            }
           }
 
           // Save to localStorage for page refresh recovery
@@ -989,9 +1334,9 @@ const ITRComputation = () => {
       }
     }
 
-    // Professional income (excluded for ITR-1 and ITR-2)
+    // Professional income (excluded for ITR-1, ITR-2, and ITR-4, included for ITR-3)
     let professionalIncome = 0;
-    if (itrType !== 'ITR-1' && itrType !== 'ITR1' && itrType !== 'ITR-2' && itrType !== 'ITR2') {
+    if (itrType !== 'ITR-1' && itrType !== 'ITR1' && itrType !== 'ITR-2' && itrType !== 'ITR2' && itrType !== 'ITR-4' && itrType !== 'ITR4') {
       if (typeof income.professionalIncome === 'object' && income.professionalIncome?.professions) {
         professionalIncome = income.professionalIncome.professions.reduce((sum, prof) =>
           sum + (parseFloat(prof.pnl?.netIncome || prof.netIncome || prof.netProfit || 0)), 0);
@@ -1013,9 +1358,9 @@ const ITRComputation = () => {
       housePropertyIncome = parseFloat(income.houseProperty || 0);
     }
 
-    // Capital gains (excluded for ITR-1, included for ITR-2)
+    // Capital gains (excluded for ITR-1 and ITR-4, included for ITR-2 and ITR-3)
     let capitalGains = 0;
-    if (itrType !== 'ITR-1' && itrType !== 'ITR1') {
+    if (itrType !== 'ITR-1' && itrType !== 'ITR1' && itrType !== 'ITR-4' && itrType !== 'ITR4') {
       if (typeof income.capitalGains === 'object' && income.capitalGains?.stcgDetails) {
         capitalGains = (income.capitalGains.stcgDetails || []).reduce((sum, e) => sum + (parseFloat(e.gainAmount) || 0), 0) +
           (income.capitalGains.ltcgDetails || []).reduce((sum, e) => sum + (parseFloat(e.gainAmount) || 0), 0);
@@ -1046,20 +1391,59 @@ const ITRComputation = () => {
       }
     }
 
-    // Foreign income (excluded for ITR-1, included for ITR-2)
-    const foreignIncome = (itrType !== 'ITR-1' && itrType !== 'ITR1')
+    // Foreign income (excluded for ITR-1 and ITR-4, included for ITR-2 and ITR-3)
+    const foreignIncome = (itrType !== 'ITR-1' && itrType !== 'ITR1' && itrType !== 'ITR-4' && itrType !== 'ITR4')
       ? (income.foreignIncome?.foreignIncomeDetails || []).reduce((sum, e) =>
           sum + (parseFloat(e.amountInr) || 0), 0)
       : 0;
 
-    // Director/Partner income (excluded for ITR-1, included for ITR-2)
-    const directorPartnerIncome = (itrType !== 'ITR-1' && itrType !== 'ITR1')
+    // Director/Partner income (excluded for ITR-1 and ITR-4, included for ITR-2 and ITR-3)
+    const directorPartnerIncome = (itrType !== 'ITR-1' && itrType !== 'ITR1' && itrType !== 'ITR-4' && itrType !== 'ITR4')
       ? (parseFloat(income.directorPartner?.directorIncome || 0) +
          parseFloat(income.directorPartner?.partnerIncome || 0))
       : 0;
 
+    // Presumptive business income (ITR-4 only)
+    let presumptiveBusinessIncome = 0;
+    if (itrType === 'ITR-4' || itrType === 'ITR4') {
+      const presumptiveBusiness = income.presumptiveBusiness || {};
+      if (presumptiveBusiness.hasPresumptiveBusiness && !presumptiveBusiness.optedOut) {
+        const presumptiveRate = presumptiveBusiness.presumptiveRate || 8;
+        presumptiveBusinessIncome = (presumptiveBusiness.grossReceipts || 0) * (presumptiveRate / 100);
+      } else if (presumptiveBusiness.hasPresumptiveBusiness && presumptiveBusiness.optedOut) {
+        presumptiveBusinessIncome = parseFloat(presumptiveBusiness.actualProfit || 0);
+      }
+    }
+
+    // Presumptive professional income (ITR-4 only)
+    let presumptiveProfessionalIncome = 0;
+    if (itrType === 'ITR-4' || itrType === 'ITR4') {
+      const presumptiveProfessional = income.presumptiveProfessional || {};
+      if (presumptiveProfessional.hasPresumptiveProfessional && !presumptiveProfessional.optedOut) {
+        const presumptiveRate = presumptiveProfessional.presumptiveRate || 50;
+        presumptiveProfessionalIncome = (presumptiveProfessional.grossReceipts || 0) * (presumptiveRate / 100);
+      } else if (presumptiveProfessional.hasPresumptiveProfessional && presumptiveProfessional.optedOut) {
+        presumptiveProfessionalIncome = parseFloat(presumptiveProfessional.actualIncome || 0);
+      }
+    }
+
+    // Goods carriage income (ITR-4 only, Section 44AE)
+    let goodsCarriageIncome = 0;
+    if (itrType === 'ITR-4' || itrType === 'ITR4') {
+      const goodsCarriage = data.goodsCarriage || {};
+      if (goodsCarriage.hasGoodsCarriage) {
+        const heavyVehicles = goodsCarriage.heavyVehicles || 0;
+        const lightVehicles = goodsCarriage.lightVehicles || 0;
+        // Heavy vehicle: ₹1,000 per ton per month, Light vehicle: ₹7,500 per vehicle per month
+        const heavyVehicleIncome = (heavyVehicles * 1000 * 12); // Assuming average tonnage calculation
+        const lightVehicleIncome = (lightVehicles * 7500 * 12);
+        goodsCarriageIncome = heavyVehicleIncome + lightVehicleIncome;
+      }
+    }
+
     const grossIncome = salaryIncome + businessIncome + professionalIncome + housePropertyIncome +
-      capitalGains + otherSourcesIncome + foreignIncome + directorPartnerIncome;
+      capitalGains + otherSourcesIncome + foreignIncome + directorPartnerIncome +
+      presumptiveBusinessIncome + presumptiveProfessionalIncome + goodsCarriageIncome;
 
     // Calculate deductions
     const totalDeductions = regime === 'old'
@@ -2641,6 +3025,149 @@ const ITRComputation = () => {
         delete sanitizedFormData.goodsCarriage;
       }
 
+      // Validate ITR-3 data before saving
+      if (selectedITR === 'ITR-3' || selectedITR === 'ITR3') {
+        const validationResult = validationEngine.validateBusinessRules(formData, selectedITR);
+        if (!validationResult.isValid && validationResult.errors.length > 0) {
+          toast.error(validationResult.errors[0], { duration: 6000 });
+          setIsSaving(false);
+          return;
+        }
+      }
+
+      // Ensure ITR-3 data structure is correct before saving
+      if (selectedITR === 'ITR-3' || selectedITR === 'ITR3') {
+        // Ensure businessIncome is an object (not a number)
+        if (typeof sanitizedFormData.income?.businessIncome === 'number') {
+          sanitizedFormData.income.businessIncome = {
+            businesses: [],
+          };
+        }
+        // Ensure professionalIncome is an object (not a number)
+        if (typeof sanitizedFormData.income?.professionalIncome === 'number') {
+          sanitizedFormData.income.professionalIncome = {
+            professions: [],
+          };
+        }
+        // Ensure capitalGains is an object (not 0)
+        if (typeof sanitizedFormData.income?.capitalGains === 'number' && sanitizedFormData.income.capitalGains === 0) {
+          sanitizedFormData.income.capitalGains = {
+            hasCapitalGains: false,
+            stcgDetails: [],
+            ltcgDetails: [],
+          };
+        }
+        // Ensure foreignIncome is an object (not undefined)
+        if (sanitizedFormData.income?.foreignIncome === undefined) {
+          sanitizedFormData.income.foreignIncome = {
+            hasForeignIncome: false,
+            foreignIncomeDetails: [],
+          };
+        }
+        // Ensure directorPartner is an object (not undefined)
+        if (sanitizedFormData.income?.directorPartner === undefined) {
+          sanitizedFormData.income.directorPartner = {
+            isDirector: false,
+            directorIncome: 0,
+            isPartner: false,
+            partnerIncome: 0,
+          };
+        }
+        // Ensure balanceSheet is an object (not undefined)
+        if (sanitizedFormData.balanceSheet === undefined) {
+          sanitizedFormData.balanceSheet = {
+            hasBalanceSheet: false,
+            assets: {
+              currentAssets: { total: 0 },
+              fixedAssets: { total: 0 },
+              investments: 0,
+              loansAdvances: 0,
+              total: 0,
+            },
+            liabilities: {
+              currentLiabilities: { total: 0 },
+              longTermLiabilities: { total: 0 },
+              capital: 0,
+              total: 0,
+            },
+          };
+        }
+        // Ensure auditInfo is an object (not undefined)
+        if (sanitizedFormData.auditInfo === undefined) {
+          sanitizedFormData.auditInfo = {
+            isAuditApplicable: false,
+            auditReportNumber: '',
+            auditReportDate: '',
+            caDetails: {},
+          };
+        }
+        // Remove ITR-4 specific fields
+        delete sanitizedFormData.presumptiveIncome;
+        delete sanitizedFormData.goodsCarriage;
+        delete sanitizedFormData.presumptiveBusiness;
+        delete sanitizedFormData.presumptiveProfessional;
+      }
+
+      // Validate ITR-4 data before saving
+      if (selectedITR === 'ITR-4' || selectedITR === 'ITR4') {
+        const validationResult = validationEngine.validateBusinessRules(formData, selectedITR);
+        if (!validationResult.isValid && validationResult.errors.length > 0) {
+          toast.error(validationResult.errors[0], { duration: 6000 });
+          setIsSaving(false);
+          return;
+        }
+      }
+
+      // Ensure ITR-4 data structure is correct before saving
+      if (selectedITR === 'ITR-4' || selectedITR === 'ITR4') {
+        // Ensure businessIncome is 0 (not an object)
+        if (typeof sanitizedFormData.income?.businessIncome === 'object') {
+          sanitizedFormData.income.businessIncome = 0;
+        }
+        // Ensure professionalIncome is 0 (not an object)
+        if (typeof sanitizedFormData.income?.professionalIncome === 'object') {
+          sanitizedFormData.income.professionalIncome = 0;
+        }
+        // Ensure capitalGains is 0 (not an object)
+        if (typeof sanitizedFormData.income?.capitalGains === 'object') {
+          sanitizedFormData.income.capitalGains = 0;
+        }
+        // Ensure foreignIncome is undefined
+        if (sanitizedFormData.income?.foreignIncome !== undefined) {
+          const { foreignIncome, ...restIncome } = sanitizedFormData.income;
+          sanitizedFormData.income = restIncome;
+        }
+        // Ensure directorPartner is undefined
+        if (sanitizedFormData.income?.directorPartner !== undefined) {
+          const { directorPartner, ...restIncome } = sanitizedFormData.income;
+          sanitizedFormData.income = restIncome;
+        }
+        // Ensure presumptiveBusiness is an object (not undefined)
+        if (sanitizedFormData.income?.presumptiveBusiness === undefined) {
+          sanitizedFormData.income.presumptiveBusiness = {
+            hasPresumptiveBusiness: false,
+            grossReceipts: 0,
+            presumptiveRate: 8,
+            presumptiveIncome: 0,
+            optedOut: false,
+          };
+        }
+        // Ensure presumptiveProfessional is an object (not undefined)
+        if (sanitizedFormData.income?.presumptiveProfessional === undefined) {
+          sanitizedFormData.income.presumptiveProfessional = {
+            hasPresumptiveProfessional: false,
+            grossReceipts: 0,
+            presumptiveRate: 50,
+            presumptiveIncome: 0,
+            optedOut: false,
+          };
+        }
+        // Remove ITR-3 specific fields
+        delete sanitizedFormData.balanceSheet;
+        delete sanitizedFormData.auditInfo;
+        delete sanitizedFormData.scheduleFA;
+      }
+
       const draftData = {
         formData: sanitizedFormData,
         selectedITR,
@@ -3001,11 +3528,12 @@ const ITRComputation = () => {
       if ((selectedITR === 'ITR-4' || selectedITR === 'ITR4')) {
         const presumptiveBusiness = validationFormData.income?.presumptiveBusiness || {};
         const presumptiveProfessional = validationFormData.income?.presumptiveProfessional || {};
-        if (presumptiveBusiness.grossReceipts > 2000000) {
-          criticalErrors.push('ITR-4 business income limit exceeded. Gross receipts (₹' + presumptiveBusiness.grossReceipts.toLocaleString('en-IN') + ') exceeds ₹20 lakh limit. Please use ITR-3.');
+        // Updated limits: ₹2 crores for business, ₹50 lakhs for profession
+        if (presumptiveBusiness.grossReceipts > 20000000) {
+          criticalErrors.push('ITR-4 business income limit exceeded. Gross receipts (₹' + presumptiveBusiness.grossReceipts.toLocaleString('en-IN') + ') exceeds ₹2 crores limit. Please use ITR-3.');
         }
-        if (presumptiveProfessional.grossReceipts > 500000) {
-          criticalErrors.push('ITR-4 professional income limit exceeded. Gross receipts (₹' + presumptiveProfessional.grossReceipts.toLocaleString('en-IN') + ') exceeds ₹5 lakh limit. Please use ITR-3.');
+        if (presumptiveProfessional.grossReceipts > 5000000) {
+          criticalErrors.push('ITR-4 professional income limit exceeded. Gross receipts (₹' + presumptiveProfessional.grossReceipts.toLocaleString('en-IN') + ') exceeds ₹50 lakhs limit. Please use ITR-3.');
         }
       }
 
@@ -3379,8 +3907,8 @@ const ITRComputation = () => {
       }
     }
 
-    // Professional income (excluded for ITR-1 and ITR-2)
-    if (selectedITR !== 'ITR-1' && selectedITR !== 'ITR1' && selectedITR !== 'ITR-2' && selectedITR !== 'ITR2') {
+    // Professional income (excluded for ITR-1, ITR-2, and ITR-4, included for ITR-3)
+    if (selectedITR !== 'ITR-1' && selectedITR !== 'ITR1' && selectedITR !== 'ITR-2' && selectedITR !== 'ITR2' && selectedITR !== 'ITR-4' && selectedITR !== 'ITR4') {
       if (typeof income.professionalIncome === 'object' && income.professionalIncome?.professions) {
         total += (income.professionalIncome.professions || []).reduce((sum, p) =>
           sum + (parseFloat(p.pnl?.netIncome || p.netIncome || p.netProfit || 0)), 0);
@@ -3435,16 +3963,51 @@ const ITRComputation = () => {
       total += parseFloat(income.houseProperty) || 0;
     }
 
-    // Foreign income (excluded for ITR-1, included for ITR-2)
-    if (selectedITR !== 'ITR-1' && selectedITR !== 'ITR1') {
+    // Foreign income (excluded for ITR-1 and ITR-4, included for ITR-2 and ITR-3)
+    if (selectedITR !== 'ITR-1' && selectedITR !== 'ITR1' && selectedITR !== 'ITR-4' && selectedITR !== 'ITR4') {
       total += (income.foreignIncome?.foreignIncomeDetails || []).reduce((sum, e) =>
         sum + (parseFloat(e.amountInr) || 0), 0);
     }
 
-    // Director/Partner income (excluded for ITR-1, included for ITR-2)
-    if (selectedITR !== 'ITR-1' && selectedITR !== 'ITR1') {
+    // Director/Partner income (excluded for ITR-1 and ITR-4, included for ITR-2 and ITR-3)
+    if (selectedITR !== 'ITR-1' && selectedITR !== 'ITR1' && selectedITR !== 'ITR-4' && selectedITR !== 'ITR4') {
       total += parseFloat(income.directorPartner?.directorIncome) || 0;
       total += parseFloat(income.directorPartner?.partnerIncome) || 0;
+    }
+
+    // Presumptive business income (ITR-4 only)
+    if (selectedITR === 'ITR-4' || selectedITR === 'ITR4') {
+      const presumptiveBusiness = income.presumptiveBusiness || {};
+      if (presumptiveBusiness.hasPresumptiveBusiness && !presumptiveBusiness.optedOut) {
+        const presumptiveRate = presumptiveBusiness.presumptiveRate || 8;
+        total += (presumptiveBusiness.grossReceipts || 0) * (presumptiveRate / 100);
+      } else if (presumptiveBusiness.hasPresumptiveBusiness && presumptiveBusiness.optedOut) {
+        total += parseFloat(presumptiveBusiness.actualProfit || 0);
+      }
+    }
+
+    // Presumptive professional income (ITR-4 only)
+    if (selectedITR === 'ITR-4' || selectedITR === 'ITR4') {
+      const presumptiveProfessional = income.presumptiveProfessional || {};
+      if (presumptiveProfessional.hasPresumptiveProfessional && !presumptiveProfessional.optedOut) {
+        const presumptiveRate = presumptiveProfessional.presumptiveRate || 50;
+        total += (presumptiveProfessional.grossReceipts || 0) * (presumptiveRate / 100);
+      } else if (presumptiveProfessional.hasPresumptiveProfessional && presumptiveProfessional.optedOut) {
+        total += parseFloat(presumptiveProfessional.actualIncome || 0);
+      }
+    }
+
+    // Goods carriage income (ITR-4 only, Section 44AE)
+    if (selectedITR === 'ITR-4' || selectedITR === 'ITR4') {
+      const goodsCarriage = formData.goodsCarriage || {};
+      if (goodsCarriage.hasGoodsCarriage) {
+        const heavyVehicles = goodsCarriage.heavyVehicles || 0;
+        const lightVehicles = goodsCarriage.lightVehicles || 0;
+        // Heavy vehicle: ₹1,000 per ton per month, Light vehicle: ₹7,500 per vehicle per month
+        const heavyVehicleIncome = (heavyVehicles * 1000 * 12); // Assuming average tonnage calculation
+        const lightVehicleIncome = (lightVehicles * 7500 * 12);
+        total += heavyVehicleIncome + lightVehicleIncome;
+      }
     }
 
     // Validation: Log warning if income sources might be missing (development only)
@@ -3648,6 +4211,162 @@ const ITRComputation = () => {
                       delete updated.auditInfo;
                       delete updated.presumptiveIncome;
                       delete updated.goodsCarriage;
+                      return updated;
+                    });
+                  }
+
+                  // Validate ITR change for ITR-3
+                  if (newITR === 'ITR-3' || newITR === 'ITR3') {
+                    // Check if current data is compatible with ITR-3
+                    const validationResult = validationEngine.validateBusinessRules(formData, newITR);
+                    if (!validationResult.isValid && validationResult.errors.length > 0) {
+                      toast.error(validationResult.errors[0] + ' Cannot switch to ITR-3.', { duration: 6000 });
+                      return; // Don't change ITR type
+                    }
+                    // Sanitize form data for ITR-3
+                    setFormData(prev => {
+                      const updated = { ...prev };
+                      // Ensure businessIncome is an object (not a number)
+                      if (typeof updated.income?.businessIncome === 'number') {
+                        updated.income.businessIncome = {
+                          businesses: [],
+                        };
+                      }
+                      // Ensure professionalIncome is an object (not a number)
+                      if (typeof updated.income?.professionalIncome === 'number') {
+                        updated.income.professionalIncome = {
+                          professions: [],
+                        };
+                      }
+                      // Ensure capitalGains is an object (not 0)
+                      if (typeof updated.income?.capitalGains === 'number' && updated.income.capitalGains === 0) {
+                        updated.income.capitalGains = {
+                          hasCapitalGains: false,
+                          stcgDetails: [],
+                          ltcgDetails: [],
+                        };
+                      }
+                      // Ensure foreignIncome is an object (not undefined)
+                      if (updated.income?.foreignIncome === undefined) {
+                        updated.income.foreignIncome = {
+                          hasForeignIncome: false,
+                          foreignIncomeDetails: [],
+                        };
+                      }
+                      // Ensure directorPartner is an object (not undefined)
+                      if (updated.income?.directorPartner === undefined) {
+                        updated.income.directorPartner = {
+                          isDirector: false,
+                          directorIncome: 0,
+                          isPartner: false,
+                          partnerIncome: 0,
+                        };
+                      }
+                      // Ensure balanceSheet is an object (not undefined)
+                      if (updated.balanceSheet === undefined) {
+                        updated.balanceSheet = {
+                          hasBalanceSheet: false,
+                          assets: {
+                            currentAssets: { total: 0 },
+                            fixedAssets: { total: 0 },
+                            investments: 0,
+                            loansAdvances: 0,
+                            total: 0,
+                          },
+                          liabilities: {
+                            currentLiabilities: { total: 0 },
+                            longTermLiabilities: { total: 0 },
+                            capital: 0,
+                            total: 0,
+                          },
+                        };
+                      }
+                      // Ensure auditInfo is an object (not undefined)
+                      if (updated.auditInfo === undefined) {
+                        updated.auditInfo = {
+                          isAuditApplicable: false,
+                          auditReportNumber: '',
+                          auditReportDate: '',
+                          caDetails: {},
+                        };
+                      }
+                      // Remove ITR-4 specific fields
+                      delete updated.presumptiveIncome;
+                      delete updated.goodsCarriage;
+                      delete updated.presumptiveBusiness;
+                      delete updated.presumptiveProfessional;
+                      return updated;
+                    });
+                  }
+
+                  // Validate ITR change for ITR-4
+                  if (newITR === 'ITR-4' || newITR === 'ITR4') {
+                    // Check if current data is compatible with ITR-4
+                    const validationResult = validationEngine.validateBusinessRules(formData, newITR);
+                    if (!validationResult.isValid && validationResult.errors.length > 0) {
+                      toast.error(validationResult.errors[0] + ' Cannot switch to ITR-4.', { duration: 6000 });
+                      return; // Don't change ITR type
+                    }
+                    // Sanitize form data for ITR-4
+                    setFormData(prev => {
+                      const updated = { ...prev };
+                      // Ensure businessIncome is 0 (not an object)
+                      if (typeof updated.income?.businessIncome === 'object') {
+                        updated.income.businessIncome = 0;
+                      }
+                      // Ensure professionalIncome is 0 (not an object)
+                      if (typeof updated.income?.professionalIncome === 'object') {
+                        updated.income.professionalIncome = 0;
+                      }
+                      // Ensure capitalGains is 0 (not an object)
+                      if (typeof updated.income?.capitalGains === 'object') {
+                        updated.income.capitalGains = 0;
+                      }
+                      // Remove foreign income if it exists
+                      if (updated.income?.foreignIncome !== undefined) {
+                        const { foreignIncome, ...restIncome } = updated.income;
+                        updated.income = restIncome;
+                      }
+                      // Remove director/partner income if it exists
+                      if (updated.income?.directorPartner !== undefined) {
+                        const { directorPartner, ...restIncome } = updated.income;
+                        updated.income = restIncome;
+                      }
+                      // Remove balance sheet if it exists
+                      if (updated.balanceSheet !== undefined) {
+                        const { balanceSheet, ...rest } = updated;
+                        updated = rest;
+                      }
+                      // Remove audit info if it exists
+                      if (updated.auditInfo !== undefined) {
+                        const { auditInfo, ...rest } = updated;
+                        updated = rest;
+                      }
+                      // Remove Schedule FA if it exists
+                      if (updated.scheduleFA !== undefined) {
+                        const { scheduleFA, ...rest } = updated;
+                        updated = rest;
+                      }
+                      // Initialize presumptive business income if it doesn't exist
+                      if (updated.income?.presumptiveBusiness === undefined) {
+                        updated.income.presumptiveBusiness = {
+                          hasPresumptiveBusiness: false,
+                          grossReceipts: 0,
+                          presumptiveRate: 8,
+                          presumptiveIncome: 0,
+                          optedOut: false,
+                        };
+                      }
+                      // Initialize presumptive professional income if it doesn't exist
+                      if (updated.income?.presumptiveProfessional === undefined) {
+                        updated.income.presumptiveProfessional = {
+                          hasPresumptiveProfessional: false,
+                          grossReceipts: 0,
+                          presumptiveRate: 50,
+                          presumptiveIncome: 0,
+                          optedOut: false,
+                        };
+                      }
                       return updated;
                     });
                   }

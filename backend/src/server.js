@@ -12,6 +12,9 @@ const fs = require('fs');
 const path = require('path');
 const enterpriseLogger = require('./utils/logger');
 const { initializeDatabase, testConnection } = require('./config/database');
+const redisService = require('./services/core/RedisService');
+const dbPoolMonitor = require('./utils/dbPoolMonitor');
+const jobQueueService = require('./services/core/JobQueue');
 const app = require('./app');
 const wsManager = require('./services/websocket/WebSocketManager');
 
@@ -111,15 +114,37 @@ server.on('listening', () => {
 // =====================================================
 
 // Graceful shutdown function;
-const gracefulShutdown = signal => {
+const gracefulShutdown = async signal => {
   enterpriseLogger.info(`${signal} received, starting graceful shutdown`);
 
-  server.close(err => {
+  // Close job queues
+  try {
+    await jobQueueService.close();
+  } catch (error) {
+    enterpriseLogger.error('Error closing job queues', { error: error.message });
+  }
+
+  // Close Redis connections
+  try {
+    await redisService.disconnect();
+  } catch (error) {
+    enterpriseLogger.error('Error disconnecting Redis', { error: error.message });
+  }
+
+  server.close(async (err) => {
     if (err) {
       enterpriseLogger.error('Error during server shutdown', {
         error: err.message,
       });
       process.exit(1);
+    }
+
+    // Close database connection
+    try {
+      const { closeDatabase } = require('./config/database');
+      await closeDatabase();
+    } catch (error) {
+      enterpriseLogger.error('Error closing database', { error: error.message });
     }
 
     enterpriseLogger.info('Server closed successfully');
@@ -153,6 +178,19 @@ const startServer = async () => {
       process.exit(1);
     }
     
+    // Initialize Redis (non-blocking - server can start without Redis in dev)
+    enterpriseLogger.info('Initializing Redis connection...');
+    const redisConnected = await redisService.initialize();
+    if (!redisConnected) {
+      enterpriseLogger.warn('Redis connection failed. Server will continue but some features may be limited.', {
+        note: 'Rate limiting, sessions, and caching will use fallback mechanisms',
+      });
+    } else {
+      // Initialize job queue if Redis is available
+      enterpriseLogger.info('Initializing job queue service...');
+      await jobQueueService.initialize();
+    }
+    
     // Verify schema exists
     enterpriseLogger.info('Verifying database schema...');
     const { sequelize } = require('./config/database');
@@ -169,8 +207,19 @@ const startServer = async () => {
         port: PORT,
         environment: NODE_ENV,
         databaseConnected: true,
+        redisConnected: redisConnected,
         tablesFound: tables.length,
       });
+
+      // Start database pool monitoring
+      try {
+        dbPoolMonitor.start();
+        enterpriseLogger.info('Database pool monitor started');
+      } catch (error) {
+        enterpriseLogger.warn('Database pool monitor failed to start', {
+          error: error.message,
+        });
+      }
 
       // Initialize WebSocket server
       try {

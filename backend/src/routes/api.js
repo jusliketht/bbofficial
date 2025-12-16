@@ -39,13 +39,52 @@ const strictLimiter = rateLimit({
 // =====================================================
 
 // Health check endpoint
-router.get('/health', (req, res) => {
-  res.json({
+router.get('/health', async (req, res) => {
+  const dbPoolMonitor = require('../utils/dbPoolMonitor');
+  const redisService = require('../services/core/RedisService');
+  const { testConnection } = require('../config/database');
+
+  const health = {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     version: '1.0.0',
-  });
+    services: {},
+  };
+
+  // Check database
+  try {
+    const dbConnected = await testConnection();
+    const poolStats = await dbPoolMonitor.getStats();
+    health.services.database = {
+      connected: dbConnected,
+      pool: poolStats,
+    };
+  } catch (error) {
+    health.services.database = {
+      connected: false,
+      error: error.message,
+    };
+    health.status = 'degraded';
+  }
+
+  // Check Redis
+  try {
+    const redisHealth = await redisService.healthCheck();
+    health.services.redis = redisHealth;
+    if (!redisHealth.healthy) {
+      health.status = 'degraded';
+    }
+  } catch (error) {
+    health.services.redis = {
+      healthy: false,
+      error: error.message,
+    };
+    health.status = 'degraded';
+  }
+
+  const statusCode = health.status === 'healthy' ? 200 : 503;
+  res.status(statusCode).json(health);
 });
 
 // API status endpoint

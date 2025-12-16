@@ -38,7 +38,8 @@
     "admin:test-login": "node src/scripts/testAdminLogin.js",
     "admin:check": "node src/scripts/checkAdminUser.js",
     "admin:test-query": "node src/scripts/testLoginQuery.js",
-    "db:add-user-columns": "node src/scripts/addMissingUserColumns.js"
+    "db:add-user-columns": "node src/scripts/addMissingUserColumns.js",
+    "db:add-scalability-indexes": "node src/scripts/migrations/add-scalability-indexes.js"
   },
   "keywords": [
     "itr",
@@ -83,6 +84,10 @@
     "razorpay": "^2.9.6",
     "react-dropzone": "^14.2.3",
     "sequelize": "^6.35.0",
+    "ioredis": "^5.3.2",
+    "connect-redis": "^7.1.0",
+    "bull": "^4.12.2",
+    "rate-limit-redis": "^4.1.1",
     "tesseract.js": "^6.0.1",
     "twilio": "^4.19.0",
     "uuid": "^9.0.1",

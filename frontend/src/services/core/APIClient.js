@@ -282,7 +282,11 @@ class APIClient {
 
   // HTTP methods with retry logic and caching
   async get(url, config = {}) {
-    const cacheKey = `GET:${url}`;
+    // Build cache key with user context if available
+    const userId = this.getUserIdFromToken();
+    const cacheKey = userId 
+      ? `GET:${url}:user:${userId}` // User-specific cache key
+      : `GET:${url}`; // Global cache key
 
     // Check cache if enabled
     if (!config._skipCache && this.cache.has(cacheKey)) {
@@ -303,6 +307,21 @@ class APIClient {
     }
 
     return response;
+  }
+
+  /**
+   * Extract user ID from JWT token if available
+   */
+  getUserIdFromToken() {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return null;
+      
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.userId || null;
+    } catch (error) {
+      return null;
+    }
   }
 
   async post(url, data = {}, config = {}) {

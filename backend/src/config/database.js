@@ -105,10 +105,11 @@ if (connectionString) {
 
     // Connection pool settings
     pool: {
-      max: parseInt(process.env.DB_POOL_MAX) || 20,
-      min: parseInt(process.env.DB_POOL_MIN) || 5,
+      max: parseInt(process.env.DB_POOL_MAX) || 50, // Increased from 20 to 50 for better concurrency
+      min: parseInt(process.env.DB_POOL_MIN) || 10, // Increased from 5 to 10
       acquire: parseInt(process.env.DB_POOL_ACQUIRE) || 30000,
       idle: parseInt(process.env.DB_POOL_IDLE) || 10000,
+      evict: parseInt(process.env.DB_POOL_EVICT) || 1000, // Check for idle connections every 1s
     },
 
     // Connection timeout settings

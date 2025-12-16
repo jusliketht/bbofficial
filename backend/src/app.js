@@ -10,8 +10,10 @@ const morgan = require('morgan');
 const compression = require('compression');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
+const RedisStore = require('connect-redis').default;
 const passport = require('./config/passport');
 const enterpriseLogger = require('./utils/logger');
+const redisService = require('./services/core/RedisService');
 const { globalErrorHandler } = require('./middleware/errorHandler');
 
 // Import routes;
@@ -51,7 +53,8 @@ app.use(
 app.use(cookieParser());
 
 // Session configuration for OAuth state parameter
-app.use(session({
+// Use Redis store if available, fallback to memory store
+const sessionConfig = {
   secret: process.env.SESSION_SECRET || 'your-session-secret',
   resave: false,
   saveUninitialized: false,
@@ -62,7 +65,27 @@ app.use(session({
     maxAge: 15 * 60 * 1000, // 15 minutes for OAuth state
     sameSite: 'lax', // Allow cross-site requests for OAuth
   },
-}));
+};
+
+// Use Redis store if Redis is available
+if (redisService.isReady()) {
+  try {
+    sessionConfig.store = new RedisStore({
+      client: redisService.getClient(),
+      prefix: 'session:',
+      ttl: 15 * 60, // 15 minutes in seconds
+    });
+    enterpriseLogger.info('Using Redis session store');
+  } catch (error) {
+    enterpriseLogger.warn('Failed to initialize Redis session store, using memory store', {
+      error: error.message,
+    });
+  }
+} else {
+  enterpriseLogger.info('Using in-memory session store (Redis not available)');
+}
+
+app.use(session(sessionConfig));
 
 // Initialize Passport
 app.use(passport.initialize());

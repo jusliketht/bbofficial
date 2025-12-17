@@ -4,7 +4,7 @@
 // =====================================================
 
 import React, { useState, useEffect } from 'react';
-import { enterpriseLogger } from '../../../../utils/logger';
+import { enterpriseLogger } from '../../../utils/logger';
 import {
   CheckCircle,
   AlertCircle,

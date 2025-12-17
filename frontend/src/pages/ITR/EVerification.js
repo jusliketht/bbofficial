@@ -26,6 +26,7 @@ import toast from 'react-hot-toast';
 import apiClient from '../../services/core/APIClient';
 import itrService from '../../services/api/itrService';
 import EVerificationOptions from '../../components/ITR/EVerificationOptions';
+import { ensureJourneyStart, trackEvent } from '../../utils/analyticsEvents';
 
 const EVerification = () => {
   const navigate = useNavigate();
@@ -62,6 +63,17 @@ const EVerification = () => {
       setFilingId(location.state.filingId);
     }
   }, [acknowledgmentNumber, filing, location.state, navigate]);
+
+  // Funnel analytics: e-verification view
+  useEffect(() => {
+    ensureJourneyStart();
+    trackEvent('itr_everify_view', {
+      filingId: filingId || filing?.id || null,
+      acknowledgmentNumber: acknowledgmentNumber || null,
+      assessmentYear: assessmentYear || null,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Resend timer countdown
   useEffect(() => {
@@ -171,6 +183,11 @@ const EVerification = () => {
       if (response.data?.verified) {
         setVerificationStatus('success');
         toast.success('ITR verified successfully!');
+        trackEvent('itr_everify_success', {
+          filingId: filingId || null,
+          acknowledgmentNumber: acknowledgmentNumber || null,
+          method: selectedMethod || null,
+        });
         // If filingId exists, mark ITR-V as verified
         if (filingId) {
           try {

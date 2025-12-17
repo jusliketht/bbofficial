@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useLocation, useSearchParams, useParams } from 'react-router-dom';
 // Lazy load icons to reduce initial bundle size
-import { ArrowLeft, Save, Download, FileText, User, IndianRupee, Calculator, CreditCard, Building2, CheckCircle, Globe, Shield, Wheat } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Save, Download, FileText, User, IndianRupee, Calculator, CreditCard, Building2, CheckCircle, Globe, Shield, Wheat } from 'lucide-react';
 import ComputationSection from '../../components/ITR/ComputationSection';
 import ComputationSheet from '../../components/ITR/ComputationSheet';
 import TaxRegimeToggle from '../../components/ITR/TaxRegimeToggle';
@@ -39,8 +39,7 @@ import DocumentChecklist from '../../components/CA/DocumentChecklist';
 import CANotes from '../../components/CA/CANotes';
 import ClientCommunication from '../../components/CA/ClientCommunication';
 import ITRFormSelector from '../../components/ITR/ITRFormSelector';
-import EVerificationModal from '../../components/ITR/EVerificationModal';
-import { ScheduleFA } from '../../features/foreign-assets';
+import { ScheduleFA, useForeignAssets } from '../../features/foreign-assets';
 import { TaxOptimizer } from '../../features/tax-optimizer';
 import { useExportDraftPDF } from '../../features/pdf-export/hooks/use-pdf-export';
 import PDFExportButton from '../../features/pdf-export/components/pdf-export-button';
@@ -57,13 +56,22 @@ import verificationStatusService from '../../services/VerificationStatusService'
 import { motion, AnimatePresence } from 'framer-motion';
 import ITRComputationHeader from '../../components/ITR/ITRComputationHeader';
 import ITRComputationContent from '../../components/ITR/ITRComputationContent';
+import { ensureJourneyStart, trackEvent } from '../../utils/analyticsEvents';
+import {
+  orderSections as orderGuidedSections,
+  shouldShowSection as shouldShowGuidedSection,
+  canProceedFromSection as canProceedGuided,
+  getMissingRequired,
+  getNextSectionId,
+  getPrevSectionId,
+} from './sectionFlow';
 
 const ITRComputation = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const params = useParams();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading, refreshProfile } = useAuth();
   const isCAUser = user && isCA(user.role);
   const [isSaving, setIsSaving] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState('saved'); // 'saving', 'saved', 'error', 'offline'
@@ -80,6 +88,10 @@ const ITRComputation = () => {
   const [expandedSectionId, setExpandedSectionId] = useState(null); // For BreathingGrid (legacy)
   const [activeSectionId, setActiveSectionId] = useState('personalInfo'); // For sidebar navigation
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const trackedComputationViewRef = useRef(false);
+  const trackedCollectDataViewRef = useRef(false);
+  const sectionCompletedOnceRef = useRef(new Set());
+  const initialSectionAppliedRef = useRef(false);
 
   // Helper function for safe localStorage operations
   const safeLocalStorageGet = (key, defaultValue = null) => {
@@ -141,8 +153,16 @@ const ITRComputation = () => {
   const effectiveDraftId = searchParams.get('draftId') || location.state?.draftId || draftIdLocal;
   const effectiveFilingId = params.filingId || searchParams.get('filingId') || location.state?.filingId || filingIdLocal;
 
-  // Track entry point for context-aware back navigation
+  // Track entry point for context-aware back navigation (refresh-safe: read from query params too)
   const getEntryPoint = () => {
+    // Check query params first (for refresh scenarios)
+    const entryPointFromQuery = searchParams.get('entryPoint');
+    if (entryPointFromQuery) {
+      return entryPointFromQuery;
+    }
+    if (location.state?.entryPoint) {
+      return location.state.entryPoint;
+    }
     if (location.state?.dataSource) {
       // From DataSourceSelector
       return location.state.dataSource;
@@ -179,6 +199,10 @@ const ITRComputation = () => {
   };
   const initialITR = getInitialITR();
   const [selectedITR, setSelectedITR] = useState(initialITR);
+  const [scheduleFAOptIn, setScheduleFAOptIn] = useState(false);
+  const [balanceSheetOptIn, setBalanceSheetOptIn] = useState(false);
+  const [auditInfoOptIn, setAuditInfoOptIn] = useState(false);
+  const [goodsCarriageOptIn, setGoodsCarriageOptIn] = useState(false);
 
   // Store entry point and ITR type in localStorage for page refresh recovery
   useEffect(() => {
@@ -189,6 +213,37 @@ const ITRComputation = () => {
       safeLocalStorageSet('itr_computation_selected_itr', selectedITR);
     }
   }, [entryPoint, selectedITR]);
+
+  // Funnel analytics: computation view (once per mount)
+  useEffect(() => {
+    if (trackedComputationViewRef.current) return;
+    trackedComputationViewRef.current = true;
+    ensureJourneyStart();
+    trackEvent('itr_computation_view', {
+      role: user?.role || null,
+      itrType: selectedITR || initialITR || null,
+      entryPoint: entryPoint || null,
+      draftId: searchParams.get('draftId') || null,
+      filingId: searchParams.get('filingId') || params?.filingId || null,
+      viewMode: (viewMode || null),
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Funnel analytics: collect-data view (once per mount)
+  useEffect(() => {
+    if (trackedCollectDataViewRef.current) return;
+    trackedCollectDataViewRef.current = true;
+    ensureJourneyStart();
+    trackEvent('itr_collect_data_view', {
+      role: user?.role || null,
+      itrType: selectedITR || initialITR || null,
+      entryPoint: entryPoint || null,
+      draftId: searchParams.get('draftId') || null,
+      filingId: searchParams.get('filingId') || params?.filingId || null,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Route guard: Redirect if no selectedPerson and no draftId/filingId
   useEffect(() => {
@@ -232,8 +287,7 @@ const ITRComputation = () => {
   const [currentFiling, setCurrentFiling] = useState(location.state?.filing || null);
   const [showResumeModal, setShowResumeModal] = useState(false);
   const [showITRSelector, setShowITRSelector] = useState(!initialITR || autoDetectITR);
-  const [showEVerificationModal, setShowEVerificationModal] = useState(false);
-  const [verificationResult, setVerificationResult] = useState(initialVerificationResult || null);
+  const [verificationResult] = useState(initialVerificationResult || null);
   const [showValidationSummary, setShowValidationSummary] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
   const createDraftIdempotencyKeyRef = useRef(null);
@@ -368,6 +422,45 @@ const ITRComputation = () => {
     },
   });
 
+  // Schedule FA visibility (ITR-2 / ITR-3 only, hidden until triggered)
+  const scheduleFAEligible =
+    selectedITR === 'ITR-2' || selectedITR === 'ITR2' || selectedITR === 'ITR-3' || selectedITR === 'ITR3';
+  const canUseScheduleFA = !!effectiveFilingId && scheduleFAEligible;
+  const { data: foreignAssetsData } = useForeignAssets(canUseScheduleFA ? effectiveFilingId : null);
+  const foreignAssetsCount = Array.isArray(foreignAssetsData?.assets) ? foreignAssetsData.assets.length : 0;
+  const hasForeignIncomeSignal = !!(
+    formData?.income?.foreignIncome?.hasForeignIncome ||
+    (formData?.income?.foreignIncome?.foreignIncomeDetails || []).length > 0
+  );
+  const shouldShowScheduleFA = canUseScheduleFA && (scheduleFAOptIn || foreignAssetsCount > 0 || hasForeignIncomeSignal);
+
+  const sectionVisibilityOpts = useMemo(() => ({
+    filingId: effectiveFilingId || null,
+    foreignAssetsCount,
+    hasForeignIncomeSignal,
+    scheduleFAOptIn,
+    balanceSheetOptIn,
+    auditInfoOptIn,
+    goodsCarriageOptIn,
+  }), [effectiveFilingId, foreignAssetsCount, hasForeignIncomeSignal, scheduleFAOptIn, balanceSheetOptIn, auditInfoOptIn, goodsCarriageOptIn]);
+
+  const scheduleFAVisible = useMemo(
+    () => shouldShowGuidedSection('scheduleFA', formData, selectedITR, sectionVisibilityOpts),
+    [formData, selectedITR, sectionVisibilityOpts],
+  );
+  const shouldShowBalanceSheet = useMemo(
+    () => shouldShowGuidedSection('balanceSheet', formData, selectedITR, sectionVisibilityOpts),
+    [formData, selectedITR, sectionVisibilityOpts],
+  );
+  const shouldShowAuditInfo = useMemo(
+    () => shouldShowGuidedSection('auditInfo', formData, selectedITR, sectionVisibilityOpts),
+    [formData, selectedITR, sectionVisibilityOpts],
+  );
+  const shouldShowGoodsCarriage = useMemo(
+    () => shouldShowGuidedSection('goodsCarriage', formData, selectedITR, sectionVisibilityOpts),
+    [formData, selectedITR, sectionVisibilityOpts],
+  );
+
   // Real-time validation hook
   const validationEngine = new ITRValidationEngine();
   const {
@@ -381,6 +474,39 @@ const ITRComputation = () => {
   // Determine if filing is readonly (completed/submitted)
   const isReadOnly = viewMode === 'readonly' ||
                      (currentFiling && ['submitted', 'acknowledged', 'processed'].includes(currentFiling.status));
+
+  // Gate A (hybrid onboarding): require PAN verified + DOB before entering computation (END_USER only)
+  const gateARefreshAttemptedRef = useRef(false);
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) return;
+    if (isCAUser) return;
+    if (isReadOnly) return;
+
+    const panOk = user.panVerified === true;
+    const dobOk = !!user.dateOfBirth;
+    if (panOk && dobOk) return;
+
+    const run = async () => {
+      // First attempt: refresh profile (to avoid stale state right after PAN verify)
+      if (!gateARefreshAttemptedRef.current && refreshProfile) {
+        gateARefreshAttemptedRef.current = true;
+        await refreshProfile();
+        return;
+      }
+
+      const returnTo = `${location.pathname}${location.search}`;
+      navigate(`/onboarding/complete-profile?returnTo=${encodeURIComponent(returnTo)}`, {
+        replace: true,
+        state: {
+          returnTo,
+          returnState: location.state || null,
+        },
+      });
+    };
+
+    run();
+  }, [authLoading, isCAUser, isReadOnly, location.pathname, location.search, location.state, navigate, refreshProfile, user]);
 
   // CA Workflow State
   const [documents, setDocuments] = useState([]);
@@ -998,11 +1124,23 @@ const ITRComputation = () => {
   // Load draft on component mount
   useEffect(() => {
     const loadDraft = async () => {
+      // If user is explicitly starting a new computation journey (e.g., coming from /itr/determine),
+      // do NOT overwrite their chosen ITR with stale localStorage state from a previous draft.
+      // LocalStorage restore should primarily serve refresh/resume (draftId present).
+      const hasExplicitStartState = !!(
+        location.state?.selectedPerson &&
+        (location.state?.selectedITR ||
+          location.state?.recommendedITR ||
+          location.state?.dataSource ||
+          location.state?.entryPoint)
+      );
+      const allowLocalStorageRestore = !!draftId || !hasExplicitStartState;
+
       // ALWAYS try to load from localStorage first (for page refresh recovery)
       // Check both draftId-specific and 'current' localStorage keys
-      const localStorageKeys = draftId
-        ? [`itr_draft_${draftId}`, 'itr_draft_current']
-        : ['itr_draft_current'];
+      const localStorageKeys = allowLocalStorageRestore
+        ? (draftId ? [`itr_draft_${draftId}`, 'itr_draft_current'] : ['itr_draft_current'])
+        : [];
 
       let savedDraft = null;
       let savedDraftKey = null;
@@ -1508,6 +1646,15 @@ const ITRComputation = () => {
       return;
     }
 
+    trackEvent('itr_compute_clicked', {
+      role: user?.role || null,
+      itrType: selectedITR,
+      draftId: effectiveDraftId || null,
+      filingId: effectiveFilingId || null,
+      taxRegime,
+      assessmentYear,
+    });
+
     // Immediately update with client-side calculation for instant feedback
     const clientSideTax = calculateClientSideTax(formData, taxRegime, selectedITR);
     if (clientSideTax) {
@@ -1529,6 +1676,16 @@ const ITRComputation = () => {
         setTaxComputation({
           ...taxResult.data,
           isClientSide: false, // Server-side calculation
+        });
+        trackEvent('itr_compute_success', {
+          role: user?.role || null,
+          itrType: selectedITR,
+          draftId: effectiveDraftId || null,
+          filingId: effectiveFilingId || null,
+          totalTax: taxResult.data.totalTax ?? null,
+          refund: taxResult.data.refund ?? null,
+          taxRegime,
+          assessmentYear,
         });
 
         // Also get regime comparison if available
@@ -1844,16 +2001,41 @@ const ITRComputation = () => {
   const handleBack = useCallback(() => {
     // Context-aware back navigation based on entry point
     const currentEntryPoint = entryPoint || safeLocalStorageGet('itr_computation_entry_point', null);
+    // Check for returnTo in query params (for refresh-safe navigation from review)
+    const returnToFromQuery = searchParams.get('returnTo');
+    const returnToFromState = location.state?.returnTo;
+    const returnTo = returnToFromQuery || returnToFromState;
+
+    // If we have a returnTo (e.g., from review), navigate there
+    if (returnTo) {
+      navigate(returnTo, { replace: false });
+      return;
+    }
 
     switch (currentEntryPoint) {
+      case 'review': {
+        // From Review page - navigate back to review with query params
+        const reviewUrl = new URLSearchParams();
+        if (effectiveDraftId) reviewUrl.set('draftId', effectiveDraftId);
+        if (effectiveFilingId) reviewUrl.set('filingId', effectiveFilingId);
+        if (selectedITR) reviewUrl.set('itrType', selectedITR);
+        if (assessmentYear) reviewUrl.set('ay', assessmentYear);
+        navigate(`/itr/review?${reviewUrl.toString()}`, { replace: false });
+        break;
+      }
+
       case 'form16':
       case 'it-portal':
       case 'direct-selection':
       case 'guided-selection':
+      case 'auto':
+      case 'upload':
+      case 'manual':
+      case 'override':
       case 'previous-year':
       case 'revised-return':
-        // From DataSourceSelector - go back to data source page
-        navigate('/itr/data-source', {
+        // From Determine ITR - go back to canonical determine screen
+        navigate('/itr/determine', {
           state: {
             selectedPerson,
             assessmentYear,
@@ -1862,18 +2044,17 @@ const ITRComputation = () => {
         break;
 
       case 'expert':
-        // From ITRDirectSelection - go back to direct selection
-        navigate('/itr/direct-selection', {
+        // Legacy entry point - canonicalize
+        navigate('/itr/determine', {
           state: {
             selectedPerson,
-            userProfile: location.state?.userProfile,
           },
         });
         break;
 
       case 'guided':
-        // From IncomeSourceSelector - go back to income sources
-        navigate('/itr/income-sources', {
+        // Legacy entry point - canonicalize
+        navigate('/itr/determine', {
           state: {
             selectedPerson,
           },
@@ -1881,12 +2062,10 @@ const ITRComputation = () => {
         break;
 
       case 'form-selection':
-        // From ITRFormSelection - go back to form selection
-        navigate('/itr/select-form', {
+        // Legacy entry point - canonicalize
+        navigate('/itr/determine', {
           state: {
             selectedPerson,
-            verificationResult: initialVerificationResult,
-            dataSource: location.state?.dataSource,
           },
         });
         break;
@@ -2454,11 +2633,19 @@ const ITRComputation = () => {
   // Get section status for sidebar (must be after getSectionSummary)
   const getSectionStatus = useCallback((sectionId, returnType = 'status') => {
     const summary = getSectionSummary(sectionId);
+
+    // Guided completion (soft gating): show missing required count when no validation errors exist
+    const missingRequired = getMissingRequired(sectionId, formData, selectedITR);
+    const hasValidationErrors = (summary.status === 'error' && (summary.statusCount || 0) > 0);
+
     if (returnType === 'count') {
+      if (!hasValidationErrors && missingRequired.length > 0) return missingRequired.length;
       return summary.statusCount || 0;
     }
+
+    if (!hasValidationErrors && missingRequired.length > 0) return 'pending';
     return summary.status || 'pending';
-  }, [getSectionSummary]);
+  }, [getSectionSummary, formData, selectedITR]);
 
   // Validation helper to prevent negative values
   const validateNonNegative = useCallback((value, fieldName) => {
@@ -2498,6 +2685,18 @@ const ITRComputation = () => {
     // The auto-save hook will handle debouncing, but we ensure it's triggered
     // Apply validation for income and deduction sections
     let validatedData = { ...data };
+
+    // Normalize nested update payloads from feature components that wrap section data
+    // e.g. onUpdate({ balanceSheet: {...} }) while sectionId is 'balanceSheet'
+    if (
+      (section === 'balanceSheet' || section === 'auditInfo' || section === 'goodsCarriage') &&
+      validatedData &&
+      typeof validatedData === 'object' &&
+      validatedData[section] &&
+      typeof validatedData[section] === 'object'
+    ) {
+      validatedData = validatedData[section];
+    }
 
     if (section === 'income') {
       // Validate income fields - prevent negative values
@@ -2672,6 +2871,14 @@ const ITRComputation = () => {
           // Update local draft identity immediately to prevent duplicate draft creation
           setDraftIdLocal(newDraftId);
           if (newFilingId) setFilingIdLocal(newFilingId);
+          trackEvent('itr_draft_created', {
+            source: 'auto',
+            role: user?.role || null,
+            itrType: selectedITR,
+            draftId: newDraftId,
+            filingId: newFilingId || null,
+            assessmentYear,
+          });
 
           // Mark navigation as in progress
           isNavigatingRef.current = true;
@@ -3189,6 +3396,15 @@ const ITRComputation = () => {
             'X-Client-Request-Id': generateClientRequestId(),
           },
         });
+        trackEvent('itr_draft_saved', {
+          source: 'manual',
+          role: user?.role || null,
+          itrType: selectedITR,
+          draftId: effectiveDraftId,
+          filingId: effectiveFilingId || null,
+          assessmentYear,
+          exitAfterSave,
+        });
         safeLocalStorageSet('itr_last_resume', {
           draftId: effectiveDraftId,
           filingId: effectiveFilingId,
@@ -3202,6 +3418,13 @@ const ITRComputation = () => {
         });
 
         if (exitAfterSave) {
+          trackEvent('itr_save_and_exit', {
+            role: user?.role || null,
+            itrType: selectedITR,
+            draftId: effectiveDraftId,
+            filingId: effectiveFilingId || null,
+            exitRoute,
+          });
           navigate(exitRoute, { replace: true });
           return;
         }
@@ -3228,6 +3451,23 @@ const ITRComputation = () => {
           const newFilingId = response.filing?.id || response.filingId;
           setDraftIdLocal(newDraftId);
           if (newFilingId) setFilingIdLocal(newFilingId);
+          trackEvent('itr_draft_created', {
+            source: 'manual',
+            role: user?.role || null,
+            itrType: selectedITR,
+            draftId: newDraftId,
+            filingId: newFilingId || null,
+            assessmentYear,
+          });
+          trackEvent('itr_draft_saved', {
+            source: 'manual',
+            role: user?.role || null,
+            itrType: selectedITR,
+            draftId: newDraftId,
+            filingId: newFilingId || null,
+            assessmentYear,
+            exitAfterSave,
+          });
           safeLocalStorageSet('itr_last_resume', {
             draftId: newDraftId,
             filingId: newFilingId,
@@ -3242,6 +3482,13 @@ const ITRComputation = () => {
           });
 
           if (exitAfterSave) {
+            trackEvent('itr_save_and_exit', {
+              role: user?.role || null,
+              itrType: selectedITR,
+              draftId: newDraftId,
+              filingId: newFilingId || null,
+              exitRoute,
+            });
             navigate(exitRoute, { replace: true });
             return;
           }
@@ -3414,7 +3661,8 @@ const ITRComputation = () => {
       if (filingId && !currentFiling) {
         try {
           const response = await itrService.getUserITRs();
-          const filing = response.filings?.find(f => f.id === parseInt(filingId, 10));
+          const filings = response?.data || response?.filings || response?.all || [];
+          const filing = filings.find(f => String(f.id) === String(filingId));
           if (filing) {
             setCurrentFiling(filing);
             if (filing.status === 'paused') {
@@ -3428,9 +3676,9 @@ const ITRComputation = () => {
             // Try to find and load associated draft for this filing
             try {
               const draftsResponse = await itrService.getUserDrafts();
-              // Backend returns { data: { drafts: [...], pagination: {...} } }
-              const drafts = draftsResponse?.data?.drafts || draftsResponse?.drafts || [];
-              const filingDraft = drafts.find(d => d.filingId === filing.id || d.filing_id === filing.id);
+              // Backend returns { success, data: [...], pagination }
+              const drafts = draftsResponse?.data || draftsResponse?.drafts || [];
+              const filingDraft = drafts.find(d => String(d.filingId) === String(filing.id));
               if (filingDraft && filingDraft.id) {
                 // Load draft data
                 const draftData = await itrService.getDraftById(filingDraft.id);
@@ -3526,186 +3774,6 @@ const ITRComputation = () => {
     }
   }, [formData, selectedITR, assessmentYear, user]);
 
-  const handleFileReturns = useCallback(() => {
-    // Validate form before submission
-    try {
-      // Convert formData to validation engine format
-      // eslint-disable-next-line camelcase
-      const validationFormData = {
-        // eslint-disable-next-line camelcase
-        personal_info: formData.personalInfo || {},
-        income: formData.income || {},
-        deductions: formData.deductions || {},
-        // eslint-disable-next-line camelcase
-        taxes_paid: formData.taxesPaid || {},
-        businessIncome: formData.income?.businessIncome,
-        professionalIncome: formData.income?.professionalIncome,
-        balanceSheet: formData.balanceSheet,
-        auditInfo: formData.auditInfo,
-      };
-
-      const completeValidation = validationEngine.validateCompleteForm(validationFormData, selectedITR);
-
-      // Also check business rules (ITR type-specific validations)
-      const businessRulesValidation = validationEngine.validateBusinessRules(validationFormData, selectedITR);
-
-      // Combine validation errors
-      const allErrors = { ...completeValidation.errors };
-      if (businessRulesValidation.errors && businessRulesValidation.errors.length > 0) {
-        allErrors.businessRules = businessRulesValidation.errors;
-      }
-
-      // Check for critical errors that should block submission
-      const criticalErrors = [];
-
-      // ITR-1 income limit check
-      if ((selectedITR === 'ITR-1' || selectedITR === 'ITR1')) {
-        const income = validationFormData.income || {};
-        const totalIncome = (parseFloat(income.salary) || 0) +
-                           (parseFloat(income.otherIncome) || 0) +
-                           (typeof income.houseProperty === 'number' ? parseFloat(income.houseProperty) : 0);
-        if (totalIncome > 5000000) {
-          criticalErrors.push('ITR-1 income limit exceeded. Total income (₹' + totalIncome.toLocaleString('en-IN') + ') exceeds ₹50 lakh limit. Please use ITR-2.');
-        }
-
-        // CRITICAL: Agricultural income > ₹5,000 check - Regulatory requirement
-        const agriIncome = formData.exemptIncome?.agriculturalIncome?.netAgriculturalIncome
-          || formData.exemptIncome?.netAgriculturalIncome
-          || formData.agriculturalIncome
-          || validationFormData.exemptIncome?.agriculturalIncome?.netAgriculturalIncome
-          || validationFormData.exemptIncome?.netAgriculturalIncome
-          || validationFormData.agriculturalIncome
-          || 0;
-        if (agriIncome > 5000) {
-          criticalErrors.push(
-            `Agricultural income (₹${agriIncome.toLocaleString('en-IN')}) exceeds ₹5,000 limit. ` +
-            'ITR-1 is not permitted. You must file ITR-2. This is a regulatory requirement - ITR-1 returns with agricultural income above ₹5,000 will be rejected by the Income Tax Department.',
-          );
-        }
-      }
-
-      // ITR-4 presumptive limits check
-      if ((selectedITR === 'ITR-4' || selectedITR === 'ITR4')) {
-        const presumptiveBusiness = validationFormData.income?.presumptiveBusiness || {};
-        const presumptiveProfessional = validationFormData.income?.presumptiveProfessional || {};
-        // Updated limits: ₹2 crores for business, ₹50 lakhs for profession
-        if (presumptiveBusiness.grossReceipts > 20000000) {
-          criticalErrors.push('ITR-4 business income limit exceeded. Gross receipts (₹' + presumptiveBusiness.grossReceipts.toLocaleString('en-IN') + ') exceeds ₹2 crores limit. Please use ITR-3.');
-        }
-        if (presumptiveProfessional.grossReceipts > 5000000) {
-          criticalErrors.push('ITR-4 professional income limit exceeded. Gross receipts (₹' + presumptiveProfessional.grossReceipts.toLocaleString('en-IN') + ') exceeds ₹50 lakhs limit. Please use ITR-3.');
-        }
-      }
-
-      // Check for ITR type violations
-      if (businessRulesValidation.errors && businessRulesValidation.errors.length > 0) {
-        criticalErrors.push(...businessRulesValidation.errors);
-      }
-
-      if (!completeValidation.isValid || criticalErrors.length > 0) {
-        // Map errors back to formData section names
-        const mappedErrors = {};
-        // eslint-disable-next-line camelcase
-        const reverseMapping = {
-          // eslint-disable-next-line camelcase
-          personal_info: 'personalInfo',
-          income: 'income',
-          deductions: 'deductions',
-          // eslint-disable-next-line camelcase
-          taxes_paid: 'taxesPaid',
-          businessIncome: 'businessIncome',
-          professionalIncome: 'professionalIncome',
-          balanceSheet: 'balanceSheet',
-          auditInfo: 'auditInfo',
-        };
-
-        Object.keys(allErrors || {}).forEach(sectionId => {
-          const mappedSection = reverseMapping[sectionId] || sectionId;
-          mappedErrors[mappedSection] = allErrors[sectionId];
-        });
-
-        // Add critical errors
-        if (criticalErrors.length > 0) {
-          mappedErrors.critical = criticalErrors;
-        }
-
-        setValidationErrors(mappedErrors);
-        setShowValidationSummary(true);
-
-        // Scroll to first error section
-        const firstErrorSection = Object.keys(mappedErrors)[0];
-        if (firstErrorSection) {
-          const sectionElement = document.querySelector(`[data-section-id="${firstErrorSection}"]`);
-          if (sectionElement) {
-            sectionElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            // Focus the section after a short delay
-            setTimeout(() => {
-              sectionElement.focus();
-            }, 300);
-          }
-        }
-
-        // Show critical error message
-        if (criticalErrors.length > 0) {
-          toast.error(criticalErrors[0] + (criticalErrors.length > 1 ? ` (+${criticalErrors.length - 1} more)` : ''), {
-            duration: 6000,
-          });
-        } else {
-          toast.error('Please fix validation errors before submitting');
-        }
-        return; // Block submission
-      }
-
-      // Form is valid, show E-verification modal
-      setShowEVerificationModal(true);
-    } catch (error) {
-      enterpriseLogger.error('Validation error', { error });
-      toast.error('Validation failed. Please check your form data.');
-    }
-  }, [formData, selectedITR, validationEngine]);
-
-  const handleVerificationComplete = useCallback(async (verificationData) => {
-    setVerificationResult(verificationData);
-    setShowEVerificationModal(false);
-
-    try {
-      if (!draftId) {
-        toast.error('Draft ID not found');
-        return;
-      }
-
-      // Validate form data before submission
-      const validationResponse = await apiClient.post(`/itr/drafts/${draftId}/validate`, {
-        formData,
-      });
-
-      if (!validationResponse.data.isValid) {
-        toast.error('Please fix validation errors before submitting');
-        return;
-      }
-
-      // Submit ITR with verification
-      const submitResponse = await apiClient.post(`/itr/drafts/${draftId}/submit`, {
-        verificationMethod: verificationData.method,
-        verificationToken: verificationData.verificationToken,
-      });
-
-      if (submitResponse.data.filing) {
-        toast.success('ITR submitted successfully!');
-        navigate(`/itr/acknowledgment?filingId=${submitResponse.data.filing.id}`, {
-          state: {
-            ackNumber: submitResponse.data.filing.acknowledgmentNumber,
-            filing: submitResponse.data.filing,
-          },
-        });
-      }
-    } catch (error) {
-      enterpriseLogger.error('ITR submission error', { error });
-      const errorMessage = ErrorHandler.getMessage(error, 'Failed to submit ITR');
-      toast.error(errorMessage);
-    }
-  }, [draftId, formData, navigate]);
-
   // Base sections for all ITR types - ITR-Specific Labels
   const getSectionTitle = (sectionId) => {
     if (sectionId === 'income') {
@@ -3738,7 +3806,9 @@ const ITRComputation = () => {
         ? 'Salary income from Form 16 and other sources'
         : selectedITR === 'ITR-3' || selectedITR === 'ITR3'
           ? 'Salary, Business, Professional, Capital Gains, House Property, Other Sources'
-          : 'Salary, Business, Capital Gains, House Property, Other Sources',
+          : selectedITR === 'ITR-4' || selectedITR === 'ITR4'
+            ? 'Salary, Presumptive income, House Property, Other Sources'
+            : 'Salary, Capital Gains, House Property, Other Sources',
     },
     {
       id: 'exemptIncome',
@@ -3792,8 +3862,8 @@ const ITRComputation = () => {
     },
   ] : [];
 
-  // Schedule FA section for ITR-2 and ITR-3
-  const scheduleFASection = (selectedITR === 'ITR-2' || selectedITR === 'ITR2' || selectedITR === 'ITR-3' || selectedITR === 'ITR3') ? [
+  // Schedule FA section for ITR-2 and ITR-3 (hidden until triggered)
+  const scheduleFASection = scheduleFAEligible ? [
     {
       id: 'scheduleFA',
       title: 'Schedule FA - Foreign Assets',
@@ -3830,92 +3900,94 @@ const ITRComputation = () => {
     },
   ];
 
-  // Helper function to check if section should be shown based on ITR type
-  const shouldShowSection = useCallback((sectionId, selectedITR) => {
-    const itr = selectedITR || 'ITR-1';
-
-    // ITR-1 restrictions (Sahaj - Simple form for salaried individuals)
-    if (itr === 'ITR-1' || itr === 'ITR1') {
-      // Hide: capital gains, business, professional, Schedule FA, balance sheet, audit, presumptive income
-      const hiddenSections = [
-        'businessIncome',
-        'professionalIncome',
-        'balanceSheet',
-        'auditInfo',
-        'scheduleFA',
-        'presumptiveIncome',
-        'goodsCarriage',
-      ];
-      // Capital gains is part of income section, but should not be shown as separate section
-      if (hiddenSections.includes(sectionId)) {
-        return false;
-      }
-      return true;
-    }
-
-    // ITR-2 restrictions (For individuals with capital gains, multiple house properties)
-    if (itr === 'ITR-2' || itr === 'ITR2') {
-      // Hide: business, professional income, balance sheet, audit, presumptive income
-      // Show: capital gains (in income section), Schedule FA
-      const hiddenSections = [
-        'businessIncome',
-        'professionalIncome',
-        'balanceSheet',
-        'auditInfo',
-        'presumptiveIncome',
-        'goodsCarriage',
-      ];
-      if (hiddenSections.includes(sectionId)) {
-        return false;
-      }
-      return true;
-    }
-
-    // ITR-3 restrictions (For individuals with business/professional income)
-    if (itr === 'ITR-3' || itr === 'ITR3') {
-      // Hide: presumptive income, goods carriage
-      // Show: business income, professional income, balance sheet, audit, Schedule FA, capital gains
-      // Note: businessIncome and professionalIncome are separate sections, not in income section
-      const hiddenSections = [
-        'presumptiveIncome',
-        'goodsCarriage',
-      ];
-      if (hiddenSections.includes(sectionId)) {
-        return false;
-      }
-      return true;
-    }
-
-    // ITR-4 restrictions (Sugam - For presumptive taxation)
-    if (itr === 'ITR-4' || itr === 'ITR4') {
-      // Hide: business income (detailed), professional income (detailed), balance sheet, audit, Schedule FA, capital gains
-      // Show: presumptive income, goods carriage
-      const hiddenSections = [
-        'businessIncome',
-        'professionalIncome',
-        'balanceSheet',
-        'auditInfo',
-        'scheduleFA',
-      ];
-      if (hiddenSections.includes(sectionId)) {
-        return false;
-      }
-      return true;
-    }
-
-    return true;
-  }, []);
+  // Helper: single source of truth (sectionFlow) for ITR visibility + progressive disclosure
+  const shouldShowSection = useCallback(
+    (sectionId) => shouldShowGuidedSection(sectionId, formData, selectedITR, sectionVisibilityOpts),
+    [formData, selectedITR, sectionVisibilityOpts],
+  );
 
   // Combine all sections and filter based on ITR type - Memoized
   const allSections = useMemo(() => [...baseSections, ...itr3Sections, ...itr4Sections, ...scheduleFASection, ...commonSections], [baseSections, itr3Sections, itr4Sections, scheduleFASection, commonSections]);
-  const sections = useMemo(() => allSections.filter(section => shouldShowSection(section.id, selectedITR)), [allSections, selectedITR, shouldShowSection]);
+  const sections = useMemo(() => allSections.filter((section) => shouldShowSection(section.id)), [allSections, shouldShowSection]);
+  const orderedSections = useMemo(() => orderGuidedSections(sections), [sections]);
+  const activeSection = useMemo(
+    () => orderedSections.find((s) => s.id === activeSectionId) || orderedSections[0] || null,
+    [orderedSections, activeSectionId],
+  );
+  const activeSectionTitle = activeSection?.title || 'Section';
+  const nextSectionId = useMemo(
+    () => getNextSectionId(orderedSections, activeSectionId),
+    [orderedSections, activeSectionId],
+  );
+  const prevSectionId = useMemo(
+    () => getPrevSectionId(orderedSections, activeSectionId),
+    [orderedSections, activeSectionId],
+  );
+  const nextSection = useMemo(
+    () => orderedSections.find((s) => s.id === nextSectionId) || null,
+    [orderedSections, nextSectionId],
+  );
+  const missingRequiredActive = useMemo(
+    () => getMissingRequired(activeSectionId, formData, selectedITR),
+    [activeSectionId, formData, selectedITR],
+  );
+  const canGoNext = useMemo(() => {
+    if (!nextSectionId) return false;
+    return canProceedGuided(activeSectionId, formData, selectedITR);
+  }, [nextSectionId, activeSectionId, formData, selectedITR]);
+
+  const shouldTrackSectionCompletion = useCallback((sectionId) => {
+    if (!sectionId) return false;
+    if (['personalInfo', 'income', 'bankDetails'].includes(sectionId)) return true;
+    if (sectionId === 'balanceSheet') return !!(formData.balanceSheet?.hasBalanceSheet || formData.balanceSheet?.balanceSheet?.hasBalanceSheet);
+    if (sectionId === 'auditInfo') return !!(formData.auditInfo?.isAuditApplicable || formData.auditInfo?.auditInfo?.isAuditApplicable);
+    return false;
+  }, [formData.balanceSheet?.hasBalanceSheet, formData.balanceSheet?.balanceSheet?.hasBalanceSheet, formData.auditInfo?.isAuditApplicable, formData.auditInfo?.auditInfo?.isAuditApplicable]);
+
+  const goNextSection = useCallback(() => {
+    const toId = nextSectionId;
+    if (!toId) return;
+
+    const canProceed = canProceedGuided(activeSectionId, formData, selectedITR);
+    if (!canProceed) return;
+
+    // Mark current section completed (once per journey) for key sections only.
+    if (shouldTrackSectionCompletion(activeSectionId) && !sectionCompletedOnceRef.current.has(activeSectionId)) {
+      sectionCompletedOnceRef.current.add(activeSectionId);
+      trackEvent('itr_section_completed', { sectionId: activeSectionId, itrType: selectedITR || null });
+    }
+
+    trackEvent('itr_section_next_clicked', {
+      fromSectionId: activeSectionId,
+      toSectionId: toId,
+      itrType: selectedITR || null,
+    });
+
+    setActiveSectionId(toId);
+  }, [nextSectionId, activeSectionId, formData, selectedITR, shouldTrackSectionCompletion]);
+
+  const goPrevSection = useCallback(() => {
+    const toId = prevSectionId;
+    if (!toId) return;
+    setActiveSectionId(toId);
+  }, [prevSectionId]);
 
   // Initialize activeSectionId to first section if not set
   useEffect(() => {
-    if (sections.length > 0 && !sections.find(s => s.id === activeSectionId)) {
-      setActiveSectionId(sections[0].id);
+    if (orderedSections.length > 0 && !orderedSections.find(s => s.id === activeSectionId)) {
+      setActiveSectionId(orderedSections[0].id);
     }
-  }, [sections, activeSectionId]);
+  }, [orderedSections, activeSectionId]);
+
+  // Accept initial section focus from review (or other entry points)
+  useEffect(() => {
+    if (initialSectionAppliedRef.current) return;
+    const requested = location.state?.initialSectionId;
+    if (!requested) return;
+    if (!orderedSections.find((s) => s.id === requested)) return;
+    initialSectionAppliedRef.current = true;
+    setActiveSectionId(requested);
+  }, [location.state?.initialSectionId, orderedSections]);
 
   // Helper function to convert Assessment Year to Financial Year format - Memoized
   const getFinancialYear = useCallback((ay) => {
@@ -4557,6 +4629,27 @@ const ITRComputation = () => {
                 </button>
               )}
 
+              {/* Next section (guided flow) */}
+              {!isReadOnly && nextSectionId && (
+                <button
+                  onClick={goNextSection}
+                  disabled={!canGoNext}
+                  title={
+                    canGoNext
+                      ? `Next: ${nextSection?.title || 'Next section'}`
+                      : `Complete required fields in ${activeSectionTitle} to continue.`
+                  }
+                  className="flex items-center px-2 py-1 text-body-small font-semibold text-white bg-primary-500 hover:bg-primary-600 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ gap: '2px' }}
+                >
+                  <span className="hidden sm:inline">
+                    Next{nextSection?.title ? `: ${nextSection.title}` : ''}
+                  </span>
+                  <span className="sm:hidden">Next</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+
               {/* Download JSON button - compact */}
               {!isReadOnly && (
                 <button
@@ -4586,19 +4679,41 @@ const ITRComputation = () => {
         taxableIncome={taxableIncome}
         taxPayable={taxPayable}
         tdsPaid={tdsPaid}
-        onFileClick={() => {
-          // Navigate to review/filing page
-          navigate('/itr/review', {
-            state: {
-              formData,
-              taxComputation,
-              regimeComparison,
-              selectedITR,
-              assessmentYear,
-              filingId,
-              draftId,
-            },
-          });
+        onFileClick={async () => {
+          // Core rule: never enter Review without a persisted draft.
+          // This prevents Review from validating/submitting stale draft snapshots.
+          try {
+            let nextDraftId = effectiveDraftId || draftIdLocal || null;
+            let nextFilingId = effectiveFilingId || filingIdLocal || null;
+
+            if (!nextDraftId) {
+              await handleSaveDraft({ exitAfterSave: false });
+              nextDraftId = draftIdLocal || searchParams.get('draftId') || null;
+              nextFilingId = filingIdLocal || searchParams.get('filingId') || null;
+            }
+
+            if (!nextDraftId) {
+              toast.error('Please save once before filing.');
+              return;
+            }
+
+            const qs = new URLSearchParams();
+            qs.set('draftId', nextDraftId);
+            if (nextFilingId) qs.set('filingId', nextFilingId);
+            if (selectedITR) qs.set('itrType', selectedITR);
+            if (assessmentYear) qs.set('ay', assessmentYear);
+
+            navigate(`/itr/review?${qs.toString()}`, {
+              state: {
+                selectedITR,
+                assessmentYear,
+                filingId: nextFilingId,
+                draftId: nextDraftId,
+              },
+            });
+          } catch (e) {
+            toast.error('Failed to save before filing. Please try again.');
+          }
         }}
         // Legacy props for backward compatibility
         formData={formData}
@@ -4631,7 +4746,7 @@ const ITRComputation = () => {
         {/* Sidebar Navigation */}
         <div className="hidden lg:block">
           <ComputationSidebar
-            sections={sections}
+            sections={orderedSections}
             activeSectionId={activeSectionId}
             onSectionSelect={handleSectionSelect}
             getSectionStatus={getSectionStatus}
@@ -4643,7 +4758,7 @@ const ITRComputation = () => {
 
         {/* Mobile Sidebar */}
         <ComputationSidebar
-          sections={sections}
+          sections={orderedSections}
           activeSectionId={activeSectionId}
           onSectionSelect={handleSectionSelect}
           getSectionStatus={getSectionStatus}
@@ -4728,7 +4843,6 @@ const ITRComputation = () => {
 
             {/* Section Header - Compact */}
             {(() => {
-              const activeSection = sections.find(s => s.id === activeSectionId) || sections[0];
               const Icon = activeSection?.icon;
               return (
                 <div className="mb-3">
@@ -4763,14 +4877,13 @@ const ITRComputation = () => {
               style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
             >
               {(() => {
-                const activeSection = sections.find(s => s.id === activeSectionId) || sections[0];
                 const Icon = activeSection?.icon;
 
                 if (activeSection?.id === 'scheduleFA') {
                   return (
                     <ScheduleFA
                       key={activeSection.id}
-                      filingId={filingId || draftId}
+                      filingId={effectiveFilingId || null}
                       onUpdate={() => {
                         if (filingId || draftId) {
                           // Trigger refetch if needed
@@ -4825,6 +4938,111 @@ const ITRComputation = () => {
                 );
               })()}
             </motion.div>
+
+            {/* Optional sections (progressive disclosure) */}
+            {!isReadOnly && (
+              <>
+                {/* Schedule FA (ITR-2/3): hidden until triggered */}
+                {!scheduleFAVisible && scheduleFAEligible && (
+                  <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-elevation-1 p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="text-body-regular font-semibold text-slate-900">Foreign assets?</div>
+                        <div className="text-body-small text-slate-600 mt-0.5">
+                          Add Schedule FA only if you held foreign assets during the year.
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!effectiveFilingId) {
+                            toast.error('Please save once to create your filing before adding foreign assets.');
+                            return;
+                          }
+                          setScheduleFAOptIn(true);
+                          setActiveSectionId('scheduleFA');
+                        }}
+                        className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors font-semibold flex-shrink-0"
+                      >
+                        Add foreign assets
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Balance Sheet (ITR-3): hidden unless user maintains it */}
+                {(selectedITR === 'ITR-3' || selectedITR === 'ITR3') && !shouldShowBalanceSheet && (
+                  <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-elevation-1 p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="text-body-regular font-semibold text-slate-900">Maintain a balance sheet?</div>
+                        <div className="text-body-small text-slate-600 mt-0.5">
+                          Add Balance Sheet only if you maintain books for your business/profession.
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBalanceSheetOptIn(true);
+                          setActiveSectionId('balanceSheet');
+                        }}
+                        className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors font-semibold flex-shrink-0"
+                      >
+                        Add balance sheet
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Audit Info (ITR-3): auto-shown when audit signals exist, otherwise opt-in */}
+                {(selectedITR === 'ITR-3' || selectedITR === 'ITR3') && !shouldShowAuditInfo && (
+                  <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-elevation-1 p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="text-body-regular font-semibold text-slate-900">Tax audit?</div>
+                        <div className="text-body-small text-slate-600 mt-0.5">
+                          Add Audit Information only if tax audit is applicable for you (Section 44AB).
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuditInfoOptIn(true);
+                          setActiveSectionId('auditInfo');
+                        }}
+                        className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors font-semibold flex-shrink-0"
+                      >
+                        Add audit info
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Goods Carriage (ITR-4): optional */}
+                {(selectedITR === 'ITR-4' || selectedITR === 'ITR4') && !shouldShowGoodsCarriage && (
+                  <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-elevation-1 p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="text-body-regular font-semibold text-slate-900">Goods carriage income?</div>
+                        <div className="text-body-small text-slate-600 mt-0.5">
+                          Add Section 44AE only if you have goods carriage business income.
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGoodsCarriageOptIn(true);
+                          setActiveSectionId('goodsCarriage');
+                        }}
+                        className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors font-semibold flex-shrink-0"
+                      >
+                        Add 44AE
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           {/* Read-only notice (minimal) - Positioned to avoid conflicts with mobile menu button */}
@@ -4841,17 +5059,6 @@ const ITRComputation = () => {
             </div>
           )}
 
-          {/* E-Verification Modal */}
-          {showEVerificationModal && (
-            <EVerificationModal
-              isOpen={showEVerificationModal}
-              onClose={() => setShowEVerificationModal(false)}
-              draftId={draftId}
-              filingId={filingId}
-              onVerificationComplete={handleVerificationComplete}
-              formData={formData}
-            />
-          )}
         </div>
       </main>
     </div>

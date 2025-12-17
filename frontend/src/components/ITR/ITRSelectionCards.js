@@ -23,7 +23,7 @@ const ITR_CARDS = [
     id: 'ITR-1',
     name: 'ITR-1 (SAHAJ)',
     icon: Briefcase,
-    color: 'from-blue-500 to-indigo-500',
+    accent: 'bg-primary-500',
     eligibility: [
       'Salary / Pension up to ₹50 lakh',
       'One house property',
@@ -44,7 +44,7 @@ const ITR_CARDS = [
     id: 'ITR-2',
     name: 'ITR-2',
     icon: TrendingUp,
-    color: 'from-purple-500 to-pink-500',
+    accent: 'bg-ember-500',
     eligibility: [
       'Everything in ITR-1, PLUS:',
       'Capital gains (stocks, mutual funds, property)',
@@ -61,7 +61,7 @@ const ITR_CARDS = [
     id: 'ITR-3',
     name: 'ITR-3',
     icon: Building2,
-    color: 'from-amber-500 to-gold-500',
+    accent: 'bg-gold-500',
     eligibility: [
       'Everything in ITR-2, PLUS:',
       'Business or professional income',
@@ -75,7 +75,7 @@ const ITR_CARDS = [
     id: 'ITR-4',
     name: 'ITR-4 (SUGAM)',
     icon: Calculator,
-    color: 'from-emerald-500 to-teal-500',
+    accent: 'bg-emerald-500',
     eligibility: [
       'For presumptive taxation (Section 44AD/44ADA/44AE):',
       'Small business turnover up to ₹2 crore',
@@ -91,7 +91,7 @@ const ITR_CARDS = [
   },
 ];
 
-const ITRSelectionCards = ({ onSelect, selectedITR = null }) => {
+const ITRSelectionCards = ({ onSelect, selectedITR = null, onHelp = null }) => {
   const [expandedCard, setExpandedCard] = useState(null);
 
   return (
@@ -117,8 +117,8 @@ const ITRSelectionCards = ({ onSelect, selectedITR = null }) => {
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <div className={cn(
-                    'w-8 h-8 rounded-xl flex items-center justify-center bg-gradient-to-br flex-shrink-0',
-                    itr.color,
+                    'w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0',
+                    itr.accent,
                   )}>
                     <Icon className="w-4 h-4 text-white" />
                   </div>
@@ -145,7 +145,7 @@ const ITRSelectionCards = ({ onSelect, selectedITR = null }) => {
 
                 {itr.notEligible.length > 0 && (
                   <div className="flex items-start gap-1.5 mt-1.5">
-                    <XCircle className="w-3 h-3 text-red-400 flex-shrink-0 mt-0.5" />
+                    <XCircle className="w-3 h-3 text-error-500 flex-shrink-0 mt-0.5" />
                     <div className="text-body-small text-slate-600 leading-tight">
                       <div className="font-medium mb-0.5">NOT for:</div>
                       {itr.notEligible.map((item, idx) => (
@@ -184,10 +184,18 @@ const ITRSelectionCards = ({ onSelect, selectedITR = null }) => {
         );
       })}
 
-      <div className="col-span-1 md:col-span-2 bg-blue-50 border border-blue-200 rounded-xl p-2 flex items-start gap-1.5 flex-shrink-0">
-        <Info className="w-3.5 h-3.5 text-blue-600 flex-shrink-0 mt-0.5" />
-        <p className="text-body-small text-blue-800">
-          Not sure? <button onClick={() => {/* Navigate to Guide Me */}} className="font-semibold underline">Let us help.</button>
+      <div className="col-span-1 md:col-span-2 bg-primary-50 border border-primary-200 rounded-xl p-3 flex items-start gap-2 flex-shrink-0">
+        <Info className="w-4 h-4 text-primary-700 flex-shrink-0 mt-0.5" aria-hidden="true" />
+        <p className="text-body-small text-primary-900">
+          Not sure?{' '}
+          <button
+            type="button"
+            onClick={() => onHelp?.()}
+            className="font-semibold underline underline-offset-4"
+          >
+            Answer a few questions
+          </button>
+          .
         </p>
       </div>
     </div>

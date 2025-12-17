@@ -131,3 +131,32 @@ export const useUserRefunds = (userId, enabled = true) => {
   });
 };
 
+/**
+ * Hook to fetch user drafts for “Resume Hub” behavior.
+ * Drafts are returned latest-first by the backend.
+ */
+export const useUserDrafts = (userId, enabled = true) => {
+  return useQuery({
+    queryKey: ['userDrafts', userId],
+    queryFn: async () => {
+      try {
+        const response = await itrService.getUserDrafts({ page: 1, limit: 50 });
+        if (response?.success === false && response?.error) {
+          throw new Error(response.error.message || 'Failed to fetch drafts');
+        }
+        const drafts = Array.isArray(response?.data) ? response.data : (Array.isArray(response) ? response : []);
+        return drafts;
+      } catch (error) {
+        const errorMessage = error?.response?.data?.error?.message ||
+                            error?.response?.data?.message ||
+                            error?.message ||
+                            'Failed to fetch drafts';
+        throw new Error(errorMessage);
+      }
+    },
+    enabled: enabled && !!userId,
+    staleTime: 30 * 1000,
+    retry: 1,
+  });
+};
+

@@ -4,7 +4,7 @@
 // =====================================================
 
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -16,12 +16,25 @@ import {
   ArrowRight,
   Loader,
 } from 'lucide-react';
-import api from '../../services/api';
 import apiClient from '../../services/core/APIClient';
+import { ensureJourneyStart, trackEvent } from '../../utils/analyticsEvents';
+import { useAuth } from '../../contexts/AuthContext';
+
+function decodeReturnTo(value) {
+  if (!value) return null;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
 
 const PANVerification = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const returnTo = decodeReturnTo(searchParams.get('returnTo'));
+  const { refreshProfile } = useAuth();
   const [panNumber, setPanNumber] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState(true);
@@ -34,6 +47,8 @@ const PANVerification = () => {
 
   // Check PAN verification status on mount
   useEffect(() => {
+    ensureJourneyStart();
+    trackEvent('pan_verification_view', { panPresent: !!selectedPerson?.panNumber });
     const checkPANStatus = async () => {
       if (!selectedPerson?.panNumber) {
         setIsCheckingStatus(false);
@@ -47,6 +62,7 @@ const PANVerification = () => {
         if (response.data.success && response.data.data.verified) {
           // PAN already verified, skip verification
           setAlreadyVerified(true);
+          trackEvent('pan_verification_skipped', { reason: 'already_verified' });
           setPanNumber(selectedPerson.panNumber);
           setVerificationResult({
             isValid: true,
@@ -58,18 +74,22 @@ const PANVerification = () => {
 
           // Auto-proceed after a short delay
           setTimeout(() => {
-            navigate('/itr/recommend-form', {
-              state: {
-                selectedPerson,
-                verificationResult: {
-                  isValid: true,
-                  pan: selectedPerson.panNumber,
-                  name: selectedPerson.name,
-                  status: 'Active',
+            if (returnTo) {
+              navigate(returnTo, { replace: true });
+            } else {
+              navigate('/itr/determine', {
+                state: {
+                  selectedPerson,
+                  verificationResult: {
+                    isValid: true,
+                    pan: selectedPerson.panNumber,
+                    name: selectedPerson.name,
+                    status: 'Active',
+                  },
+                  skipPANVerification: true,
                 },
-                skipPANVerification: true,
-              },
-            });
+              });
+            }
           }, 2000);
         } else {
           // PAN not verified, show verification form
@@ -91,12 +111,19 @@ const PANVerification = () => {
   // PAN verification mutation
   const verifyPANMutation = useMutation({
     mutationFn: async (panData) => {
-      const response = await api.post('/itr/pan/verify', panData);
+      const response = await apiClient.post('/itr/pan/verify', panData);
       return response.data;
     },
     onSuccess: (data) => {
       setVerificationResult(data.data);
       setIsVerifying(false);
+      if (data?.data?.isValid) {
+        trackEvent('pan_verification_success', { pan: panNumber ? `${panNumber.substring(0, 5)}*****` : null });
+        // Refresh profile so Gate A can pass without a full reload
+        if (refreshProfile) {
+          refreshProfile();
+        }
+      }
     },
     onError: (error) => {
       setError(error.response?.data?.error || 'PAN verification failed');
@@ -138,7 +165,12 @@ const PANVerification = () => {
   const handleProceedToITRSelection = () => {
     if (!verificationResult?.isValid) return;
 
-    navigate('/itr/recommend-form', {
+    if (returnTo) {
+      navigate(returnTo, { replace: true });
+      return;
+    }
+
+    navigate('/itr/determine', {
       state: {
         selectedPerson: selectedPerson || selectedMember,
         verificationResult,

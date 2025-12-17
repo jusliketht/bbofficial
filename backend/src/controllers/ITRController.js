@@ -954,7 +954,7 @@ class ITRController {
 
       // Get draft (join with itr_filings to verify user_id)
       const getDraftQuery = `
-        SELECT d.id, d.data, f.itr_type, f.status
+        SELECT d.id, d.data, f.id AS filing_id, f.itr_type, f.status, f.assessment_year
         FROM itr_drafts d
         JOIN itr_filings f ON d.filing_id = f.id
         WHERE d.id = $1 AND f.user_id = $2
@@ -972,9 +972,45 @@ class ITRController {
         });
       }
 
-      const draftData = draft.rows[0].data;
+      const draftRow = draft.rows[0];
+      const draftData = draftRow.data;
       const formData = typeof draftData === 'string' ? JSON.parse(draftData) : draftData;
-      const itrType = draft.rows[0].itr_type;
+      const itrType = draftRow.itr_type;
+      const existingFilingId = draftRow.filing_id;
+      const assessmentYear = formData.assessmentYear || draftRow.assessment_year || getDefaultAssessmentYear();
+
+      // =====================================================
+      // Gate B (server-side): address + bank required at submit
+      // =====================================================
+      const missing = {};
+
+      const bankOk = !!(formData?.bankDetails?.accountNumber && formData?.bankDetails?.ifsc);
+      if (!bankOk) {
+        missing.bankDetails = 'Bank account number and IFSC are required to submit';
+      }
+
+      // Address is stored in user_profiles in this codebase
+      try {
+        const addressQuery = `
+          SELECT address_line_1, city, state, pincode
+          FROM user_profiles
+          WHERE user_id = $1
+          LIMIT 1
+        `;
+        const addressResult = await dbQuery(addressQuery, [userId]);
+        const addr = addressResult.rows[0] || null;
+        const addressOk = !!(addr?.address_line_1 && addr?.city && addr?.state && addr?.pincode);
+        if (!addressOk) {
+          missing.address = 'Address (line 1, city, state, pincode) is required to submit';
+        }
+      } catch (e) {
+        // If address table/query fails, don't block submission with an opaque error here.
+        // Validation remains best-effort; downstream systems may still enforce.
+      }
+
+      if (Object.keys(missing).length > 0) {
+        return validationErrorResponse(res, missing, 'Missing required details for submission');
+      }
 
       // Final validation
       const normalizedItrType = itrType.replace('-', '').toLowerCase();
@@ -1041,33 +1077,39 @@ class ITRController {
       // Compute final tax
       // Prepare filing data with itrType
       const filingData = { ...formData, itrType };
-      const taxComputation = await this.taxComputationEngine.computeTax(filingData, formData.assessmentYear || getDefaultAssessmentYear());
+      const taxComputation = await this.taxComputationEngine.computeTax(filingData, assessmentYear);
 
-      // Create ITR filing record
-      const createFilingQuery = `
-        INSERT INTO itr_filings (user_id, itr_type, json_payload, status, submitted_at, assessment_year)
-        VALUES ($1, $2, $3, 'submitted', NOW(), $4)
+      // Update existing filing record (created at draft creation time)
+      const updateFilingQuery = `
+        UPDATE itr_filings
+        SET
+          status = 'submitted',
+          submitted_at = NOW(),
+          assessment_year = $1,
+          json_payload = $2::jsonb,
+          tax_computation = $3::jsonb,
+          updated_at = NOW()
+        WHERE id = $4 AND user_id = $5
         RETURNING id, itr_type, status, submitted_at, assessment_year
       `;
 
-      const assessmentYear = formData.assessmentYear || getDefaultAssessmentYear();
-      const filing = await dbQuery(createFilingQuery, [
-        userId,
-        itrType,
-        JSON.stringify(formData),
+      const updatedFiling = await dbQuery(updateFilingQuery, [
         assessmentYear,
+        JSON.stringify(formData || {}),
+        JSON.stringify(taxComputation || {}),
+        existingFilingId,
+        userId,
       ]);
 
-      const filingId = filing.rows[0].id;
+      const filingId = updatedFiling.rows[0]?.id || existingFilingId;
 
-      // Update draft status
-      const updateDraftQuery = `
-        UPDATE itr_drafts 
-        SET status = 'submitted', updated_at = NOW()
-        WHERE id = $1
-      `;
-
-      await dbQuery(updateDraftQuery, [draftId]);
+      // Mark draft as completed (itr_drafts does not reliably have a status column)
+      await dbQuery(
+        `UPDATE itr_drafts
+         SET is_completed = true, updated_at = NOW(), last_saved_at = NOW()
+         WHERE id = $1`,
+        [draftId],
+      );
 
       // Create invoice draft if not exists
       let invoiceId = null;
@@ -1144,10 +1186,10 @@ class ITRController {
       // Send SSE notification for filing submission
       sseNotificationService.sendFilingStatusUpdate(userId, {
         id: filingId,
-        itrType: filing.rows[0].itr_type,
+        itrType,
         oldStatus: 'draft',
         newStatus: 'submitted',
-        submittedAt: filing.rows[0].submitted_at,
+        submittedAt: updatedFiling.rows[0]?.submitted_at || new Date().toISOString(),
       });
 
       // Broadcast WebSocket event for filing status change
@@ -1280,10 +1322,10 @@ class ITRController {
       return successResponse(res, {
         filing: {
           id: filingId,
-          itrType: filing.rows[0].itr_type,
-          status: filing.rows[0].status,
-          submittedAt: filing.rows[0].submitted_at,
-          assessmentYear: filing.rows[0].assessment_year,
+          itrType,
+          status: 'submitted',
+          submittedAt: updatedFiling.rows[0]?.submitted_at || new Date().toISOString(),
+          assessmentYear,
           acknowledgmentNumber,
           verificationMethod: storedVerificationMethod,
           invoiceId,
@@ -1313,7 +1355,7 @@ class ITRController {
 
       // Get draft and filing info
       const getDraftQuery = `
-        SELECT d.id, f.id as filing_id, f.json_payload
+        SELECT d.id, f.id as filing_id, d.data
         FROM itr_drafts d
         JOIN itr_filings f ON d.filing_id = f.id
         WHERE d.id = $1 AND f.user_id = $2
@@ -1325,8 +1367,13 @@ class ITRController {
         return notFoundResponse(res, 'Draft');
       }
 
-      const formData = JSON.parse(draft.rows[0].json_payload || '{}');
-      const pan = formData.personal_info?.pan || formData.personalInfo?.pan;
+      let formData = {};
+      try {
+        formData = draft.rows[0].data ? (typeof draft.rows[0].data === 'string' ? JSON.parse(draft.rows[0].data) : draft.rows[0].data) : {};
+      } catch (e) {
+        formData = {};
+      }
+      const pan = formData.personal_info?.pan || formData.personalInfo?.pan || formData.personalInfo?.panNumber || null;
 
       if (!pan) {
         return validationErrorResponse(res, {
@@ -1362,7 +1409,7 @@ class ITRController {
 
       // Get draft and filing info
       const getDraftQuery = `
-        SELECT d.id, f.id as filing_id, f.json_payload
+        SELECT d.id, f.id as filing_id, d.data
         FROM itr_drafts d
         JOIN itr_filings f ON d.filing_id = f.id
         WHERE d.id = $1 AND f.user_id = $2
@@ -1374,8 +1421,13 @@ class ITRController {
         return notFoundResponse(res, 'Draft');
       }
 
-      const formData = JSON.parse(draft.rows[0].json_payload || '{}');
-      const pan = formData.personal_info?.pan || formData.personalInfo?.pan;
+      let formData = {};
+      try {
+        formData = draft.rows[0].data ? (typeof draft.rows[0].data === 'string' ? JSON.parse(draft.rows[0].data) : draft.rows[0].data) : {};
+      } catch (e) {
+        formData = {};
+      }
+      const pan = formData.personal_info?.pan || formData.personalInfo?.pan || formData.personalInfo?.panNumber || null;
       const filingId = draft.rows[0].filing_id;
 
       if (!pan) {
@@ -1421,7 +1473,7 @@ class ITRController {
 
       // Get draft and filing info
       const getDraftQuery = `
-        SELECT d.id, f.id as filing_id, f.json_payload
+        SELECT d.id, f.id as filing_id, d.data
         FROM itr_drafts d
         JOIN itr_filings f ON d.filing_id = f.id
         WHERE d.id = $1 AND f.user_id = $2
@@ -1433,8 +1485,13 @@ class ITRController {
         return notFoundResponse(res, 'Draft');
       }
 
-      const formData = JSON.parse(draft.rows[0].json_payload || '{}');
-      const pan = formData.personal_info?.pan || formData.personalInfo?.pan;
+      let formData = {};
+      try {
+        formData = draft.rows[0].data ? (typeof draft.rows[0].data === 'string' ? JSON.parse(draft.rows[0].data) : draft.rows[0].data) : {};
+      } catch (e) {
+        formData = {};
+      }
+      const pan = formData.personal_info?.pan || formData.personalInfo?.pan || formData.personalInfo?.panNumber || null;
       const filingId = draft.rows[0].filing_id;
 
       if (!pan) {
@@ -1479,7 +1536,7 @@ class ITRController {
 
       // Get draft and filing info
       const getDraftQuery = `
-        SELECT d.id, f.id as filing_id, f.json_payload
+        SELECT d.id, f.id as filing_id, d.data
         FROM itr_drafts d
         JOIN itr_filings f ON d.filing_id = f.id
         WHERE d.id = $1 AND f.user_id = $2
@@ -1491,8 +1548,13 @@ class ITRController {
         return notFoundResponse(res, 'Draft');
       }
 
-      const formData = JSON.parse(draft.rows[0].json_payload || '{}');
-      const pan = formData.personal_info?.pan || formData.personalInfo?.pan;
+      let formData = {};
+      try {
+        formData = draft.rows[0].data ? (typeof draft.rows[0].data === 'string' ? JSON.parse(draft.rows[0].data) : draft.rows[0].data) : {};
+      } catch (e) {
+        formData = {};
+      }
+      const pan = formData.personal_info?.pan || formData.personalInfo?.pan || formData.personalInfo?.panNumber || null;
       const filingId = draft.rows[0].filing_id;
 
       if (!pan) {
@@ -1538,7 +1600,7 @@ class ITRController {
 
       // Get draft and filing info
       const getDraftQuery = `
-        SELECT d.id, f.id as filing_id, f.json_payload
+        SELECT d.id, f.id as filing_id, d.data
         FROM itr_drafts d
         JOIN itr_filings f ON d.filing_id = f.id
         WHERE d.id = $1 AND f.user_id = $2
@@ -1550,8 +1612,13 @@ class ITRController {
         return notFoundResponse(res, 'Draft');
       }
 
-      const formData = JSON.parse(draft.rows[0].json_payload || '{}');
-      const pan = formData.personal_info?.pan || formData.personalInfo?.pan;
+      let formData = {};
+      try {
+        formData = draft.rows[0].data ? (typeof draft.rows[0].data === 'string' ? JSON.parse(draft.rows[0].data) : draft.rows[0].data) : {};
+      } catch (e) {
+        formData = {};
+      }
+      const pan = formData.personal_info?.pan || formData.personalInfo?.pan || formData.personalInfo?.panNumber || null;
       const filingId = draft.rows[0].filing_id;
 
       if (!pan) {
@@ -1597,7 +1664,7 @@ class ITRController {
 
       // Get draft and filing info
       const getDraftQuery = `
-        SELECT d.id, f.id as filing_id, f.json_payload
+        SELECT d.id, f.id as filing_id, d.data
         FROM itr_drafts d
         JOIN itr_filings f ON d.filing_id = f.id
         WHERE d.id = $1 AND f.user_id = $2
@@ -1609,8 +1676,13 @@ class ITRController {
         return notFoundResponse(res, 'Draft');
       }
 
-      const formData = JSON.parse(draft.rows[0].json_payload || '{}');
-      const pan = formData.personal_info?.pan || formData.personalInfo?.pan;
+      let formData = {};
+      try {
+        formData = draft.rows[0].data ? (typeof draft.rows[0].data === 'string' ? JSON.parse(draft.rows[0].data) : draft.rows[0].data) : {};
+      } catch (e) {
+        formData = {};
+      }
+      const pan = formData.personal_info?.pan || formData.personalInfo?.pan || formData.personalInfo?.panNumber || null;
 
       if (!pan) {
         return validationErrorResponse(res, {
@@ -1653,7 +1725,7 @@ class ITRController {
 
       // Get draft and filing info
       const getDraftQuery = `
-        SELECT d.id, f.id as filing_id, f.json_payload
+        SELECT d.id, f.id as filing_id, d.data
         FROM itr_drafts d
         JOIN itr_filings f ON d.filing_id = f.id
         WHERE d.id = $1 AND f.user_id = $2
@@ -1665,8 +1737,13 @@ class ITRController {
         return notFoundResponse(res, 'Draft');
       }
 
-      const formData = JSON.parse(draft.rows[0].json_payload || '{}');
-      const pan = formData.personal_info?.pan || formData.personalInfo?.pan;
+      let formData = {};
+      try {
+        formData = draft.rows[0].data ? (typeof draft.rows[0].data === 'string' ? JSON.parse(draft.rows[0].data) : draft.rows[0].data) : {};
+      } catch (e) {
+        formData = {};
+      }
+      const pan = formData.personal_info?.pan || formData.personalInfo?.pan || formData.personalInfo?.panNumber || null;
       const filingId = draft.rows[0].filing_id;
 
       if (!pan) {
@@ -1769,8 +1846,13 @@ class ITRController {
       return paginatedResponse(res,
         drafts.rows.map(draft => ({
           id: draft.id,
+          filingId: draft.filing_id,
           itrType: draft.itr_type,
           status: draft.status,
+          assessmentYear: draft.assessment_year,
+          step: draft.step,
+          isCompleted: draft.is_completed,
+          lastSavedAt: draft.last_saved_at,
           createdAt: draft.created_at,
           updatedAt: draft.updated_at,
         })),
@@ -4659,7 +4741,6 @@ class ITRController {
       const { filingId } = req.params;
 
       const PDFGenerationService = require('../services/core/PDFGenerationService');
-      const ITRFiling = require('../models/ITRFiling');
 
       // Verify user owns this filing
       const verifyQuery = `
@@ -4675,21 +4756,39 @@ class ITRController {
         return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
-      // Get filing data
-      const filing = await ITRFiling.findByPk(filingId);
-      
-      if (!filing.acknowledgmentNumber) {
+      // Get filing data (DB source of truth; avoids model/column drift)
+      const filingQuery = `
+        SELECT
+          itr_type,
+          assessment_year,
+          submitted_at,
+          acknowledgment_number,
+          ack_number,
+          verification_status
+        FROM itr_filings
+        WHERE id = $1
+      `;
+      const filingResult = await dbQuery(filingQuery, [filingId]);
+
+      if (filingResult.rows.length === 0) {
+        return notFoundResponse(res, 'Filing');
+      }
+
+      const row = filingResult.rows[0];
+      const acknowledgmentNumber = row.acknowledgment_number || row.ack_number || null;
+
+      if (!acknowledgmentNumber) {
         return validationErrorResponse(res, {
           acknowledgmentNumber: 'Filing not yet acknowledged',
         });
       }
 
       const acknowledgmentData = {
-        acknowledgmentNumber: filing.acknowledgmentNumber,
-        submittedAt: filing.submittedAt,
-        itrType: filing.itrType,
-        assessmentYear: filing.assessmentYear,
-        eVerificationStatus: filing.eVerificationStatus || 'Pending',
+        acknowledgmentNumber,
+        submittedAt: row.submitted_at,
+        itrType: row.itr_type,
+        assessmentYear: row.assessment_year,
+        eVerificationStatus: row.verification_status || 'pending',
       };
 
       // Generate PDF

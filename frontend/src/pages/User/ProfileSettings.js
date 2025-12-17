@@ -4,7 +4,7 @@
 // =====================================================
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { User, Shield, CreditCard, FileText, Settings, Save, ExternalLink, Plus, Edit2, Trash2, CheckCircle, AlertCircle, Loader2, X, RotateCcw, Filter, ArrowUpDown, Download, Eye, ChevronRight, RefreshCw, Search, Clock, EyeOff } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -26,6 +26,8 @@ import fieldLockService, { VERIFICATION_STATUS } from '../../services/FieldLockS
 const ProfileSettings = () => {
   const { user, updateProfile, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = searchParams.get('returnTo');
   const [activeTab, setActiveTab] = useState('profile');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -151,6 +153,14 @@ const ProfileSettings = () => {
               <h1 className="text-heading-2 sm:text-heading-1 font-bold text-slate-900">Profile Settings</h1>
               <p className="text-body-regular sm:text-body-large text-slate-600 mt-2">Manage your account information and preferences</p>
             </div>
+            {returnTo ? (
+              <button
+                onClick={() => navigate(returnTo)}
+                className="px-4 py-2 bg-primary-500 text-white rounded-xl hover:bg-primary-600 flex items-center gap-2 text-body-sm font-medium"
+              >
+                Back to filing
+              </button>
+            ) : (
             <button
               onClick={() => navigate('/preferences')}
               className="px-4 py-2 bg-gold-500 text-white rounded-xl hover:bg-gold-600 flex items-center gap-2 text-body-sm font-medium"
@@ -159,6 +169,7 @@ const ProfileSettings = () => {
               Preferences
               <ExternalLink className="h-4 w-4" />
             </button>
+            )}
           </div>
         </div>
 

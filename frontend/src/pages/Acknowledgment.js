@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -13,8 +13,9 @@ import {
   Mail,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { enterpriseLogger } from '../utils/logger';
 import itrService from '../services/api/itrService';
-import apiClient from '../services/core/APIClient';
+import { ensureJourneyStart, trackEvent } from '../utils/analyticsEvents';
 import {
   EnterpriseCard,
   EnterpriseButton,
@@ -33,33 +34,46 @@ const Acknowledgment = () => {
   const [isSharing, setIsSharing] = useState(false); // Justification: Show loading state during share
 
   // Get acknowledgment number from navigation state - Justification: Pass data between pages
-  const ackNumber = location.state?.ackNumber;
+  const ackNumberFromState = location.state?.ackNumber || location.state?.acknowledgmentNumber || null;
+
+  // Funnel analytics: acknowledgment view
+  React.useEffect(() => {
+    ensureJourneyStart();
+    trackEvent('itr_ack_view', {
+      filingId: filingId || null,
+      ackNumber: ackNumberFromState || null,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Fetch filing details - Justification: Display complete filing information
-  const { data: filing, isLoading: filingLoading } = useQuery(
+  const { data: filingResponse, isLoading: filingLoading } = useQuery(
     ['filing', filingId],
     () => itrService.getFilingById(filingId),
     {
       enabled: !!filingId,
       onError: (error) => {
         toast.error('Failed to load filing details');
-        console.error('Failed to load filing details:', error);
+        enterpriseLogger.error('Failed to load filing details', { error, filingId });
       },
     },
   );
 
-  // Fetch submission details - Justification: Get submission timestamp and verification method
-  const { data: submission } = useQuery(
-    ['filing-submission', filingId],
-    () => apiClient.get(`/itr/filings/${filingId}/submission`),
-    {
-      enabled: !!filingId,
-      onError: (error) => {
-        console.error('Failed to load submission details:', error);
-        // Silently fail - submission details are optional
-      },
-    },
-  );
+  const filing = filingResponse?.filing || null;
+  const ackNumber = useMemo(() => {
+    return ackNumberFromState || filing?.acknowledgmentNumber || null;
+  }, [ackNumberFromState, filing?.acknowledgmentNumber]);
+
+  const statusLabel = useMemo(() => {
+    const s = String(filing?.status || '').toLowerCase();
+    if (!s) return 'Unknown';
+    if (s === 'submitted') return 'Submitted';
+    if (s === 'acknowledged') return 'Acknowledged';
+    if (s === 'processed') return 'Processed';
+    if (s === 'paused') return 'Paused';
+    if (s === 'draft') return 'Draft';
+    return s;
+  }, [filing?.status]);
 
   // Handle download acknowledgment - Justification: Allow users to save acknowledgment as PDF
   const handleDownloadAcknowledgment = async () => {
@@ -75,7 +89,7 @@ const Acknowledgment = () => {
       toast.success('Acknowledgment downloaded successfully!');
     } catch (error) {
       toast.error('Failed to download acknowledgment');
-      console.error('Download error:', error);
+      enterpriseLogger.error('Download acknowledgment failed', { error, filingId });
     } finally {
       setIsDownloading(false);
     }
@@ -99,9 +113,12 @@ const Acknowledgment = () => {
     setIsSharing(true);
     try {
       const subject = `ITR Filing Acknowledgment - ${ackNumber}`;
+      const itrType = filing?.itrType || filing?.itr_type || 'N/A';
+      const ay = filing?.assessmentYear || filing?.assessment_year || 'N/A';
       const body = `Dear Taxpayer,\n\nYour ITR filing has been successfully submitted.\n\nAcknowledgment Number: ${ackNumber}\nFiling Date: ${new Date().toLocaleDateString()}\nITR Type: ${filing?.filing?.itr_type}\nAssessment Year: ${filing?.filing?.assessment_year}\n\nThank you for using our platform.\n\nBest regards,\nBurnblack Team`;
+      const safeBody = `Dear Taxpayer,\n\nYour ITR filing has been successfully submitted.\n\nAcknowledgment Number: ${ackNumber || 'Pending'}\nFiling Date: ${filing?.submittedAt ? new Date(filing.submittedAt).toLocaleDateString() : new Date().toLocaleDateString()}\nITR Type: ${itrType}\nAssessment Year: ${ay}\n\nThank you for using our platform.\n\nBest regards,\nBurnblack Team`;
 
-      const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(safeBody)}`;
       window.open(mailtoLink);
       toast.success('Email client opened!');
     } catch (error) {
@@ -141,8 +158,13 @@ const Acknowledgment = () => {
               Acknowledgment Number
             </h2>
             <p className="text-heading-2 font-mono font-bold text-success-900">
-              {ackNumber || 'ACK' + Date.now().toString().slice(-8)}
+              {ackNumber || 'Pending (use Filing ID below)'}
             </p>
+            {!ackNumber && filingId && (
+              <p className="text-body-small text-success-800 mt-1 font-mono break-all">
+                Filing ID: {filingId}
+              </p>
+            )}
             <p className="text-body-regular text-success-700 mt-1">
               Please save this number for future reference
             </p>
@@ -162,7 +184,11 @@ const Acknowledgment = () => {
                 <User className="h-5 w-5 text-slate-400 mr-3" />
                 <div>
                   <p className="text-body-regular font-medium text-slate-900">Taxpayer Name</p>
-                  <p className="text-body-regular text-slate-600">{filing?.filing?.user_name || 'N/A'}</p>
+                  <p className="text-body-regular text-slate-600">
+                    {filing?.formData?.personalInfo?.fullName ||
+                      filing?.formData?.personal_info?.full_name ||
+                      'N/A'}
+                  </p>
                 </div>
               </div>
 
@@ -170,7 +196,7 @@ const Acknowledgment = () => {
                 <FileText className="h-5 w-5 text-slate-400 mr-3" />
                 <div>
                   <p className="text-body-regular font-medium text-slate-900">ITR Type</p>
-                  <p className="text-body-regular text-slate-600">{filing?.filing?.itr_type}</p>
+                  <p className="text-body-regular text-slate-600">{filing?.itrType || 'N/A'}</p>
                 </div>
               </div>
 
@@ -178,7 +204,7 @@ const Acknowledgment = () => {
                 <Calendar className="h-5 w-5 text-slate-400 mr-3" />
                 <div>
                   <p className="text-body-regular font-medium text-slate-900">Assessment Year</p>
-                  <p className="text-body-regular text-slate-600">{filing?.filing?.assessment_year}</p>
+                  <p className="text-body-regular text-slate-600">{filing?.assessmentYear || 'N/A'}</p>
                 </div>
               </div>
             </div>
@@ -189,10 +215,7 @@ const Acknowledgment = () => {
                 <div>
                   <p className="text-body-regular font-medium text-slate-900">Submission Date</p>
                   <p className="text-body-regular text-slate-600">
-                    {submission?.submission?.submitted_at
-                      ? new Date(submission.submission.submitted_at).toLocaleDateString()
-                      : new Date().toLocaleDateString()
-                    }
+                    {filing?.submittedAt ? new Date(filing.submittedAt).toLocaleDateString() : 'N/A'}
                   </p>
                 </div>
               </div>
@@ -202,7 +225,7 @@ const Acknowledgment = () => {
                 <div>
                   <p className="text-body-regular font-medium text-slate-900">Verification Method</p>
                   <p className="text-body-regular text-slate-600">
-                    {submission?.submission?.verification_method || 'Aadhaar OTP'}
+                    {filing?.verificationMethod || 'N/A'}
                   </p>
                 </div>
               </div>
@@ -211,7 +234,7 @@ const Acknowledgment = () => {
                 <CheckCircle className="h-5 w-5 text-slate-400 mr-3" />
                 <div>
                   <p className="text-body-regular font-medium text-slate-900">Status</p>
-                  <p className="text-body-regular text-success-600 font-medium">Submitted</p>
+                  <p className="text-body-regular text-success-600 font-medium">{statusLabel}</p>
                 </div>
               </div>
             </div>
@@ -254,7 +277,7 @@ const Acknowledgment = () => {
       <div className="bg-white shadow rounded-xl p-6">
         <h3 className="text-heading-4 font-medium text-slate-900 mb-4">What would you like to do next?</h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* Download Acknowledgment */}
           <button
             onClick={handleDownloadAcknowledgment}
@@ -266,6 +289,28 @@ const Acknowledgment = () => {
               {isDownloading ? 'Downloading...' : 'Download'}
             </span>
             <span className="text-body-small text-slate-500">Save as PDF</span>
+          </button>
+
+          {/* Track ITR-V */}
+          <button
+            onClick={() => navigate(`/itr/itrv-tracking?filingId=${filingId}`)}
+            className="flex flex-col items-center p-4 border border-slate-200 rounded-xl hover:bg-slate-50"
+            disabled={!filingId}
+          >
+            <FileText className="h-6 w-6 text-slate-600 mb-2" />
+            <span className="text-body-regular font-medium text-slate-900">Track ITR-V</span>
+            <span className="text-body-small text-slate-500">Verification status</span>
+          </button>
+
+          {/* Track Refund */}
+          <button
+            onClick={() => navigate(`/itr/refund-tracking?filingId=${filingId}`)}
+            className="flex flex-col items-center p-4 border border-slate-200 rounded-xl hover:bg-slate-50"
+            disabled={!filingId}
+          >
+            <Download className="h-6 w-6 text-slate-600 mb-2" />
+            <span className="text-body-regular font-medium text-slate-900">Track Refund</span>
+            <span className="text-body-small text-slate-500">Refund timeline</span>
           </button>
 
           {/* Print Acknowledgment */}
@@ -311,25 +356,25 @@ const Acknowledgment = () => {
         <h3 className="text-heading-4 font-medium text-slate-900 mb-3">What happens next?</h3>
         <div className="space-y-3 text-body-regular text-slate-700">
           <div className="flex items-start">
-            <div className="w-2 h-2 bg-gray-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+            <div className="w-2 h-2 bg-slate-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
             <p>
               <strong>Processing:</strong> The Income Tax Department will process your return within 2-3 weeks.
             </p>
           </div>
           <div className="flex items-start">
-            <div className="w-2 h-2 bg-gray-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+            <div className="w-2 h-2 bg-slate-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
             <p>
               <strong>Intimation:</strong> You will receive an intimation under Section 143(1) if there are any adjustments.
             </p>
           </div>
           <div className="flex items-start">
-            <div className="w-2 h-2 bg-gray-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+            <div className="w-2 h-2 bg-slate-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
             <p>
               <strong>Refund:</strong> If you're eligible for a refund, it will be processed and credited to your bank account.
             </p>
           </div>
           <div className="flex items-start">
-            <div className="w-2 h-2 bg-gray-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+            <div className="w-2 h-2 bg-slate-400 rounded-full mt-2 mr-3 flex-shrink-0"></div>
             <p>
               <strong>Communication:</strong> Any further communication will be sent to your registered email and mobile number.
             </p>

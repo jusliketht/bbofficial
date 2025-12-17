@@ -147,6 +147,29 @@ class AuthService {
     }
   }
 
+  // Persist onboarding completion server-side (preferred over localStorage-only)
+  async completeOnboarding() {
+    try {
+      const response = await apiClient.post('/auth/complete-onboarding', { onboardingCompleted: true });
+
+      // Best-effort: also update cached local user record
+      try {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const u = JSON.parse(userStr);
+          localStorage.setItem('user', JSON.stringify({ ...u, onboardingCompleted: true }));
+        }
+      } catch (e) {
+        // ignore localStorage errors
+      }
+
+      return response.data;
+    } catch (error) {
+      errorHandler.handle(error);
+      throw error;
+    }
+  }
+
   // Check if user is authenticated
   isAuthenticated() {
     return !!apiClient.getAuthToken();

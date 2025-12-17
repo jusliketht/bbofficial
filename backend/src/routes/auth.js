@@ -439,7 +439,24 @@ router.get('/profile', authenticateToken, async (req, res) => {
     const userId = req.user.userId;
 
     const user = await User.findByPk(userId, {
-      attributes: ['id', 'email', 'fullName', 'phone', 'role', 'status', 'createdAt', 'dateOfBirth', 'gender', 'metadata', 'authProvider', 'passwordHash', 'panNumber', 'panVerified', 'panVerifiedAt'],
+      attributes: [
+        'id',
+        'email',
+        'fullName',
+        'phone',
+        'role',
+        'status',
+        'createdAt',
+        'dateOfBirth',
+        'gender',
+        'metadata',
+        'authProvider',
+        'passwordHash',
+        'panNumber',
+        'panVerified',
+        'panVerifiedAt',
+        'onboardingCompleted',
+      ],
     });
 
     if (!user) {
@@ -453,7 +470,15 @@ router.get('/profile', authenticateToken, async (req, res) => {
     const UserProfile = require('../models/UserProfile');
     const userProfile = await UserProfile.findOne({
       where: { userId: user.id },
-      attributes: ['addressLine1', 'addressLine2', 'city', 'state', 'pincode'],
+      attributes: [
+        'addressLine1',
+        'addressLine2',
+        'city',
+        'state',
+        'pincode',
+        'profileCompleted',
+        'completionPercentage',
+      ],
     });
 
     res.json({
@@ -473,12 +498,17 @@ router.get('/profile', authenticateToken, async (req, res) => {
         panNumber: user.panNumber,
         panVerified: user.panVerified || false,
         panVerifiedAt: user.panVerifiedAt,
+        onboardingCompleted: user.onboardingCompleted || false,
         address: userProfile ? {
           addressLine1: userProfile.addressLine1 || null,
           addressLine2: userProfile.addressLine2 || null,
           city: userProfile.city || null,
           state: userProfile.state || null,
           pincode: userProfile.pincode || null,
+        } : null,
+        profileCompletion: userProfile ? {
+          profileCompleted: userProfile.profileCompleted || false,
+          completionPercentage: typeof userProfile.completionPercentage === 'number' ? userProfile.completionPercentage : 0,
         } : null,
       },
     });

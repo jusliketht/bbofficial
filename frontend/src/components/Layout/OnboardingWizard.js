@@ -16,6 +16,7 @@ import {
   Tablet,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import authService from '../../services/api/authService';
 
 const OnboardingWizard = ({ onComplete }) => {
   const [currentStep, setCurrentStep] = useState(0);
@@ -81,10 +82,17 @@ const OnboardingWizard = ({ onComplete }) => {
     setUserProfile(prev => ({ ...prev, ...updates }));
   };
 
-  const handleComplete = () => {
-    // Save user preferences to localStorage
+  const handleComplete = async () => {
+    // Save user preferences to localStorage (best-effort fallback)
     localStorage.setItem('itr_onboarding_completed', 'true');
     localStorage.setItem('itr_user_profile', JSON.stringify(userProfile));
+
+    // Prefer server-side onboarding completion (so it persists across devices/sessions)
+    try {
+      await authService.completeOnboarding();
+    } catch (e) {
+      // Don't block UX on server failure; local fallback still works
+    }
 
     toast.success('Welcome! Your preferences have been saved.');
     onComplete && onComplete(userProfile);

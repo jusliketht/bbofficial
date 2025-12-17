@@ -202,7 +202,7 @@ const ScheduleFA = ({ filingId, onUpdate }) => {
                               asset.assetDetails?.address ||
                               'Foreign Asset'}
                           </h4>
-                          <span className="px-2 py-1 text-body-small font-medium bg-blue-100 text-blue-800 rounded">
+                          <span className="px-2 py-1 text-body-small font-medium bg-slate-100 text-slate-700 rounded">
                             {asset.country}
                           </span>
                         </div>

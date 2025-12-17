@@ -7,6 +7,7 @@
 const express = require('express');
 const ITRController = require('../controllers/ITRController');
 const { authenticateToken } = require('../middleware/auth');
+const { successResponse, errorResponse, notFoundResponse } = require('../utils/responseFormatter');
 
 const router = express.Router();
 const itrController = new ITRController();
@@ -398,7 +399,10 @@ router.get('/filings/:filingId', authenticateToken, async (req, res) => {
     const enterpriseLogger = require('../utils/logger');
 
     const getFilingQuery = `
-      SELECT id, itr_type, json_payload, tax_computation, status, submitted_at, assessment_year, created_at, updated_at
+      SELECT
+        id, itr_type, json_payload, tax_computation, status, submitted_at, assessment_year,
+        acknowledgment_number, verification_method,
+        created_at, updated_at
       FROM itr_filings 
       WHERE id = $1 AND user_id = $2
     `;
@@ -406,30 +410,59 @@ router.get('/filings/:filingId', authenticateToken, async (req, res) => {
     const filing = await dbQuery(getFilingQuery, [filingId, userId]);
 
     if (filing.rows.length === 0) {
-      return res.status(404).json({
-        error: 'Filing not found',
-      });
+      return notFoundResponse(res, 'Filing');
     }
 
     const filingRow = filing.rows[0];
-    const formData = filingRow.json_payload ? 
-                     (typeof filingRow.json_payload === 'string' ? JSON.parse(filingRow.json_payload) : filingRow.json_payload) : {};
-    const taxComputation = filingRow.tax_computation ? 
-                           (typeof filingRow.tax_computation === 'string' ? JSON.parse(filingRow.tax_computation) : filingRow.tax_computation) : null;
 
-    res.json({
-      filing: {
-        id: filingRow.id,
-        itrType: filingRow.itr_type,
-        formData: formData,
-        taxComputation: taxComputation,
-        status: filingRow.status,
-        submittedAt: filingRow.submitted_at,
-        assessmentYear: filingRow.assessment_year,
-        createdAt: filingRow.created_at,
-        updatedAt: filingRow.updated_at,
+    let formData = {};
+    let taxComputation = null;
+
+    try {
+      formData = filingRow.json_payload
+        ? (typeof filingRow.json_payload === 'string' ? JSON.parse(filingRow.json_payload) : filingRow.json_payload)
+        : {};
+    } catch (parseError) {
+      enterpriseLogger.error('Failed to parse filing json_payload', {
+        error: parseError.message,
+        filingId,
+        userId,
+      });
+      return errorResponse(res, { message: 'Invalid filing payload format' }, 500);
+    }
+
+    try {
+      taxComputation = filingRow.tax_computation
+        ? (typeof filingRow.tax_computation === 'string' ? JSON.parse(filingRow.tax_computation) : filingRow.tax_computation)
+        : null;
+    } catch (parseError) {
+      enterpriseLogger.error('Failed to parse filing tax_computation', {
+        error: parseError.message,
+        filingId,
+        userId,
+      });
+      return errorResponse(res, { message: 'Invalid tax computation payload format' }, 500);
+    }
+
+    return successResponse(
+      res,
+      {
+        filing: {
+          id: filingRow.id,
+          itrType: filingRow.itr_type,
+          formData,
+          taxComputation,
+          status: filingRow.status,
+          submittedAt: filingRow.submitted_at,
+          assessmentYear: filingRow.assessment_year,
+          acknowledgmentNumber: filingRow.acknowledgment_number || null,
+          verificationMethod: filingRow.verification_method || null,
+          createdAt: filingRow.created_at,
+          updatedAt: filingRow.updated_at,
+        },
       },
-    });
+      'Filing retrieved successfully'
+    );
   } catch (error) {
     const enterpriseLogger = require('../utils/logger');
     enterpriseLogger.error('Get filing failed', {
@@ -438,9 +471,7 @@ router.get('/filings/:filingId', authenticateToken, async (req, res) => {
       filingId: req.params.filingId,
       stack: error.stack,
     });
-    res.status(500).json({
-      error: 'Internal server error',
-    });
+    return errorResponse(res, error, 500);
   }
 });
 

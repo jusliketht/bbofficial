@@ -15,6 +15,7 @@ import { cn } from '../../lib/utils';
 import { enterpriseLogger } from '../../utils/logger';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Modal from '../../components/common/Modal';
+import itrService from '../../services/api/itrService';
 
 const ITRVTracking = () => {
   const [searchParams] = useSearchParams();
@@ -23,6 +24,21 @@ const ITRVTracking = () => {
   const filingId = searchParams.get('filingId');
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [verificationMethod, setVerificationMethod] = useState('');
+  const [recentCompletedFilings, setRecentCompletedFilings] = useState([]);
+
+  useEffect(() => {
+    const loadFilings = async () => {
+      try {
+        const resp = await itrService.getUserITRs();
+        const all = resp?.data || resp?.filings || resp?.all || [];
+        const completed = all.filter(f => ['submitted', 'acknowledged', 'processed'].includes(String(f.status).toLowerCase()));
+        setRecentCompletedFilings(completed.slice(0, 10));
+      } catch (e) {
+        // best-effort
+      }
+    };
+    loadFilings();
+  }, []);
 
   const { data: itrvData, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['itrvStatus', filingId],
@@ -147,15 +163,32 @@ const ITRVTracking = () => {
   if (!itrvData && !filingId) {
     return (
       <div>
-        <div className="bg-white rounded-xl shadow-elevation-1 border border-slate-200 p-6 text-center">
+        <div className="bg-white rounded-xl shadow-elevation-1 border border-slate-200 p-6">
           <AlertCircle className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-          <h3 className="text-heading-4 font-semibold text-slate-900 mb-2">No Filing Selected</h3>
-          <p className="text-body-regular text-slate-600 mb-4">
-            Please select a filing to view ITR-V tracking information.
+          <h3 className="text-heading-4 font-semibold text-slate-900 mb-2 text-center">Select a filing</h3>
+          <p className="text-body-regular text-slate-600 mb-4 text-center">
+            Choose a recent filed return to view its ITR-V status.
           </p>
-          <Button variant="primary" onClick={() => navigate('/itr/filings')}>
-            View My Filings
-          </Button>
+
+          {recentCompletedFilings.length > 0 ? (
+            <div className="flex flex-wrap justify-center gap-2">
+              {recentCompletedFilings.map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => navigate(`/itr/itrv-tracking?filingId=${f.id}`)}
+                  className="px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-body-sm text-slate-800"
+                >
+                  {f.itrType || 'ITR'} - AY {f.assessmentYear || '—'}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center">
+              <Button variant="primary" onClick={() => navigate('/dashboard')}>
+                Go to Dashboard
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     );

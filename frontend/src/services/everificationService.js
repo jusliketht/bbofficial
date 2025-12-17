@@ -6,6 +6,10 @@
 import apiClient from './core/APIClient';
 
 class EVerificationService {
+  _unwrap(response) {
+    return response?.data?.data || response?.data || {};
+  }
+
   /**
    * Send Aadhaar OTP
    * @param {string} draftId - Draft ID
@@ -20,7 +24,7 @@ class EVerificationService {
 
       return {
         success: true,
-        ...response.data,
+        ...this._unwrap(response),
       };
     } catch (error) {
       console.error('Failed to send Aadhaar OTP:', error);
@@ -44,7 +48,7 @@ class EVerificationService {
 
       return {
         success: true,
-        ...response.data,
+        ...this._unwrap(response),
       };
     } catch (error) {
       console.error('Failed to verify Aadhaar OTP:', error);
@@ -68,7 +72,7 @@ class EVerificationService {
 
       return {
         success: true,
-        ...response.data,
+        ...this._unwrap(response),
       };
     } catch (error) {
       console.error('Failed to verify Net Banking:', error);
@@ -90,7 +94,7 @@ class EVerificationService {
 
       return {
         success: true,
-        ...response.data,
+        ...this._unwrap(response),
       };
     } catch (error) {
       console.error('Failed to verify DSC:', error);
@@ -109,7 +113,7 @@ class EVerificationService {
 
       return {
         success: true,
-        ...response.data,
+        ...this._unwrap(response),
       };
     } catch (error) {
       console.error('Failed to get verification status:', error);

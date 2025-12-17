@@ -1,176 +1,198 @@
 // =====================================================
 // DATA SOURCE SELECTOR COMPONENT
-// Matches UX.md SCREEN 1 specification
+// Canonical Determine ITR step: /itr/determine
+// Spec: docs/ITR_DETERMINE_ITR_SPEC.md
 // =====================================================
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Upload,
-  Download,
-  FileText,
-  Compass,
-  Copy,
-  RefreshCw,
-  ArrowRight,
   ArrowLeft,
   CheckCircle,
+  Compass,
+  Copy,
+  Download,
+  RefreshCw,
+  Upload,
   X,
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { cn } from '../../lib/utils';
-import { springs } from '../../lib/motion';
+
 import Form16Uploader from './Form16Uploader';
 import GuideMeQuestionnaire from './GuideMeQuestionnaire';
 import ITRSelectionCards from './ITRSelectionCards';
+import RecommendationPanel from './DetermineITR/RecommendationPanel';
+import { springs } from '../../lib/motion';
 import { useDataPrefetch } from '../../hooks/useDataPrefetch';
 import itrService from '../../services/api/itrService';
 import { useAuth } from '../../contexts/AuthContext';
+import { ensureJourneyStart, trackEvent } from '../../utils/analyticsEvents';
 
-const DataSourceSelector = ({ onProceed }) => {
+const STAGES = {
+  CHOOSER: 'chooser',
+  AUTO: 'auto',
+  UPLOAD: 'upload',
+  MANUAL: 'manual',
+  EXPERT: 'expert',
+  RECOMMENDATION: 'recommendation',
+};
+
+function formatIncomeSource(s) {
+  const t = s?.type ? String(s.type).replace(/_/g, ' ').toLowerCase() : 'income';
+  const details = s?.details ? ` — ${s.details}` : '';
+  const src = s?.source ? ` (${s.source})` : '';
+  return `${t}${details}${src}`;
+}
+
+function confidenceLabelFrom(result) {
+  const raw = result?.confidence;
+  if (raw === null || raw === undefined || raw === '') return null;
+  if (typeof raw === 'string') {
+    const n = raw.trim().toLowerCase();
+    if (n === 'high' || n === 'medium' || n === 'low') return n.charAt(0).toUpperCase() + n.slice(1);
+  }
+  if (typeof raw === 'number') {
+    if (raw >= 0.75) return 'High';
+    if (raw >= 0.5) return 'Medium';
+    return 'Low';
+  }
+  return null;
+}
+
+export default function DataSourceSelector({ onProceed }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const selectedPerson = location.state?.selectedPerson;
+  const selectedPerson = location.state?.selectedPerson || null;
 
-  // Get current assessment year (memoized to prevent duplicate requests)
   const assessmentYear = useMemo(() => {
     const currentYear = new Date().getFullYear();
     const nextYear = currentYear + 1;
     return `${nextYear}-${(nextYear + 1).toString().slice(-2)}`;
   }, []);
 
-  // State management
-  const [currentView, setCurrentView] = useState(null); // null | 'form16' | 'ais-portal' | 'expert' | 'guided'
+  const [stage, setStage] = useState(STAGES.CHOOSER);
   const [form16Summary, setForm16Summary] = useState(null);
+  const [guidedAnswers, setGuidedAnswers] = useState(null);
+  const [selectedITR, setSelectedITR] = useState(null);
+
+  const [recommendationState, setRecommendationState] = useState(null);
+  // shape: { itrType, reason, confidence, mode, source, meta }
+  // source: auto|upload|manual|override|previous-year|revised
+
   const [previousYearFiling, setPreviousYearFiling] = useState(null);
   const [existingFiling, setExistingFiling] = useState(null);
-  const [selectedITR, setSelectedITR] = useState(null);
-  const [loadingPreviousYear, setLoadingPreviousYear] = useState(false);
-  const [loadingExistingFiling, setLoadingExistingFiling] = useState(false);
 
-  // Refs to prevent duplicate requests (React StrictMode causes double renders in dev)
   const previousYearRequestedRef = useRef(false);
   const existingFilingRequestedRef = useRef(false);
 
-  // AIS/26AS prefetch hook
-  const panNumber = selectedPerson?.panNumber || user?.panNumber;
-  const userId = selectedPerson?.id || user?.id;
+  const panNumber = selectedPerson?.panNumber || user?.panNumber || null;
+  const userId = selectedPerson?.id || user?.id || null;
+
   const {
     prefetchStatus,
     prefetchedData,
-    itrRecommendation,
-    fetchAll,
+    itrRecommendation: itrRecommendationResult,
+    detectedIncomeSources,
+    startPrefetch: fetchAll,
     isLoading: isPrefetching,
   } = useDataPrefetch(userId, panNumber, assessmentYear);
 
-  // Route guard
-  useEffect(() => {
-    if (!selectedPerson) {
-      navigate('/itr/select-person');
-    }
-  }, [selectedPerson, navigate]);
+  const trackedDetermineViewRef = useRef(false);
+  const trackedAutoDetectSuccessRef = useRef(false);
+  const openedForm16RecommendationRef = useRef(false);
 
-  // Fetch previous year filing (optional feature - fail silently)
+  // Analytics: Determine ITR view
+  useEffect(() => {
+    if (!selectedPerson) return;
+    if (trackedDetermineViewRef.current) return;
+    trackedDetermineViewRef.current = true;
+    ensureJourneyStart();
+    trackEvent('itr_determine_view', {
+      role: user?.role || null,
+      personType: selectedPerson?.type || null,
+      assessmentYear,
+      hasPan: !!panNumber,
+    });
+  }, [selectedPerson, user?.role, assessmentYear, panNumber]);
+
+  // Analytics: Auto-detect success (AIS/26AS)
+  useEffect(() => {
+    const recommended = itrRecommendationResult?.recommendedITR;
+    if (!recommended) return;
+    if (prefetchStatus.overall !== 'success') return;
+    if (trackedAutoDetectSuccessRef.current) return;
+    trackedAutoDetectSuccessRef.current = true;
+    trackEvent('itr_auto_detect_success', {
+      recommendedITR: recommended,
+      confidence: itrRecommendationResult?.confidence ?? null,
+    });
+  }, [prefetchStatus.overall, itrRecommendationResult]);
+
+  // Optional: previous year filing (fail silently)
   useEffect(() => {
     const fetchPreviousYear = async () => {
       if (!selectedPerson?.id) return;
-
-      // Prevent duplicate requests (React StrictMode causes double renders in dev)
       if (previousYearRequestedRef.current) return;
       previousYearRequestedRef.current = true;
 
-      setLoadingPreviousYear(true);
       try {
-        const result = await itrService.getAvailablePreviousYears(
-          selectedPerson.id,
-          assessmentYear,
-        );
-        // Backend returns { success: true, previousYears: [...], count: number }
-        // Service now returns { success: false, previousYears: [], count: 0 } on error
-        if (result?.success && result?.previousYears && result.previousYears.length > 0) {
+        const result = await itrService.getAvailablePreviousYears(selectedPerson.id, assessmentYear);
+        if (result?.success && Array.isArray(result?.previousYears) && result.previousYears.length > 0) {
           setPreviousYearFiling(result.previousYears[0]);
         }
-      } catch (error) {
-        // This should rarely happen now since service handles errors gracefully
-        // But keep this as a safety net
-        // Silently fail - no previous year filing is normal for new users
-      } finally {
-        setLoadingPreviousYear(false);
+      } catch (e) {
+        // noop
       }
     };
-
     fetchPreviousYear();
   }, [selectedPerson?.id, assessmentYear]);
 
-  // Check for existing filing (revised return) - optional feature, fail silently
+  // Optional: revised return detection (fail silently)
   useEffect(() => {
     const checkExisting = async () => {
       if (!selectedPerson?.id) return;
-
-      // Prevent duplicate requests (React StrictMode causes double renders in dev)
       if (existingFilingRequestedRef.current) return;
       existingFilingRequestedRef.current = true;
 
-      setLoadingExistingFiling(true);
       try {
         const filing = await itrService.checkExistingFiling(selectedPerson.id, assessmentYear);
-        if (filing) {
-          setExistingFiling(filing);
-        }
-      } catch (error) {
-        // Silently fail - no existing filing is normal for first-time filers
-      } finally {
-        setLoadingExistingFiling(false);
+        if (filing) setExistingFiling(filing);
+      } catch (e) {
+        // noop
       }
     };
-
     checkExisting();
   }, [selectedPerson?.id, assessmentYear]);
 
-  // Handlers
-  const handleForm16Complete = (summary) => {
-    setForm16Summary(summary);
-  };
+  // When auto-detect finishes successfully in AUTO stage, converge to Recommendation
+  useEffect(() => {
+    if (stage !== STAGES.AUTO) return;
+    if (prefetchStatus.overall !== 'success') return;
+    if (!itrRecommendationResult?.recommendedITR) return;
 
-  const handleAISFetch = async () => {
-    setCurrentView('ais-portal');
-    try {
-      await fetchAll();
-      toast.success('Data fetched successfully!');
-    } catch (error) {
-      toast.error('Failed to fetch data. Please try again.');
-    }
-  };
-
-  const handleContinueFromLastYear = () => {
-    if (!previousYearFiling) return;
-
-    navigate('/itr/computation', {
-      state: {
-        selectedPerson,
-        dataSource: 'previous-year',
-        copyFilingId: previousYearFiling.id,
-        selectedITR: previousYearFiling.itrType || previousYearFiling.itrForm,
-        assessmentYear,
+    const confidence = confidenceLabelFrom(itrRecommendationResult);
+    setRecommendationState({
+      itrType: itrRecommendationResult.recommendedITR,
+      reason: itrRecommendationResult.reason || null,
+      confidence,
+      mode: 'recommended',
+      source: 'auto',
+      meta: {
+        recommendation: itrRecommendationResult,
+        detectedIncomeSources: Array.isArray(detectedIncomeSources) ? detectedIncomeSources : [],
+        prefetchedData: prefetchedData || null,
       },
     });
-  };
-
-  const handleStartRevised = () => {
-    if (!existingFiling) return;
-
-    navigate('/itr/computation', {
-      state: {
-        selectedPerson,
-        dataSource: 'revised-return',
-        originalFilingId: existingFiling.id,
-        selectedITR: existingFiling.itrType || existingFiling.itrForm,
-        assessmentYear,
-      },
-    });
-  };
+    setStage(STAGES.RECOMMENDATION);
+  }, [
+    stage,
+    prefetchStatus.overall,
+    itrRecommendationResult,
+    detectedIncomeSources,
+    prefetchedData,
+  ]);
 
   const handleProceed = (itrType, data = {}) => {
     const navigationState = {
@@ -180,495 +202,328 @@ const DataSourceSelector = ({ onProceed }) => {
       ...data,
     };
 
-    if (currentView === 'form16' && form16Summary) {
-      navigationState.dataSource = 'form16';
-      navigationState.form16Data = form16Summary;
-    } else if (currentView === 'ais-portal' && prefetchedData) {
-      navigationState.dataSource = 'it-portal';
-      navigationState.prefetchedData = prefetchedData;
-    } else if (currentView === 'expert') {
-      navigationState.dataSource = 'direct-selection';
-    } else if (currentView === 'guided') {
-      navigationState.dataSource = 'guided-selection';
-    }
-
     navigate('/itr/computation', { state: navigationState });
-
-    if (onProceed) {
-      onProceed(itrType, navigationState);
-    }
+    if (onProceed) onProceed(itrType, navigationState);
   };
 
-  // Main screen render
-  if (currentView === null) {
-    return (
-      <div className="bg-gradient-to-b from-neutral-50 to-white min-h-screen">
-        {/* Header with Back Navigation */}
-        <div className="bg-white border-b border-neutral-200 sticky top-0 z-40 shadow-elevation-1">
-          <div className="max-w-[1200px] mx-auto px-4 md:px-6 lg:px-8 py-4">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => navigate('/itr/select-person')}
-                className="p-2 rounded-xl hover:bg-neutral-100 transition-colors flex-shrink-0 group"
-                aria-label="Go back"
-              >
-                <ArrowLeft className="h-5 w-5 text-neutral-600 group-hover:text-neutral-900 transition-colors" />
-              </button>
-              <div className="flex-1">
-                <h1 className="text-heading-3 sm:text-heading-2 font-bold text-neutral-900">Select Data Source</h1>
-                <p className="text-body-regular text-neutral-600 mt-0.5">Choose how to start your ITR filing</p>
-              </div>
-            </div>
-          </div>
-        </div>
+  const openRecommendation = ({ itrType, reason, confidence, mode, source, meta }) => {
+    setRecommendationState({
+      itrType,
+      reason: reason || null,
+      confidence: confidence || null,
+      mode: mode || 'recommended',
+      source,
+      meta: meta || {},
+    });
+    setSelectedITR(itrType);
+    setStage(STAGES.RECOMMENDATION);
+  };
 
-        {/* Main Content */}
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          {/* Header Section - Enhanced */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={springs.gentle}
-            className="mb-6 sm:mb-8"
+  const renderTopBar = ({ title, subtitle, onBack, right }) => (
+    <div className="bg-white border-b border-slate-200 sticky top-0 z-40">
+      <div className="max-w-[960px] mx-auto px-4 sm:px-6 py-4">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onBack}
+            className="p-2 rounded-xl hover:bg-slate-100 transition-colors"
+            aria-label="Go back"
           >
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 sm:mb-6 p-4 bg-white rounded-xl border border-neutral-200 shadow-elevation-1">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-success-100 flex items-center justify-center flex-shrink-0">
-                  <CheckCircle className="w-5 h-5 text-success-600" />
-                </div>
-                <div>
-                  <span className="text-body-small text-neutral-500 block">PAN Number</span>
-                  <span className="text-body-regular sm:text-body-large font-bold font-mono text-neutral-900">
-                    {panNumber || 'N/A'}
-                  </span>
-                </div>
-              </div>
-              <div className="px-4 py-2 bg-gradient-to-r from-gold-100 to-amber-100 rounded-xl border border-gold-200">
-                <span className="text-body-small text-gold-700 font-medium block">Assessment Year</span>
-                <span className="text-body-regular font-bold text-gold-900">{assessmentYear}</span>
-              </div>
-            </div>
-            <motion.h1
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.1 }}
-              className="text-heading-2 sm:text-heading-1 font-bold text-neutral-900 text-center mb-2"
-            >
-              How would you like to start?
-            </motion.h1>
-            <p className="text-body-regular sm:text-body-large text-neutral-600 text-center max-w-2xl mx-auto">
-              Choose the method that works best for you. We'll guide you through the rest.
-            </p>
-          </motion.div>
-
-          {/* All Options in 2x2 Grid - Enhanced */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-6">
-            {/* Card 1: UPLOAD FORM 16 */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={springs.gentle}
-              className="bg-white rounded-xl border-2 border-gold-300 shadow-elevation-2 p-5 sm:p-6 relative overflow-hidden hover:border-gold-400 hover:shadow-elevation-3 transition-all duration-300 flex flex-col group"
-            >
-              <div className="absolute top-3 right-3">
-                <span className="inline-flex items-center px-2 py-1 rounded-full text-body-small font-bold bg-gold-100 text-gold-900 shadow-elevation-1">
-                  RECOMMENDED
-                </span>
-              </div>
-
-              <div className="flex items-start gap-3 mb-4">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold-400 to-gold-500 flex items-center justify-center flex-shrink-0 shadow-elevation-2 group-hover:scale-110 transition-transform">
-                  <Upload className="w-6 h-6 text-white" />
-                </div>
-                <div className="flex-1 min-w-0 pt-1">
-                  <h3 className="text-base sm:text-heading-4 font-bold text-neutral-900 mb-1.5">
-                    Upload Form 16
-                  </h3>
-                  <p className="text-body-small sm:text-body-regular text-neutral-600 leading-relaxed">
-                    Auto-fill salary, TDS, and suggest ITR form. Fastest way to get started.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setCurrentView('form16')}
-                className="w-full py-3 px-4 border-2 border-dashed border-neutral-300 rounded-xl hover:border-gold-400 hover:bg-gold-50 transition-all text-center mt-auto group-hover:border-gold-500 group-hover:bg-gold-100/50"
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <Upload className="w-4 h-4 text-neutral-600" />
-                  <p className="text-body-regular font-semibold text-neutral-700">
-                    Drop files or click to upload
-                  </p>
-                </div>
-              </button>
-            </motion.div>
-
-            {/* Card 2: FETCH AIS/26AS */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ ...springs.gentle, delay: 0.1 }}
-              className="bg-white rounded-xl border-2 border-neutral-200 shadow-elevation-2 p-5 sm:p-6 hover:border-primary-300 hover:shadow-elevation-3 transition-all duration-300 flex flex-col group"
-            >
-              <div className="flex items-start gap-3 mb-4">
-                <div className="w-12 h-12 rounded-xl bg-aurora-gradient flex items-center justify-center flex-shrink-0 shadow-elevation-2 group-hover:scale-110 transition-transform">
-                  <Download className="w-6 h-6 text-white" />
-                </div>
-                <div className="flex-1 min-w-0 pt-1">
-                  <h3 className="text-base sm:text-heading-4 font-bold text-neutral-900 mb-1.5">
-                    Fetch AIS/26AS
-                  </h3>
-                  <p className="text-body-small sm:text-body-regular text-neutral-600 leading-relaxed">
-                    Auto-import from Income Tax Portal. Connect and fetch your tax data automatically.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={handleAISFetch}
-                className="w-full py-3 px-4 bg-aurora-gradient text-white rounded-xl font-semibold hover:opacity-90 transition-all shadow-elevation-3 shadow-primary-500/20 text-body-regular mt-auto flex items-center justify-center gap-2"
-              >
-                <Download className="w-4 h-4" />
-                Fetch Now
-              </button>
-            </motion.div>
-
-            {/* Card 3: I KNOW MY ITR */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ ...springs.gentle, delay: 0.2 }}
-              className="bg-white rounded-xl border-2 border-neutral-200 shadow-elevation-2 p-5 sm:p-6 hover:border-primary-300 hover:shadow-elevation-3 transition-all duration-300 flex flex-col group"
-            >
-              <div className="flex items-start gap-3 mb-4">
-                <div className="w-12 h-12 rounded-xl bg-aurora-gradient flex items-center justify-center flex-shrink-0 shadow-elevation-2 group-hover:scale-110 transition-transform">
-                  <FileText className="w-6 h-6 text-white" />
-                </div>
-                <div className="flex-1 min-w-0 pt-1">
-                  <h3 className="text-base sm:text-heading-4 font-bold text-neutral-900 mb-1.5">
-                    I Know My ITR
-                  </h3>
-                  <p className="text-body-small sm:text-body-regular text-neutral-600 leading-relaxed">
-                    Directly select ITR-1, 2, 3, or 4. For users familiar with ITR forms.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setCurrentView('expert')}
-                className="w-full py-3 px-4 bg-aurora-gradient text-white rounded-xl font-semibold hover:opacity-90 transition-all shadow-elevation-3 shadow-primary-500/20 text-body-regular mt-auto flex items-center justify-center gap-2"
-              >
-                <FileText className="w-4 h-4" />
-                Select Form
-              </button>
-            </motion.div>
-
-            {/* Card 4: GUIDE ME */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ ...springs.gentle, delay: 0.3 }}
-              className="bg-white rounded-xl border-2 border-neutral-200 shadow-elevation-2 p-5 sm:p-6 hover:border-emerald-300 hover:shadow-elevation-3 transition-all duration-300 flex flex-col group"
-            >
-              <div className="flex items-start gap-3 mb-4">
-                <div className="w-12 h-12 rounded-xl bg-aurora-gradient flex items-center justify-center flex-shrink-0 shadow-elevation-2 group-hover:scale-110 transition-transform">
-                  <Compass className="w-6 h-6 text-white" />
-                </div>
-                <div className="flex-1 min-w-0 pt-1">
-                  <h3 className="text-base sm:text-heading-4 font-bold text-neutral-900 mb-1.5">
-                    Guide Me
-                  </h3>
-                  <p className="text-body-small sm:text-body-regular text-neutral-600 leading-relaxed">
-                    Answer 5 simple questions to find your form. Perfect for first-time filers.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setCurrentView('guided')}
-                className="w-full py-3 px-4 bg-aurora-gradient text-white rounded-xl font-semibold hover:opacity-90 transition-all shadow-elevation-3 shadow-primary-500/20 text-body-regular mt-auto flex items-center justify-center gap-2"
-              >
-                <Compass className="w-4 h-4" />
-                Start Guide
-              </button>
-            </motion.div>
+            <ArrowLeft className="w-5 h-5 text-slate-700" aria-hidden="true" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-heading-3 font-semibold text-slate-900 truncate">{title}</h1>
+            {subtitle ? <p className="text-body-small text-slate-600 mt-0.5">{subtitle}</p> : null}
           </div>
-
-          {/* Continue from Last Year & Revised Return - Enhanced */}
-          {(previousYearFiling || existingFiling) && (
-            <div className="mt-6 sm:mt-8">
-              <h2 className="text-heading-4 font-semibold text-neutral-900 mb-4 text-center sm:text-left">
-                Quick Actions
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {previousYearFiling && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={springs.gentle}
-                  >
-                    <div className="bg-white rounded-xl border-2 border-primary-200 shadow-elevation-2 p-4 sm:p-5 hover:border-primary-300 hover:shadow-elevation-3 transition-all">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-xl bg-aurora-gradient flex items-center justify-center flex-shrink-0 shadow-elevation-2">
-                          <Copy className="w-5 h-5 text-white" />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="text-sm sm:text-base font-bold text-neutral-900">
-                            Continue from Last Year
-                          </h3>
-                          <p className="text-body-small text-neutral-600 mt-0.5">
-                            {previousYearFiling.itrType || previousYearFiling.itrForm || 'ITR'} AY{' '}
-                            {previousYearFiling.assessmentYear || '2024-25'}
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={handleContinueFromLastYear}
-                        className="w-full py-2.5 px-4 bg-aurora-gradient text-white rounded-xl font-semibold hover:opacity-90 transition-all shadow-elevation-2 shadow-primary-500/20 text-body-regular flex items-center justify-center gap-2"
-                      >
-                        <Copy className="w-4 h-4" />
-                        Continue
-                      </button>
-                    </div>
-                  </motion.div>
-                )}
-
-                {existingFiling && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={springs.gentle}
-                  >
-                    <div className="bg-white rounded-xl border-2 border-amber-200 shadow-elevation-2 p-4 sm:p-5 hover:border-amber-300 hover:shadow-elevation-3 transition-all">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-gold-600 flex items-center justify-center flex-shrink-0 shadow-elevation-2">
-                          <RefreshCw className="w-5 h-5 text-white" />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="text-sm sm:text-base font-bold text-neutral-900">
-                            Revised Return
-                          </h3>
-                          <p className="text-body-small text-neutral-600 mt-0.5">
-                            {existingFiling.itrType || existingFiling.itrForm || 'ITR'} for {assessmentYear}
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={handleStartRevised}
-                        className="w-full py-2.5 px-4 bg-gradient-to-r from-amber-500 to-gold-600 text-white rounded-xl font-semibold hover:from-amber-600 hover:to-gold-700 transition-all shadow-elevation-2 shadow-amber-500/20 text-body-regular flex items-center justify-center gap-2"
-                      >
-                        <RefreshCw className="w-4 h-4" />
-                        Start Revised
-                      </button>
-                    </div>
-                  </motion.div>
-                )}
-              </div>
-            </div>
-          )}
+          {right ? <div className="flex-shrink-0">{right}</div> : null}
         </div>
       </div>
-    );
-  }
+    </div>
+  );
 
-  // Form 16 Upload View
-  if (currentView === 'form16') {
-    return (
-      <div className="bg-gradient-to-b from-neutral-50 to-white min-h-screen flex flex-col">
-        {/* Header with Back Navigation and Breadcrumb */}
-        <header className="bg-white border-b border-neutral-200 z-50 flex-shrink-0 shadow-elevation-1">
-          <div className="max-w-[1200px] mx-auto px-4 md:px-6 lg:px-8 py-4">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => {
-                  setCurrentView(null);
-                  setForm16Summary(null);
-                }}
-                className="p-2 rounded-xl hover:bg-neutral-100 transition-colors flex-shrink-0 group"
-                aria-label="Go back"
-              >
-                <ArrowLeft className="w-5 h-5 text-neutral-600 group-hover:text-neutral-900 transition-colors" />
-              </button>
-              <div className="flex items-center gap-2 text-body-regular text-neutral-500">
-                <span>Data Source</span>
-                <span>/</span>
-                <span className="text-neutral-900 font-medium">Upload Form 16</span>
-              </div>
-            </div>
-            <h2 className="text-heading-3 sm:text-heading-2 font-bold text-neutral-900 mt-3">
-              Upload Form 16
-            </h2>
-            <p className="text-body-regular text-neutral-600 mt-1">
-              Upload your Form 16 to automatically extract salary and TDS information
-            </p>
+  const renderContextStrip = () => (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-elevation-1 p-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-success-100 flex items-center justify-center flex-shrink-0">
+            <CheckCircle className="w-5 h-5 text-success-700" aria-hidden="true" />
           </div>
-        </header>
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 flex-1 overflow-y-auto py-6">
-
-          <Form16Uploader
-            onSummaryUpdate={handleForm16Complete}
-            onComplete={(summary) => {
-              if (summary?.suggestedITR) {
-                handleProceed(summary.suggestedITR, { form16Summary: summary });
-              }
-            }}
-          />
-
-          {form16Summary && form16Summary.fileCount > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-6"
-            >
-              <button
-                onClick={() => handleProceed(form16Summary.suggestedITR, { form16Summary })}
-                className="w-full py-4 px-6 bg-gold-500 text-white rounded-xl font-semibold text-heading-md hover:bg-gold-700 transition-all shadow-elevation-3 shadow-gold-500/25 flex items-center justify-center gap-2"
-              >
-                Proceed to Computation Sheet
-                <ArrowRight className="w-5 h-5" />
-              </button>
-            </motion.div>
-          )}
+          <div className="min-w-0">
+            <div className="text-body-small text-slate-500">PAN</div>
+            <div className="text-body-regular font-semibold text-slate-900 font-mono truncate">
+              {panNumber || '—'}
+            </div>
+          </div>
+        </div>
+        <div className="rounded-xl bg-primary-50 border border-primary-200 px-4 py-2">
+          <div className="text-body-small text-primary-700 font-medium">Assessment Year</div>
+          <div className="text-body-regular font-semibold text-primary-900">{assessmentYear}</div>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
 
-  // AIS/26AS Portal View
-  if (currentView === 'ais-portal') {
+  // =====================================================
+  // State 0: Gate (missing person)
+  // =====================================================
+  if (!selectedPerson) {
     return (
-      <div className="bg-gradient-to-b from-neutral-50 to-white min-h-screen flex flex-col">
-        {/* Header with Back Navigation and Breadcrumb */}
-        <header className="bg-white border-b border-neutral-200 z-50 flex-shrink-0 shadow-elevation-1">
-          <div className="max-w-[1200px] mx-auto px-4 md:px-6 lg:px-8 py-4">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setCurrentView(null)}
-                className="p-2 rounded-xl hover:bg-neutral-100 transition-colors flex-shrink-0 group"
-                aria-label="Go back"
-              >
-                <ArrowLeft className="w-5 h-5 text-neutral-600 group-hover:text-neutral-900 transition-colors" />
-              </button>
-              <div className="flex items-center gap-2 text-body-regular text-neutral-500">
-                <span>Data Source</span>
-                <span>/</span>
-                <span className="text-neutral-900 font-medium">Fetch AIS/26AS</span>
-              </div>
-            </div>
-            <h2 className="text-heading-3 sm:text-heading-2 font-bold text-neutral-900 mt-3">
-              Fetch AIS/26AS Data
-            </h2>
-            <p className="text-body-regular text-neutral-600 mt-1">
-              Connect to Income Tax Portal and automatically import your tax data
+      <div className="min-h-screen bg-slate-50">
+        {renderTopBar({
+          title: 'Determine your ITR',
+          subtitle: 'Select who you’re filing for to continue.',
+          onBack: () => navigate('/dashboard'),
+        })}
+        <div className="max-w-[720px] mx-auto px-4 sm:px-6 py-10">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-elevation-2 p-6">
+            <h2 className="text-heading-3 font-semibold text-slate-900">Select person</h2>
+            <p className="text-body-regular text-slate-600 mt-2">
+              We need to know who you’re filing for before recommending the correct ITR.
             </p>
-          </div>
-        </header>
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 flex-1 overflow-y-auto py-6 sm:py-8">
-
-          <div className="bg-white rounded-xl border-2 border-neutral-200 shadow-elevation-3 p-6 sm:p-8">
-            <div className="text-center mb-6">
-              <h3 className="text-heading-3 sm:text-heading-2 font-bold text-neutral-900 mb-2">
-                Fetching AIS/26AS Data
-              </h3>
-              <p className="text-body-regular sm:text-body-large text-neutral-600">
-                Connecting to Income Tax Portal and fetching your data...
-              </p>
-            </div>
-
-            {isPrefetching ? (
-              <div className="flex flex-col items-center gap-6 py-8">
-                <div className="w-16 h-16 border-4 border-primary-100 border-t-primary-500 rounded-full animate-spin" />
-                <div className="text-center">
-                  <p className="text-body-large font-semibold text-neutral-900 mb-1">Fetching your data...</p>
-                  <p className="text-body-regular text-neutral-600">This may take a few moments</p>
-                </div>
-              </div>
-            ) : prefetchStatus.overall === 'success' && itrRecommendation ? (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="space-y-6"
-              >
-                <div className="bg-gradient-to-br from-primary-50 to-amber-50 rounded-xl border-2 border-primary-300 p-6 sm:p-8 text-center shadow-elevation-2">
-                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary-100 mb-4">
-                    <CheckCircle className="w-8 h-8 text-primary-600" />
-                  </div>
-                  <div className="text-heading-1 sm:text-heading-1 font-bold text-primary-700 mb-3">{itrRecommendation}</div>
-                  <p className="text-body-large text-neutral-700 max-w-md mx-auto">
-                    Based on your AIS/26AS data, we recommend filing <strong>{itrRecommendation}</strong>
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => handleProceed(itrRecommendation)}
-                  className="w-full py-4 px-6 bg-aurora-gradient text-white rounded-xl font-semibold hover:opacity-90 transition-all shadow-elevation-3 shadow-primary-500/20 flex items-center justify-center gap-2 text-body-large"
-                >
-                  Proceed with {itrRecommendation}
-                  <ArrowRight className="w-5 h-5" />
-                </button>
-              </motion.div>
-            ) : prefetchStatus.overall === 'error' ? (
-              <div className="text-center py-8">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-error-100 mb-4">
-                  <X className="w-8 h-8 text-error-600" />
-                </div>
-                <p className="text-body-large font-semibold text-error-600 mb-2">
-                  Failed to fetch data
-                </p>
-                <p className="text-body-regular text-neutral-600 mb-6">
-                  Please check your connection and try again
-                </p>
-                <button
-                  onClick={handleAISFetch}
-                  className="px-6 py-3 bg-aurora-gradient text-white rounded-xl font-semibold hover:opacity-90 transition-all shadow-elevation-2"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => navigate('/itr/select-person')}
+              className="mt-5 w-full px-5 py-3 rounded-xl bg-primary-500 text-white font-semibold hover:bg-primary-600 transition-colors"
+            >
+              Select person
+            </button>
           </div>
         </div>
       </div>
     );
   }
 
-  // Expert Mode: ITR Selection Cards
-  if (currentView === 'expert') {
-    return (
-      <div className="bg-gradient-to-b from-neutral-50 to-white min-h-screen flex flex-col">
-        {/* Header with Back Navigation and Breadcrumb */}
-        <header className="bg-white border-b border-neutral-200 z-50 flex-shrink-0 shadow-elevation-1">
-          <div className="max-w-[1200px] mx-auto px-4 md:px-6 lg:px-8 py-4">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => {
-                  setCurrentView(null);
-                  setSelectedITR(null);
-                }}
-                className="p-2 rounded-xl hover:bg-neutral-100 transition-colors flex-shrink-0 group"
-                aria-label="Go back"
-              >
-                <ArrowLeft className="w-5 h-5 text-neutral-600 group-hover:text-neutral-900 transition-colors" />
-              </button>
-              <div className="flex items-center gap-2 text-body-regular text-neutral-500">
-                <span>Data Source</span>
-                <span>/</span>
-                <span className="text-neutral-900 font-medium">Select ITR Form</span>
-              </div>
-            </div>
-            <h2 className="text-heading-3 sm:text-heading-2 font-bold text-neutral-900 mt-3">
-              Select Your ITR Form
-            </h2>
-            <p className="text-body-regular text-neutral-600 mt-1">
-              Choose the ITR form that matches your income sources
-            </p>
-          </div>
-        </header>
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 flex-1 overflow-hidden py-6 sm:py-8 flex flex-col">
+  // =====================================================
+  // Shared recommendation screen (State 2)
+  // =====================================================
+  if (stage === STAGES.RECOMMENDATION) {
+    const incomePreview =
+      Array.isArray(recommendationState?.meta?.detectedIncomeSources)
+        ? recommendationState.meta.detectedIncomeSources.map(formatIncomeSource)
+        : [];
 
-          <div className="flex-1 overflow-hidden">
-            <ITRSelectionCards
-              selectedITR={selectedITR}
-              onSelect={(itrType) => {
-                setSelectedITR(itrType);
+    return (
+      <div className="min-h-screen bg-slate-50">
+        {renderTopBar({
+          title: 'Determine your ITR',
+          subtitle: 'Review and continue to the computation sheet.',
+          onBack: () => setStage(STAGES.CHOOSER),
+        })}
+        <div className="max-w-[960px] mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5">
+          {renderContextStrip()}
+
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={springs.gentle}>
+            <RecommendationPanel
+              mode={recommendationState?.mode || 'recommended'}
+              itrType={recommendationState?.itrType || null}
+              reason={recommendationState?.reason || null}
+              confidence={recommendationState?.confidence || null}
+              incomeSourcesPreview={incomePreview}
+              onChangeITR={() => {
+                trackEvent('itr_data_source_selected', { source: 'override' });
+                setStage(STAGES.EXPERT);
+              }}
+              onContinue={() => {
+                const itrType = recommendationState?.itrType;
+                if (!itrType) return;
+
+                const src = recommendationState?.source;
+                const meta = recommendationState?.meta || {};
+
+                if (src === 'auto') {
+                  handleProceed(itrType, {
+                    dataSource: 'it-portal',
+                    entryPoint: 'auto',
+                    recommendation: meta.recommendation || null,
+                    detectedIncomeSources: meta.detectedIncomeSources || [],
+                    prefetchedData: meta.prefetchedData || null,
+                  });
+                  return;
+                }
+
+                if (src === 'upload') {
+                  handleProceed(itrType, {
+                    dataSource: 'form16',
+                    entryPoint: 'upload',
+                    form16Data: meta.form16Summary || null,
+                    recommendation: meta.recommendation || null,
+                  });
+                  return;
+                }
+
+                if (src === 'manual') {
+                  handleProceed(itrType, {
+                    dataSource: 'guided-selection',
+                    entryPoint: 'manual',
+                    guidedAnswers: meta.guidedAnswers || null,
+                    recommendation: meta.recommendation || null,
+                  });
+                  return;
+                }
+
+                if (src === 'override') {
+                  handleProceed(itrType, {
+                    dataSource: 'direct-selection',
+                    entryPoint: 'override',
+                    recommendation: meta.recommendation || { reason: 'Selected by you', confidence: null },
+                  });
+                  return;
+                }
+
+                // Fallback
                 handleProceed(itrType);
+              }}
+            />
+          </motion.div>
+        </div>
+      </div>
+    );
+  }
+
+  // =====================================================
+  // AUTO stage
+  // =====================================================
+  if (stage === STAGES.AUTO) {
+    const showError = prefetchStatus.overall === 'error';
+    const showSuccess = prefetchStatus.overall === 'success' && !!itrRecommendationResult?.recommendedITR;
+
+    return (
+      <div className="min-h-screen bg-slate-50">
+        {renderTopBar({
+          title: 'Connect & Auto-detect',
+          subtitle: 'Fetching AIS/26AS and recommending the right ITR.',
+          onBack: () => setStage(STAGES.CHOOSER),
+        })}
+        <div className="max-w-[960px] mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5">
+          {renderContextStrip()}
+
+          <div className="bg-white rounded-xl border border-slate-200 shadow-elevation-2 p-6">
+            {isPrefetching ? (
+              <div className="flex flex-col items-center gap-5 py-6">
+                <div className="w-14 h-14 border-4 border-primary-100 border-t-primary-500 rounded-full animate-spin" />
+                <div className="text-center">
+                  <div className="text-heading-4 font-semibold text-slate-900">Fetching your data…</div>
+                  <div className="text-body-regular text-slate-600 mt-1">Connecting → Fetching → Analyzing</div>
+                </div>
+              </div>
+            ) : showError ? (
+              <div className="text-center py-6">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-error-100 mb-3">
+                  <X className="w-6 h-6 text-error-700" aria-hidden="true" />
+                </div>
+                <div className="text-heading-4 font-semibold text-slate-900">Couldn’t fetch AIS/26AS</div>
+                <p className="text-body-regular text-slate-600 mt-1">
+                  Try again, or use Form 16 / the quick questionnaire.
+                </p>
+                <div className="mt-5 flex flex-col sm:flex-row gap-3 justify-center">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      trackedAutoDetectSuccessRef.current = false;
+                      try {
+                        await fetchAll();
+                        toast.success('Data fetched successfully!');
+                      } catch (e) {
+                        toast.error('Failed to fetch data. Please try again.');
+                      }
+                    }}
+                    className="px-5 py-3 rounded-xl bg-primary-500 text-white font-semibold hover:bg-primary-600 transition-colors"
+                  >
+                    Retry auto-detect
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      trackEvent('itr_data_source_selected', { source: 'upload' });
+                      setStage(STAGES.UPLOAD);
+                    }}
+                    className="px-5 py-3 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 transition-colors"
+                  >
+                    Upload Form 16
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      trackEvent('itr_data_source_selected', { source: 'manual' });
+                      trackEvent('itr_manual_fallback_used', { started: true });
+                      setStage(STAGES.MANUAL);
+                    }}
+                    className="px-5 py-3 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 transition-colors"
+                  >
+                    Answer a few questions
+                  </button>
+                </div>
+              </div>
+            ) : showSuccess ? (
+              <div className="text-center py-4">
+                <div className="text-body-regular text-slate-600">
+                  Recommendation ready. Redirecting…
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-6">
+                <div className="text-heading-4 font-semibold text-slate-900">No recommendation yet</div>
+                <p className="text-body-regular text-slate-600 mt-1">Try again or use another method.</p>
+                <div className="mt-5 flex flex-col sm:flex-row gap-3 justify-center">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      trackedAutoDetectSuccessRef.current = false;
+                      try {
+                        await fetchAll();
+                        toast.success('Data fetched successfully!');
+                      } catch (e) {
+                        toast.error('Failed to fetch data. Please try again.');
+                      }
+                    }}
+                    className="px-5 py-3 rounded-xl bg-primary-500 text-white font-semibold hover:bg-primary-600 transition-colors"
+                  >
+                    Retry auto-detect
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // =====================================================
+  // UPLOAD stage (Form 16)
+  // =====================================================
+  if (stage === STAGES.UPLOAD) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        {renderTopBar({
+          title: 'Upload Form 16',
+          subtitle: 'We’ll suggest the right ITR and prefill salary/TDS.',
+          onBack: () => {
+            setForm16Summary(null);
+            setStage(STAGES.CHOOSER);
+          },
+        })}
+        <div className="max-w-[960px] mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5">
+          {renderContextStrip()}
+
+          <div className="bg-white rounded-xl border border-slate-200 shadow-elevation-2 p-6">
+            <Form16Uploader
+              onSummaryUpdate={(summary) => {
+                setForm16Summary(summary);
+              }}
+              onComplete={(summary) => {
+                if (summary?.suggestedITR) {
+                  if (openedForm16RecommendationRef.current) return;
+                  openedForm16RecommendationRef.current = true;
+                  openRecommendation({
+                    itrType: summary.suggestedITR,
+                    reason: 'Based on salary and TDS from your uploaded Form 16.',
+                    confidence: 'Medium',
+                    mode: 'recommended',
+                    source: 'upload',
+                    meta: { form16Summary: summary, recommendation: { reason: 'Form 16 upload', confidence: 'Medium' } },
+                  });
+                }
               }}
             />
           </div>
@@ -677,48 +532,265 @@ const DataSourceSelector = ({ onProceed }) => {
     );
   }
 
-  // Guided Mode: Questionnaire
-  if (currentView === 'guided') {
+  // =====================================================
+  // MANUAL stage (guided)
+  // =====================================================
+  if (stage === STAGES.MANUAL) {
     return (
-      <div className="bg-gradient-to-b from-neutral-50 to-white min-h-screen flex flex-col">
-        {/* Header with Back Navigation and Breadcrumb */}
-        <header className="bg-white border-b border-neutral-200 z-50 flex-shrink-0 shadow-elevation-1">
-          <div className="max-w-[1200px] mx-auto px-4 md:px-6 lg:px-8 py-4">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setCurrentView(null)}
-                className="p-2 rounded-xl hover:bg-neutral-100 transition-colors flex-shrink-0 group"
-                aria-label="Go back"
-              >
-                <ArrowLeft className="w-5 h-5 text-neutral-600 group-hover:text-neutral-900 transition-colors" />
-              </button>
-              <div className="flex items-center gap-2 text-body-regular text-neutral-500">
-                <span>Data Source</span>
-                <span>/</span>
-                <span className="text-neutral-900 font-medium">Guide Me</span>
-              </div>
-            </div>
-            <h2 className="text-heading-3 sm:text-heading-2 font-bold text-neutral-900 mt-3">
-              Find Your ITR Form
-            </h2>
-            <p className="text-body-regular text-neutral-600 mt-1">
-              Answer a few questions to determine the right ITR form for you
-            </p>
-          </div>
-        </header>
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 flex-1 overflow-y-auto py-6">
+      <div className="min-h-screen bg-slate-50">
+        {renderTopBar({
+          title: 'Answer a few questions',
+          subtitle: 'We’ll recommend the right ITR based on a few quick signals.',
+          onBack: () => setStage(STAGES.CHOOSER),
+        })}
+        <div className="max-w-[960px] mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5">
+          {renderContextStrip()}
 
-          <GuideMeQuestionnaire
-            onComplete={(recommendedITR, answers) => {
-              handleProceed(recommendedITR, { guidedAnswers: answers });
-            }}
-          />
+          <div className="bg-white rounded-xl border border-slate-200 shadow-elevation-2 p-6">
+            <GuideMeQuestionnaire
+              onComplete={(recommendedITR, answers) => {
+                setGuidedAnswers(answers || null);
+                trackEvent('itr_manual_fallback_used', { recommendedITR });
+                openRecommendation({
+                  itrType: recommendedITR,
+                  reason: 'Based on your answers about income sources and eligibility.',
+                  confidence: 'Medium',
+                  mode: 'recommended',
+                  source: 'manual',
+                  meta: {
+                    guidedAnswers: answers || null,
+                    recommendation: { reason: 'Manual signals', confidence: 'Medium' },
+                  },
+                });
+              }}
+            />
+          </div>
         </div>
       </div>
     );
   }
 
-  return null;
-};
+  // =====================================================
+  // EXPERT stage (override)
+  // =====================================================
+  if (stage === STAGES.EXPERT) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        {renderTopBar({
+          title: 'Choose your ITR',
+          subtitle: 'If you already know your ITR, select it here.',
+          onBack: () => setStage(STAGES.CHOOSER),
+        })}
+        <div className="max-w-[960px] mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5">
+          {renderContextStrip()}
 
-export default DataSourceSelector;
+          <div className="bg-white rounded-xl border border-slate-200 shadow-elevation-2 p-6">
+            <ITRSelectionCards
+              selectedITR={selectedITR}
+              onHelp={() => {
+                trackEvent('itr_data_source_selected', { source: 'manual' });
+                trackEvent('itr_manual_fallback_used', { started: true });
+                setStage(STAGES.MANUAL);
+              }}
+              onSelect={(itrType) => {
+                setSelectedITR(itrType);
+                trackEvent('itr_itr_override_used', { selectedITR: itrType });
+                openRecommendation({
+                  itrType,
+                  reason: 'Selected by you.',
+                  confidence: null,
+                  mode: 'selected',
+                  source: 'override',
+                  meta: { recommendation: { reason: 'Selected by user', confidence: null } },
+                });
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // =====================================================
+  // CHOOSER stage (default, auto-first)
+  // =====================================================
+  return (
+    <div className="min-h-screen bg-slate-50">
+      {renderTopBar({
+        title: 'Determine your ITR',
+        subtitle: 'Auto-detect first. You can always change later.',
+        onBack: () => navigate('/itr/select-person'),
+      })}
+
+      <div className="max-w-[960px] mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5">
+        {renderContextStrip()}
+
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={springs.gentle}>
+          <div className="bg-white rounded-xl border border-slate-200 shadow-elevation-2 p-5 sm:p-6">
+            <div className="flex items-start gap-3">
+              <div className="w-12 h-12 rounded-xl bg-primary-100 flex items-center justify-center flex-shrink-0">
+                <Download className="w-6 h-6 text-primary-700" aria-hidden="true" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-heading-4 font-semibold text-slate-900">Connect & Auto-detect</h2>
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-body-small font-semibold bg-primary-100 text-primary-900 border border-primary-200">
+                    Recommended
+                  </span>
+                </div>
+                <p className="text-body-regular text-slate-600 mt-1">
+                  We’ll fetch AIS/26AS (best available data) and recommend the correct ITR with a short explanation.
+                </p>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    trackEvent('itr_data_source_selected', { source: 'auto' });
+                    setStage(STAGES.AUTO);
+                    trackedAutoDetectSuccessRef.current = false;
+                    try {
+                      await fetchAll();
+                      toast.success('Data fetched successfully!');
+                    } catch (e) {
+                      toast.error('Failed to fetch data. Please try again.');
+                    }
+                  }}
+                  className="mt-4 w-full sm:w-auto px-5 py-3 rounded-xl bg-primary-500 text-white font-semibold hover:bg-primary-600 transition-colors"
+                >
+                  Connect & Auto-detect
+                </button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-elevation-1 p-5">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0">
+                <Upload className="w-5 h-5 text-slate-700" aria-hidden="true" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-heading-4 font-semibold text-slate-900">Upload Form 16</h3>
+                <p className="text-body-regular text-slate-600 mt-1">
+                  Fastest for salaried users. We’ll infer the ITR and prefill salary/TDS.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    trackEvent('itr_data_source_selected', { source: 'upload' });
+                    setStage(STAGES.UPLOAD);
+                  }}
+                  className="mt-4 w-full px-5 py-3 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 transition-colors"
+                >
+                  Upload Form 16
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 shadow-elevation-1 p-5">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0">
+                <Compass className="w-5 h-5 text-slate-700" aria-hidden="true" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-heading-4 font-semibold text-slate-900">Answer a few questions</h3>
+                <p className="text-body-regular text-slate-600 mt-1">
+                  A quick fallback if auto-fetch isn’t available. We’ll recommend based on simple signals.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    trackEvent('itr_data_source_selected', { source: 'manual' });
+                    trackEvent('itr_manual_fallback_used', { started: true });
+                    setStage(STAGES.MANUAL);
+                  }}
+                  className="mt-4 w-full px-5 py-3 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 transition-colors"
+                >
+                  Start questionnaire
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="text-center">
+          <button
+            type="button"
+            onClick={() => {
+              trackEvent('itr_data_source_selected', { source: 'override' });
+              setStage(STAGES.EXPERT);
+            }}
+            className="text-body-regular text-slate-600 hover:text-slate-900 underline underline-offset-4"
+          >
+            I know my ITR (choose manually)
+          </button>
+        </div>
+
+        {(previousYearFiling || existingFiling) && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-elevation-1 p-5">
+            <div className="text-heading-4 font-semibold text-slate-900 mb-3">Quick actions</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {previousYearFiling && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    trackEvent('itr_data_source_selected', { source: 'manual' });
+                    handleProceed(previousYearFiling.itrType || previousYearFiling.itrForm, {
+                      dataSource: 'previous-year',
+                      entryPoint: 'manual',
+                      copyFilingId: previousYearFiling.id,
+                      assessmentYear,
+                    });
+                  }}
+                  className="text-left rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors p-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0">
+                      <Copy className="w-5 h-5 text-slate-700" aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-body-regular font-semibold text-slate-900">Continue from last year</div>
+                      <div className="text-body-small text-slate-600 mt-0.5">
+                        {previousYearFiling.itrType || previousYearFiling.itrForm || 'ITR'} •{' '}
+                        {previousYearFiling.assessmentYear || '—'}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              )}
+
+              {existingFiling && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    trackEvent('itr_data_source_selected', { source: 'manual' });
+                    handleProceed(existingFiling.itrType || existingFiling.itrForm, {
+                      dataSource: 'revised-return',
+                      entryPoint: 'manual',
+                      originalFilingId: existingFiling.id,
+                      assessmentYear,
+                    });
+                  }}
+                  className="text-left rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors p-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0">
+                      <RefreshCw className="w-5 h-5 text-slate-700" aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-body-regular font-semibold text-slate-900">Start revised return</div>
+                      <div className="text-body-small text-slate-600 mt-0.5">
+                        {existingFiling.itrType || existingFiling.itrForm || 'ITR'} • {assessmentYear}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

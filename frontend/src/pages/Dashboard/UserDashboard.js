@@ -21,9 +21,10 @@ import DashboardWidgets from '../../components/Dashboard/DashboardWidgets';
 import WelcomeModal from '../../components/UI/WelcomeModal';
 import { DashboardSkeleton } from '../../components/UI/Skeletons';
 import { getErrorMessage } from '../../utils/errorUtils';
+import { ensureJourneyStart, resetJourney, trackEvent } from '../../utils/analyticsEvents';
 
 // Hooks
-import { useUserDashboardStats, useUserFilings, useUserRefunds } from '../../hooks/useUserDashboard';
+import { useUserDashboardStats, useUserDrafts, useUserFilings, useUserRefunds } from '../../hooks/useUserDashboard';
 import useDashboardRealtime from '../../hooks/useDashboardRealtime';
 
 const UserDashboard = () => {
@@ -41,6 +42,7 @@ const UserDashboard = () => {
   const { data: dashboardData, isLoading: statsLoading, error: statsError } = useUserDashboardStats(userId);
   const { data: filingsData, isLoading: filingsLoading, error: filingsError } = useUserFilings(userId);
   const { data: refundsData, isLoading: refundsLoading } = useUserRefunds(userId);
+  const { data: draftsData, isLoading: draftsLoading } = useUserDrafts(userId);
 
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
@@ -78,7 +80,7 @@ const UserDashboard = () => {
     ? Math.round((completedFilingsCount / totalFilingsCount) * 100)
     : 0;
 
-  const loading = statsLoading || filingsLoading;
+  const loading = statsLoading || filingsLoading || draftsLoading;
   const error = statsError || filingsError;
   const isEmpty = !loading && !hasFiled;
 
@@ -92,6 +94,12 @@ const UserDashboard = () => {
     } catch (e) {
       // Ignore malformed localStorage
     }
+  }, []);
+
+  // Funnel analytics: dashboard view
+  useEffect(() => {
+    trackEvent('dashboard_view', { role: user?.role || null, userId });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Show welcome modal on first login
@@ -134,6 +142,10 @@ const UserDashboard = () => {
   };
 
   const handleStartFiling = () => {
+    // Start a fresh journey for metrics (new filing funnel attempt)
+    resetJourney();
+    ensureJourneyStart();
+    trackEvent('itr_start_clicked', { role: user?.role || null, userId, entry: 'dashboard' });
     navigate('/itr/select-person');
   };
 
@@ -242,6 +254,15 @@ const UserDashboard = () => {
     if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
     return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   };
+
+  // Drafts are the deterministic source for “Continue” (draftId-based deep link)
+  const drafts = Array.isArray(draftsData) ? draftsData : [];
+  const resumableDrafts = drafts.filter(d => ['draft', 'paused'].includes(d?.status));
+  const latestResumableDraft = resumableDrafts[0] || null;
+  const draftIdByFilingId = drafts.reduce((acc, d) => {
+    if (d?.filingId && d?.id) acc[String(d.filingId)] = d.id;
+    return acc;
+  }, {});
 
   if (loading) {
     return (
@@ -569,14 +590,17 @@ const UserDashboard = () => {
             {ongoingFilings.map((filing) => {
               const progress = calculateProgress(filing);
               const isPaused = filing.status === 'paused';
+              const filingKey = String(filing.id);
+              const draftIdForFiling = draftIdByFilingId[filingKey] || null;
+              const continueUrl = draftIdForFiling
+                ? `/itr/computation?draftId=${draftIdForFiling}&filingId=${filingKey}`
+                : `/itr/computation?filingId=${filingKey}`;
 
               return (
                 <div
                   key={filing.id}
                   className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-card-hover hover:border-primary-200 transition-all duration-200 cursor-pointer group"
-                  onClick={() => navigate(`/itr/computation?filingId=${filing.id}`, {
-                    state: { filing },
-                  })}
+                  onClick={() => navigate(continueUrl, { state: { filing } })}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
@@ -638,9 +662,7 @@ const UserDashboard = () => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate(`/itr/computation?filingId=${filing.id}`, {
-                              state: { filing },
-                            });
+                            navigate(continueUrl, { state: { filing } });
                           }}
                           className="flex items-center gap-2 px-5 py-2.5 bg-success-500 text-white rounded-xl hover:bg-success-600 transition-all shadow-elevation-1 shadow-success-500/20 hover:shadow-elevation-2"
                         >
@@ -651,9 +673,7 @@ const UserDashboard = () => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate(`/itr/computation?filingId=${filing.id}`, {
-                              state: { filing },
-                            });
+                            navigate(continueUrl, { state: { filing } });
                           }}
                           className="flex items-center gap-2 px-5 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-600 transition-all shadow-elevation-1 shadow-primary-500/20 hover:shadow-elevation-2"
                         >
@@ -688,9 +708,7 @@ const UserDashboard = () => {
               <div
                 key={filing.id}
                 className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-card-hover hover:border-primary-200 transition-all duration-200 cursor-pointer group"
-                onClick={() => navigate(`/itr/computation?filingId=${filing.id}`, {
-                  state: { filing, viewMode: 'readonly' },
-                })}
+                onClick={() => navigate(`/acknowledgment/${filing.id}`)}
               >
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -715,9 +733,7 @@ const UserDashboard = () => {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        navigate(`/itr/computation?filingId=${filing.id}`, {
-                          state: { filing, viewMode: 'readonly' },
-                        });
+                        navigate(`/acknowledgment/${filing.id}`);
                       }}
                       className="px-4 py-2 text-body-regular text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-xl transition-colors"
                     >
@@ -733,11 +749,71 @@ const UserDashboard = () => {
 
       {/* Primary Component - Compact */}
       <div className="mb-4">
-        {hasFiled && ongoingFilings.length === 0 ? (
-          <FilingStatusTracker filing={filingData} />
-        ) : !hasFiled ? (
-          <FilingLaunchpad onStartFiling={handleStartFiling} />
-        ) : null}
+        {(() => {
+          // 1) Continue: local resume pointer OR server-backed latest draft
+          const resumeDraftId = lastResume?.draftId || latestResumableDraft?.id || null;
+          const resumeFilingId = lastResume?.filingId || latestResumableDraft?.filingId || null;
+          const resumeUrl = resumeDraftId
+            ? `/itr/computation?draftId=${resumeDraftId}${resumeFilingId ? `&filingId=${resumeFilingId}` : ''}`
+            : null;
+
+          if (resumeUrl) {
+            return (
+              <div className="bg-white rounded-2xl shadow-elevation-2 border border-slate-200 p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-heading-sm font-semibold text-slate-900">Continue your filing</h2>
+                    <p className="text-body-sm text-slate-600 mt-1">
+                      Resume from where you left off.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => navigate(resumeUrl)}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-600 transition-all shadow-elevation-1 shadow-primary-500/20 hover:shadow-elevation-2"
+                  >
+                    Continue
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          // 2) Track: latest completed filing
+          if (completedFilings.length > 0) {
+            const latest = completedFilings[0];
+            return (
+              <div className="bg-white rounded-2xl shadow-elevation-2 border border-slate-200 p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-heading-sm font-semibold text-slate-900">Track your latest filing</h2>
+                    <p className="text-body-sm text-slate-600 mt-1">
+                      {latest.itrType} - AY {latest.assessmentYear}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => navigate(`/itr/itrv-tracking?filingId=${latest.id}`)}
+                      className="px-4 py-2 text-body-regular text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors"
+                    >
+                      ITR-V status
+                    </button>
+                    <button
+                      onClick={() => navigate(`/acknowledgment/${latest.id}`)}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-600 transition-all shadow-elevation-1 shadow-primary-500/20 hover:shadow-elevation-2"
+                    >
+                      Acknowledgment
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          // 3) Start: first-time / no filings
+          return <FilingLaunchpad onStartFiling={handleStartFiling} />;
+        })()}
       </div>
 
       {/* Quick Actions + More Options in 2 columns */}
@@ -840,7 +916,7 @@ const UserDashboard = () => {
                     <div
                       key={activity.id || `activity-${index + 3}`}
                       className={`flex items-center justify-between py-3 px-3 ${
-                        index < recentActivity.length - 4 ? 'border-b border-gray-100' : ''
+                        index < recentActivity.length - 4 ? 'border-b border-slate-100' : ''
                       } hover:bg-slate-50 rounded-xl transition-colors`}
                     >
                       <div className="flex items-center min-w-0 flex-1">

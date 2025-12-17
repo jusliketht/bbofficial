@@ -13,6 +13,7 @@ import toast from 'react-hot-toast';
 import Button from '../../components/DesignSystem/components/Button';
 import { cn } from '../../lib/utils';
 import { enterpriseLogger } from '../../utils/logger';
+import itrService from '../../services/api/itrService';
 
 const RefundTracking = () => {
   const [searchParams] = useSearchParams();
@@ -25,6 +26,7 @@ const RefundTracking = () => {
   const [updating, setUpdating] = useState(false);
   const [showUpdateAccountModal, setShowUpdateAccountModal] = useState(false);
   const [showReissueModal, setShowReissueModal] = useState(false);
+  const [recentCompletedFilings, setRecentCompletedFilings] = useState([]);
 
   useEffect(() => {
     if (filingId) {
@@ -33,6 +35,20 @@ const RefundTracking = () => {
     loadRefundHistory();
   }, [filingId]);
 
+  useEffect(() => {
+    const loadFilings = async () => {
+      try {
+        const resp = await itrService.getUserITRs();
+        const all = resp?.data || resp?.filings || resp?.all || [];
+        const completed = all.filter(f => ['submitted', 'acknowledged', 'processed'].includes(String(f.status).toLowerCase()));
+        setRecentCompletedFilings(completed.slice(0, 10));
+      } catch (e) {
+        // best-effort; do nothing
+      }
+    };
+    loadFilings();
+  }, []);
+
   const loadRefundStatus = async () => {
     if (!filingId) return;
 
@@ -40,7 +56,7 @@ const RefundTracking = () => {
       setLoading(true);
       const response = await apiClient.get(`/itr/filings/${filingId}/refund/status`);
       if (response.data.success) {
-        setRefund(response.data.refund);
+        setRefund(response.data?.data?.refund || null);
       }
     } catch (error) {
       enterpriseLogger.error('Error loading refund status:', { error });
@@ -54,7 +70,7 @@ const RefundTracking = () => {
     try {
       const response = await apiClient.get('/itr/refunds/history');
       if (response.data.success) {
-        setRefundHistory(response.data.refunds || []);
+        setRefundHistory(response.data?.data?.refunds || []);
       }
     } catch (error) {
       enterpriseLogger.error('Error loading refund history:', { error });
@@ -87,13 +103,13 @@ const RefundTracking = () => {
       });
 
       if (response.data.success) {
-        setRefund(response.data.refund);
+        setRefund(response.data?.data?.refund || null);
         setShowUpdateAccountModal(false);
         toast.success('Bank account updated successfully');
       }
     } catch (error) {
       enterpriseLogger.error('Error updating bank account:', { error });
-      toast.error(error.response?.data?.error || 'Failed to update bank account');
+      toast.error(error.response?.data?.error?.message || error.response?.data?.error || 'Failed to update bank account');
     } finally {
       setUpdating(false);
     }
@@ -109,13 +125,13 @@ const RefundTracking = () => {
       });
 
       if (response.data.success) {
-        setRefund(response.data.refund);
+        setRefund(response.data?.data?.refund || null);
         setShowReissueModal(false);
         toast.success('Refund re-issue request submitted successfully');
       }
     } catch (error) {
       enterpriseLogger.error('Error requesting refund reissue:', { error });
-      toast.error(error.response?.data?.error || 'Failed to request refund reissue');
+      toast.error(error.response?.data?.error?.message || error.response?.data?.error || 'Failed to request refund reissue');
     } finally {
       setUpdating(false);
     }
@@ -161,6 +177,27 @@ const RefundTracking = () => {
             </Button>
           </div>
         </div>
+
+        {/* Pick a filing (if missing filingId) */}
+        {!filingId && recentCompletedFilings.length > 0 && (
+          <div className="mb-8 bg-white rounded-xl border border-slate-200 p-4">
+            <h2 className="text-heading-lg text-slate-900 mb-2">View current status for a filing</h2>
+            <p className="text-body-md text-slate-600 mb-3">
+              Select a recent filed return to see its current refund status.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {recentCompletedFilings.map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => navigate(`/itr/refund-tracking?filingId=${f.id}`)}
+                  className="px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-body-sm text-slate-800"
+                >
+                  {f.itrType || 'ITR'} - AY {f.assessmentYear || '—'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Current Refund Status */}
         {filingId && refund && (

@@ -159,7 +159,7 @@ const ForeignAssetsSummary = ({ filingId, assets, totalValue, onEdit }) => {
       <div>
         <h4 className="text-heading-sm text-slate-900 font-medium mb-4">Breakdown by Country</h4>
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-slate-200">
             {Object.entries(breakdownByCountry)
               .sort((a, b) => b[1].value - a[1].value)
               .map(([country, data]) => (
@@ -217,11 +217,11 @@ const ForeignAssetsSummary = ({ filingId, assets, totalValue, onEdit }) => {
                           asset.assetDetails?.address ||
                           getAssetTypeLabel(asset.assetType)}
                       </h5>
-                      <span className="px-2 py-1 text-body-small font-medium bg-blue-100 text-blue-800 rounded">
+                      <span className="px-2 py-1 text-body-small font-medium bg-slate-100 text-slate-700 rounded">
                         {asset.country}
                       </span>
                       {asset.dtaaApplicable && (
-                        <span className="px-2 py-1 text-body-small font-medium bg-green-100 text-green-800 rounded">
+                        <span className="px-2 py-1 text-body-small font-medium bg-success-100 text-success-800 rounded">
                           DTAA
                         </span>
                       )}

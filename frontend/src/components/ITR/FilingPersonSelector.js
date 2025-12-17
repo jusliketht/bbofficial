@@ -15,6 +15,7 @@ import toast from 'react-hot-toast';
 import MemberFormInline from '../Members/MemberFormInline';
 import PANVerificationInline from './PANVerificationInline';
 import { springs, stagger } from '../../lib/motion';
+import { ensureJourneyStart, trackEvent } from '../../utils/analyticsEvents';
 
 const FilingPersonSelector = () => {
   const { user } = useAuth();
@@ -35,6 +36,8 @@ const FilingPersonSelector = () => {
   const [isLoadingFilings, setIsLoadingFilings] = useState(false);
 
   useEffect(() => {
+    ensureJourneyStart();
+    trackEvent('itr_select_person_view', { role: user?.role || null });
     loadFamilyMembers();
     checkUserPANStatus();
   }, []);
@@ -304,7 +307,13 @@ const FilingPersonSelector = () => {
 
   const proceedToDataSourceSelection = (person) => {
     // Navigate to data source selection
-    navigate('/itr/data-source', {
+    trackEvent('itr_person_selected', {
+      role: user?.role || null,
+      personType: person?.type || null,
+      panVerified: !!person?.panVerified,
+      next: 'itr_determine',
+    });
+    navigate('/itr/determine', {
       state: {
         selectedPerson: person,
         verificationResult: {

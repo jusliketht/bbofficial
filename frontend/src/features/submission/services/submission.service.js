@@ -153,11 +153,15 @@ class SubmissionService {
       const id = filingId;
       // For now, we'll send dscDetails object instead of file
       // In production, this would handle file upload properly
+      const certificateName = dscFile.name || 'DSC Certificate';
+      const certificateSerialNumber = `SN_${Date.now()}`;
+      const certificateValidFrom = new Date().toISOString();
+      const certificateValidTo = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
       const dscDetails = {
-        certificate_name: dscFile.name || 'DSC Certificate',
-        certificate_serial_number: `SN_${Date.now()}`,
-        certificate_valid_from: new Date().toISOString(),
-        certificate_valid_to: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+        'certificate_name': certificateName,
+        'certificate_serial_number': certificateSerialNumber,
+        'certificate_valid_from': certificateValidFrom,
+        'certificate_valid_to': certificateValidTo,
       };
 
       const response = await apiClient.post(
@@ -205,9 +209,10 @@ class SubmissionService {
         `${this.basePath}/drafts/${id}/validate`,
         formData,
       );
+      const payload = response?.data?.data || response?.data || {};
       return {
         success: true,
-        ...response.data,
+        ...payload,
       };
     } catch (error) {
       console.error('Validation failed:', error);

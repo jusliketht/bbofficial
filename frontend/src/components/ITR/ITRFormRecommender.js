@@ -22,6 +22,7 @@ import {
 import ITRAutoDetector from '../../services/ITRAutoDetector';
 import apiClient from '../../services/core/APIClient';
 import toast from 'react-hot-toast';
+import { ensureJourneyStart, trackEvent } from '../../utils/analyticsEvents';
 
 const ITRFormRecommender = () => {
   const navigate = useNavigate();
@@ -40,6 +41,8 @@ const ITRFormRecommender = () => {
   const itrDescriptions = autoDetector.getITRDescriptions();
 
   useEffect(() => {
+    ensureJourneyStart();
+    trackEvent('itr_determination_view', { surface: 'recommend-form', panVerified: !!verificationResult?.isValid });
     analyzeAndRecommend();
   }, []);
 
@@ -129,6 +132,13 @@ const ITRFormRecommender = () => {
       toast.error('Please select an ITR form');
       return;
     }
+
+    trackEvent('itr_type_selected', {
+      surface: 'recommend-form',
+      itrType: selectedITR,
+      confidence: recommendation?.confidence || null,
+      caReviewRequired: recommendation?.triggeredRules?.some(r => r.caReviewRequired) || false,
+    });
 
     navigate('/itr/computation', {
       state: {

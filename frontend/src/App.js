@@ -5,7 +5,7 @@
 // =====================================================
 
 import { Suspense, lazy, useEffect } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
 // Core components (keep synchronous - needed immediately)
 import Layout from './components/Layout.js';
@@ -38,6 +38,9 @@ const ResetPassword = lazy(() => import('./pages/Auth/ResetPassword'));
 const GoogleOAuthSuccess = lazy(() => import('./pages/Auth/GoogleOAuthSuccess'));
 const GoogleOAuthError = lazy(() => import('./pages/Auth/GoogleOAuthError'));
 const GoogleOAuthLinkRequired = lazy(() => import('./pages/Auth/GoogleOAuthLinkRequired'));
+
+// Onboarding / gates
+const CompleteProfileGate = lazy(() => import('./pages/Onboarding/CompleteProfileGate'));
 
 // CA Registration components
 const RegisterCAFirm = lazy(() => import('./pages/CA/RegisterCAFirm'));
@@ -89,7 +92,10 @@ const UserDashboard = lazy(() => import('./pages/Dashboard/UserDashboard'));
 const StartFiling = lazy(() => import('./pages/ITR/StartFiling'));
 const FilingHistory = lazy(() => import('./pages/ITR/FilingHistory'));
 const FilingPersonSelector = lazy(() => import('./components/ITR/FilingPersonSelector'));
+const PANVerification = lazy(() => import('./pages/ITR/PANVerification'));
+const ITRFormRecommender = lazy(() => import('./components/ITR/ITRFormRecommender'));
 const ITRComputation = lazy(() => import('./pages/ITR/ITRComputation'));
+const DetermineITR = lazy(() => import('./pages/ITR/DetermineITR'));
 const RefundTracking = lazy(() => import('./pages/ITR/RefundTracking'));
 const ITRVTracking = lazy(() => import('./pages/ITR/ITRVTracking'));
 const AssessmentNotices = lazy(() => import('./pages/ITR/AssessmentNotices'));
@@ -103,6 +109,7 @@ const ITRDirectSelection = lazy(() => import('./pages/ITR/ITRDirectSelection'));
 const IncomeSourceSelector = lazy(() => import('./pages/ITR/IncomeSourceSelector'));
 const DocumentUploadHub = lazy(() => import('./pages/ITR/DocumentUploadHub'));
 const DataSourceSelector = lazy(() => import('./components/ITR/DataSourceSelector'));
+const ITRReview = lazy(() => import('./pages/ITR/ITRReview'));
 const PreviousYearSelector = lazy(() => import('./features/itr/components/previous-year-selector'));
 const PreviousYearPreview = lazy(() => import('./features/itr/components/previous-year-preview'));
 const PreviousYearReview = lazy(() => import('./features/itr/components/previous-year-review'));
@@ -129,6 +136,39 @@ const ToolsPage = lazy(() => import('./pages/Tools/ToolsPage'));
 // Legal pages
 const TermsPage = lazy(() => import('./pages/Legal/TermsPage'));
 const PrivacyPage = lazy(() => import('./pages/Legal/PrivacyPage'));
+
+function ITRDetermineRedirect() {
+  const location = useLocation();
+  return (
+    <Navigate
+      to="/itr/determine"
+      replace
+      state={{
+        ...(location.state || {}),
+        redirectedFrom: location.pathname,
+      }}
+    />
+  );
+}
+
+function AcknowledgmentRedirect() {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search || '');
+  const filingId = params.get('filingId') || location.state?.filingId || null;
+  if (!filingId) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return (
+    <Navigate
+      to={`/acknowledgment/${filingId}`}
+      replace
+      state={{
+        ...(location.state || {}),
+        filingId,
+      }}
+    />
+  );
+}
 
 // Main App Component
 const AppContent = () => {
@@ -675,12 +715,38 @@ const AppContent = () => {
             }
           />
           <Route
+            path="/itr/pan-verification"
+            element={
+              <Layout>
+                <Suspense fallback={<RouteLoader message="Loading PAN verification..." />}>
+                  <PANVerification />
+                </Suspense>
+              </Layout>
+            }
+          />
+          <Route
+            path="/itr/recommend-form"
+            element={
+              <Layout>
+                <ITRDetermineRedirect />
+              </Layout>
+            }
+          />
+          <Route
+            path="/itr/determine"
+            element={
+              <Layout>
+                <Suspense fallback={<RouteLoader message="Determining ITR..." />}>
+                  <DetermineITR />
+                </Suspense>
+              </Layout>
+            }
+          />
+          <Route
             path="/itr/data-source"
             element={
               <Layout>
-                <Suspense fallback={<RouteLoader message="Loading data source..." />}>
-                  <DataSourceSelector />
-                </Suspense>
+                <ITRDetermineRedirect />
               </Layout>
             }
           />
@@ -688,9 +754,7 @@ const AppContent = () => {
             path="/itr/select-form"
             element={
               <Layout>
-                <Suspense fallback={<RouteLoader message="Loading ITR form selection..." />}>
-                  <ITRFormSelection />
-                </Suspense>
+                <ITRDetermineRedirect />
               </Layout>
             }
           />
@@ -698,9 +762,7 @@ const AppContent = () => {
             path="/itr/mode-selection"
             element={
               <Layout>
-                <Suspense fallback={<RouteLoader message="Loading mode selection..." />}>
-                  <ITRModeSelection />
-                </Suspense>
+                <ITRDetermineRedirect />
               </Layout>
             }
           />
@@ -708,9 +770,7 @@ const AppContent = () => {
             path="/itr/direct-selection"
             element={
               <Layout>
-                <Suspense fallback={<RouteLoader message="Loading direct selection..." />}>
-                  <ITRDirectSelection />
-                </Suspense>
+                <ITRDetermineRedirect />
               </Layout>
             }
           />
@@ -718,9 +778,7 @@ const AppContent = () => {
             path="/itr/income-sources"
             element={
               <Layout>
-                <Suspense fallback={<RouteLoader message="Loading income sources..." />}>
-                  <IncomeSourceSelector />
-                </Suspense>
+                <ITRDetermineRedirect />
               </Layout>
             }
           />
@@ -730,6 +788,16 @@ const AppContent = () => {
               <Layout>
                 <Suspense fallback={<RouteLoader message="Loading document upload..." />}>
                   <DocumentUploadHub />
+                </Suspense>
+              </Layout>
+            }
+          />
+          <Route
+            path="/itr/review"
+            element={
+              <Layout>
+                <Suspense fallback={<RouteLoader message="Loading review..." />}>
+                  <ITRReview />
                 </Suspense>
               </Layout>
             }
@@ -832,6 +900,16 @@ const AppContent = () => {
             }
           />
           <Route
+            path="/onboarding/complete-profile"
+            element={
+              <Layout>
+                <Suspense fallback={<RouteLoader message="Loading profile gate..." />}>
+                  <CompleteProfileGate />
+                </Suspense>
+              </Layout>
+            }
+          />
+          <Route
             path="/itr/assessment-notices"
             element={
               <Layout>
@@ -876,7 +954,7 @@ const AppContent = () => {
             element={
               <Layout>
                 <Suspense fallback={<RouteLoader message="Loading acknowledgment..." />}>
-                  <Acknowledgment />
+                  <AcknowledgmentRedirect />
                 </Suspense>
               </Layout>
             }

@@ -3,9 +3,10 @@
 // User authentication & profile management
 // =====================================================
 
-import React, { createContext, useState, useEffect, useContext, useCallback, useRef } from 'react';
+import { createContext, useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services';
+import { trackEvent } from '../utils/analyticsEvents';
 
 const AuthContext = createContext(null);
 
@@ -25,6 +26,33 @@ export const AuthProvider = ({ children }) => {
   const [justLoggedIn, setJustLoggedIn] = useState(false);
   const navigate = useNavigate();
   const profileFetchInProgress = useRef(false); // Prevent multiple simultaneous profile fetches
+
+  const refreshProfile = useCallback(async () => {
+    // Best-effort; do not throw unless needed by caller
+    const currentUser = authService.getCurrentUser();
+    if (!currentUser) return null;
+
+    // For admin users, skip profile fetch (admin profile endpoint may not exist)
+    const isAdmin = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'PLATFORM_ADMIN';
+    if (isAdmin) return null;
+
+    if (profileFetchInProgress.current) return null;
+
+    try {
+      profileFetchInProgress.current = true;
+      const profileData = await authService.getProfile();
+      setProfile(profileData);
+      if (profileData?.user) {
+        setUser(prevUser => ({ ...prevUser, ...profileData.user }));
+      }
+      return profileData;
+    } catch (error) {
+      console.warn('Failed to refresh user profile:', error);
+      return null;
+    } finally {
+      profileFetchInProgress.current = false;
+    }
+  }, []);
 
   // Initialize authentication state
   useEffect(() => {
@@ -74,6 +102,7 @@ export const AuthProvider = ({ children }) => {
         setUser(response.user);
         setIsAuthenticated(true);
         setJustLoggedIn(true); // Mark that user just logged in
+        trackEvent('auth_login_success', { role: response.user?.role || null });
 
         // Load profile after successful login (only if not already fetching)
         if (!profileFetchInProgress.current) {
@@ -115,6 +144,7 @@ export const AuthProvider = ({ children }) => {
         setUser(response.user);
         setIsAuthenticated(true);
         setJustLoggedIn(true); // Mark that user just logged in
+        trackEvent('auth_oauth_success', { role: response.user?.role || null });
 
         // Load profile after successful login (only if not already fetching)
         if (!profileFetchInProgress.current) {
@@ -205,6 +235,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     updateProfile,
     setJustLoggedIn, // Allow components to clear the flag
+    refreshProfile,
 
     // Utilities
     hasRole,

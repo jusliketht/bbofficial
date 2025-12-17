@@ -15,6 +15,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { deductionService } from '../services/deduction.service';
+import apiClient from '../../../services/core/APIClient';
 import toast from 'react-hot-toast';
 import { ConfirmationDialog } from '../../../components/UI/ConfirmationDialog/ConfirmationDialog';
 

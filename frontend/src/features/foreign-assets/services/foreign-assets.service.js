@@ -6,6 +6,10 @@
 import apiClient from '../../../services/core/APIClient';
 
 class ForeignAssetsService {
+  _unwrap(response) {
+    return response?.data?.data || response?.data || {};
+  }
+
   /**
    * Get foreign assets for a filing
    * @param {string} filingId - Filing ID
@@ -18,7 +22,7 @@ class ForeignAssetsService {
       );
       return {
         success: true,
-        ...response.data,
+        ...this._unwrap(response),
       };
     } catch (error) {
       console.error('Failed to get foreign assets:', error);
@@ -45,7 +49,7 @@ class ForeignAssetsService {
       );
       return {
         success: true,
-        ...response.data,
+        ...this._unwrap(response),
       };
     } catch (error) {
       console.error('Failed to add foreign asset:', error);
@@ -71,7 +75,7 @@ class ForeignAssetsService {
       );
       return {
         success: true,
-        ...response.data,
+        ...this._unwrap(response),
       };
     } catch (error) {
       console.error('Failed to update foreign asset:', error);
@@ -95,7 +99,7 @@ class ForeignAssetsService {
       );
       return {
         success: true,
-        ...response.data,
+        ...this._unwrap(response),
       };
     } catch (error) {
       console.error('Failed to delete foreign asset:', error);
@@ -125,7 +129,7 @@ class ForeignAssetsService {
       );
       return {
         success: true,
-        ...response.data,
+        ...this._unwrap(response),
       };
     } catch (error) {
       console.error('Failed to upload document:', error);

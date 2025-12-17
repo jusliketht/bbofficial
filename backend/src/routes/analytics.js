@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const enterpriseLogger = require('../utils/logger');
 const { sendSuccess, sendError } = require('../utils/responseFormatter');
+const { optionalAuth } = require('../middleware/auth');
 
 // =====================================================
 // WEB VITALS ANALYTICS ENDPOINT
@@ -76,6 +77,51 @@ router.post('/web-vitals', async (req, res) => {
       500,
       error.message,
     );
+  }
+});
+
+// =====================================================
+// GENERIC EVENT CAPTURE ENDPOINT (Funnel + UX analytics)
+// =====================================================
+
+/**
+ * @route   POST /api/analytics/events
+ * @desc    Receive UX/funnel events (optionally associated with user if token present)
+ * @access  Public (optional auth)
+ */
+router.post('/events', optionalAuth, async (req, res) => {
+  try {
+    const { name, timestamp, sessionId, journeyId, properties } = req.body || {};
+
+    if (!name) {
+      return sendError(res, 'Missing required field: name', 400);
+    }
+
+    enterpriseLogger.info('Analytics event received', {
+      name,
+      timestamp: timestamp || new Date().toISOString(),
+      sessionId: sessionId || null,
+      journeyId: journeyId || null,
+      userId: req.user?.userId || req.user?.id || null,
+      role: req.user?.role || null,
+      properties: properties || {},
+      userAgent: req.get('user-agent'),
+      ip: req.ip,
+    });
+
+    // TODO: Persist to DB/warehouse (model: AnalyticsEvent)
+    return sendSuccess(res, 'Event recorded', {
+      name,
+      receivedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    enterpriseLogger.error('Error processing analytics event', {
+      error: error.message,
+      stack: error.stack,
+      body: req.body,
+    });
+
+    return sendError(res, 'Failed to process analytics event', 500, error.message);
   }
 });
 

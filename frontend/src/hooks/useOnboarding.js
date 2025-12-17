@@ -6,8 +6,21 @@ export const useOnboarding = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check if onboarding is completed
-    const completed = localStorage.getItem('itr_onboarding_completed') === 'true';
+    // Prefer server-backed flag if present on cached user object; fallback to legacy local flag
+    let completed = false;
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        completed = !!u?.onboardingCompleted;
+      }
+    } catch (e) {
+      // ignore parse errors
+    }
+
+    if (!completed) {
+      completed = localStorage.getItem('itr_onboarding_completed') === 'true';
+    }
     const profile = localStorage.getItem('itr_user_profile');
 
     setIsCompleted(completed);

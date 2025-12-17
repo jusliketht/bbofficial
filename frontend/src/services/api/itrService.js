@@ -7,6 +7,10 @@ import apiClient from '../core/APIClient';
 import errorHandler from '../core/ErrorHandler';
 
 class ITRService {
+  _unwrap(response) {
+    // Support both standardized successResponse ({ success, data }) and legacy/raw shapes.
+    return response?.data?.data || response?.data || {};
+  }
   // Get available ITR types
   async getITRTypes() {
     try {
@@ -174,7 +178,7 @@ class ITRService {
   async getDraftById(draftId) {
     try {
       const response = await apiClient.get(`/itr/drafts/${draftId}`);
-      return response.data;
+      return this._unwrap(response);
     } catch (error) {
       errorHandler.handle(error);
       throw error;
@@ -185,7 +189,7 @@ class ITRService {
   async getUserDrafts(params = {}) {
     try {
       const response = await apiClient.get('/itr/drafts', { params });
-      return response.data;
+      return this._unwrap(response);
     } catch (error) {
       errorHandler.handle(error);
       throw error;
@@ -196,7 +200,7 @@ class ITRService {
   async getFilingById(filingId) {
     try {
       const response = await apiClient.get(`/itr/filings/${filingId}`);
-      return response.data;
+      return this._unwrap(response);
     } catch (error) {
       errorHandler.handle(error);
       throw error;

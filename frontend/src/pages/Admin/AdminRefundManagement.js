@@ -111,7 +111,7 @@ const AdminRefundManagement = () => {
 
   const handleProcess = async (refundId) => {
     // eslint-disable-next-line no-alert
-    if (!confirm('Process this refund? This will mark it as credited.')) return;
+    if (!window.confirm('Process this refund? This will mark it as credited.')) return;
 
     setProcessing(refundId);
     try {

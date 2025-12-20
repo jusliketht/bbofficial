@@ -520,5 +520,40 @@ CAFirmReview.belongsTo(User, {
   onDelete: 'SET NULL',
 });
 
+// =====================================================
+// FINANCE ASSOCIATIONS (Phase 5)
+// =====================================================
+
+const { Invoice } = require('./Invoice');
+const Payment = require('./Payment');
+
+// Invoice belongs to User
+Invoice.belongsTo(User, {
+  foreignKey: 'userId',
+  as: 'user',
+  onDelete: 'CASCADE',
+});
+
+// Invoice belongs to ITR Filing
+Invoice.belongsTo(ITRFiling, {
+  foreignKey: 'filingId',
+  as: 'filing',
+  onDelete: 'SET NULL',
+});
+
+// Invoice has many Payments
+Invoice.hasMany(Payment, {
+  foreignKey: 'invoiceId',
+  as: 'payments',
+  onDelete: 'CASCADE',
+});
+
+// Payment belongs to Invoice
+Payment.belongsTo(Invoice, {
+  foreignKey: 'invoiceId',
+  as: 'invoice',
+  onDelete: 'CASCADE',
+});
+
 enterpriseLogger.info('Model associations defined');
 

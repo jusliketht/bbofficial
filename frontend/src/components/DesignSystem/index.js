@@ -4,6 +4,8 @@
 // =====================================================
 
 // Design tokens
+import DESIGN_TOKENS from './tokens';
+import Components from './components';
 export { DESIGN_TOKENS, COLORS, TYPOGRAPHY, SPACING, ANIMATIONS } from './tokens';
 
 // Base components
@@ -26,8 +28,6 @@ export { default as LoadingState, SkeletonLoader, InlineLoader } from './Loading
 export { default as ErrorBoundary } from './ErrorBoundary';
 
 // Legacy exports for backward compatibility
-import DESIGN_TOKENS from './tokens';
-import Components from './components';
 
 export default {
   DESIGN_TOKENS,

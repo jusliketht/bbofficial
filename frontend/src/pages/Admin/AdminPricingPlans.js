@@ -110,7 +110,7 @@ const AdminPricingPlans = () => {
 
   const handleDelete = async (planId) => {
     // eslint-disable-next-line no-alert
-    if (!confirm('Are you sure you want to delete this pricing plan?')) {
+    if (!window.confirm('Are you sure you want to delete this pricing plan?')) {
       return;
     }
 

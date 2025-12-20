@@ -46,6 +46,9 @@ import PDFExportButton from '../../features/pdf-export/components/pdf-export-but
 import useRealTimeValidation from '../../hooks/useRealTimeValidation';
 import ITRValidationEngine from '../../components/ITR/core/ITRValidationEngine';
 import { AlertCircle, XCircle, Cloud, CloudOff, Check, LogOut } from 'lucide-react';
+import { useFilingContext } from '../../hooks/useFilingContext';
+import { useFinancialBlueprint } from '../../hooks/useFinancialBlueprint';
+import { isLockedState } from '../../types/filing.ts';
 import ValidationSummary from '../../components/ITR/ValidationSummary';
 import { formatIndianCurrency } from '../../lib/format';
 import useAutoSave, { AutoSaveIndicator } from '../../hooks/useAutoSave';
@@ -56,6 +59,9 @@ import verificationStatusService from '../../services/VerificationStatusService'
 import { motion, AnimatePresence } from 'framer-motion';
 import ITRComputationHeader from '../../components/ITR/ITRComputationHeader';
 import ITRComputationContent from '../../components/ITR/ITRComputationContent';
+import FinancialBlueprintSection from '../../components/ITR/FinancialBlueprintSection';
+import FinancialBlueprintOverview from '../../components/ITR/FinancialBlueprintOverview';
+import FinancialYearEvents from '../../components/ITR/FinancialYearEvents';
 import { ensureJourneyStart, trackEvent } from '../../utils/analyticsEvents';
 import {
   orderSections as orderGuidedSections,
@@ -88,6 +94,8 @@ const ITRComputation = () => {
   const [expandedSectionId, setExpandedSectionId] = useState(null); // For BreathingGrid (legacy)
   const [activeSectionId, setActiveSectionId] = useState('personalInfo'); // For sidebar navigation
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [focusMode, setFocusMode] = useState(false); // Focus mode for primary actions
+  const [blueprintCollapsed, setBlueprintCollapsed] = useState(false); // Collapse blueprint in focus mode
   const trackedComputationViewRef = useRef(false);
   const trackedCollectDataViewRef = useRef(false);
   const sectionCompletedOnceRef = useRef(new Set());
@@ -152,6 +160,12 @@ const ITRComputation = () => {
   const [filingIdLocal, setFilingIdLocal] = useState(filingId || null);
   const effectiveDraftId = searchParams.get('draftId') || location.state?.draftId || draftIdLocal;
   const effectiveFilingId = params.filingId || searchParams.get('filingId') || location.state?.filingId || filingIdLocal;
+
+  // Phase 4: Get filing context (lifecycle state, allowed actions, ITR type)
+  const { lifecycleState, allowedActions, itrType: contextITRType, isLoading: contextLoading, error: contextError } = useFilingContext(effectiveFilingId);
+
+  // Get Financial Blueprint data
+  const { blueprint, isLoading: blueprintLoading } = useFinancialBlueprint(effectiveFilingId);
 
   // Track entry point for context-aware back navigation (refresh-safe: read from query params too)
   const getEntryPoint = () => {
@@ -471,8 +485,10 @@ const ITRComputation = () => {
     isValidating: isValidatingForm,
   } = useRealTimeValidation(formData, selectedITR, 300);
 
-  // Determine if filing is readonly (completed/submitted)
+  // Phase 4: Determine if filing is readonly (use lifecycleState instead of status)
+  // Fallback to old status check for backward compatibility during transition
   const isReadOnly = viewMode === 'readonly' ||
+                     (lifecycleState && isLockedState(lifecycleState)) ||
                      (currentFiling && ['submitted', 'acknowledged', 'processed'].includes(currentFiling.status));
 
   // Gate A (hybrid onboarding): require PAN verified + DOB before entering computation (END_USER only)
@@ -3736,16 +3752,7 @@ const ITRComputation = () => {
         }
       }
 
-      // Validate JSON schema before export
-      try {
-        itrJsonExportService.validateJsonForExport(formData, selectedITR);
-      } catch (validationError) {
-        toast.error('JSON validation failed: ' + validationError.message, {
-          duration: 6000,
-        });
-        setIsDownloading(false);
-        return;
-      }
+      // Validation is now handled by backend API during export
 
       const result = await itrJsonExportService.exportToJson(
         formData,
@@ -4258,7 +4265,36 @@ const ITRComputation = () => {
             <div className="hidden lg:flex items-center gap-2">
               <ITRToggle
                 selectedITR={selectedITR}
-                onITRChange={(newITR) => {
+                onITRChange={async (newITR) => {
+                  // Route ITR change through backend Domain Core (if filing exists)
+                  if (effectiveFilingId && newITR !== selectedITR) {
+                    try {
+                      const result = await itrService.changeITRType(effectiveFilingId, newITR);
+                      if (result?.filing) {
+                        // Backend validated and changed ITR type
+                        setSelectedITR(newITR);
+                        toast.success('ITR type changed successfully');
+                        // If recommendation suggests different ITR, show warning
+                        if (result.filing.recommendation) {
+                          toast(`Recommended ITR: ${result.filing.recommendation.recommended} - ${result.filing.recommendation.reason}`, {
+                            icon: 'ℹ️',
+                            duration: 5000,
+                          });
+                        }
+                        return; // Exit early - backend handled the change
+                      }
+                    } catch (error) {
+                      toast.error(error.response?.data?.message || 'Failed to change ITR type');
+                      enterpriseLogger.error('ITR type change failed', {
+                        filingId: effectiveFilingId,
+                        newITR,
+                        error: error.message,
+                      });
+                      return; // Don't proceed with frontend change if backend rejected
+                    }
+                  }
+
+                  // For new drafts (no filingId yet) or if backend change succeeded, continue with frontend data sanitization
                   // Validate ITR change for ITR-1
                   if (newITR === 'ITR-1' || newITR === 'ITR1') {
                     // Check if current data is compatible with ITR-1
@@ -4593,7 +4629,7 @@ const ITRComputation = () => {
               {!isReadOnly && (
                 <button
                   onClick={() => handleSaveDraft({ exitAfterSave: false })}
-                  disabled={isSaving}
+                  disabled={!allowedActions.includes('edit_data') || isSaving}
                   className="flex items-center px-2 py-1 text-body-small font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50"
                   style={{ gap: '2px' }}
                 >
@@ -4620,7 +4656,7 @@ const ITRComputation = () => {
               {!isReadOnly && (
                 <button
                   onClick={handleComputeTax}
-                  disabled={isComputingTax}
+                  disabled={!allowedActions.includes('compute_tax') || isComputingTax}
                   className="flex items-center px-2 py-1 text-body-small font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50"
                   style={{ gap: '2px' }}
                 >
@@ -4822,7 +4858,40 @@ const ITRComputation = () => {
           )}
 
           {/* Content Container - Compact padding */}
-          <div className="max-w-[1200px] mx-auto px-3 py-3">
+          <div className={`${focusMode ? 'flex gap-4' : 'max-w-[1200px] mx-auto'} px-3 py-3`}>
+            {/* Financial Blueprint Overview - Sticky sidebar in focus mode */}
+            {effectiveFilingId && (
+              <div className={focusMode ? 'w-80 flex-shrink-0' : 'w-full'}>
+                <FinancialBlueprintOverview
+                  blueprint={blueprint}
+                  isLoading={blueprintLoading}
+                  isCollapsed={blueprintCollapsed}
+                  focusMode={focusMode}
+                  onToggleCollapse={() => setBlueprintCollapsed(!blueprintCollapsed)}
+                  onClose={() => setFocusMode(false)}
+                  onActionClick={(action) => {
+                    setFocusMode(true);
+                    setBlueprintCollapsed(false);
+                    // Navigate to appropriate section based on action
+                    if (action === 'edit_data') {
+                      setActiveSectionId('personalInfo');
+                    } else if (action === 'compute_tax') {
+                      setActiveSectionId('taxComputation');
+                    } else if (action === 'file_itr') {
+                      setActiveSectionId('taxComputation');
+                    }
+                  }}
+                />
+                {!focusMode && <FinancialYearEvents blueprint={blueprint} formData={formData} />}
+              </div>
+            )}
+
+            {/* Focused Content Area */}
+            <div className={focusMode ? 'flex-1 min-w-0' : 'w-full'}>
+              {focusMode && effectiveFilingId && (
+                <FinancialYearEvents blueprint={blueprint} formData={formData} />
+              )}
+
             {/* Auto-Population Actions - Compact */}
             {Object.keys(autoFilledFields).some(section => autoFilledFields[section]?.length > 0) && (
               <div className="mb-3">
@@ -5043,6 +5112,7 @@ const ITRComputation = () => {
                 )}
               </>
             )}
+            </div>
           </div>
 
           {/* Read-only notice (minimal) - Positioned to avoid conflicts with mobile menu button */}

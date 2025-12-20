@@ -11,6 +11,7 @@ module.exports = {
   },
   extends: [
     'eslint:recommended',
+    'react-app', // Includes TypeScript support, react, and react-hooks from react-scripts
   ],
   parserOptions: {
     ecmaFeatures: {
@@ -19,10 +20,8 @@ module.exports = {
     ecmaVersion: 12,
     sourceType: 'module'
   },
-  plugins: [
-    'react',
-    'react-hooks',
-  ],
+  // Plugins are provided by 'react-app' extends, no need to declare separately
+  // plugins: ['react', 'react-hooks'] // Already included in react-app
   rules: {
     // React specific rules
     'react/react-in-jsx-scope': 'off',
@@ -103,10 +102,12 @@ module.exports = {
     {
       files: ['**/*.ts', '**/*.tsx'],
       rules: {
-        '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
-        '@typescript-eslint/no-explicit-any': 'warn',
-        '@typescript-eslint/explicit-function-return-type': 'off',
-        '@typescript-eslint/explicit-module-boundary-types': 'off'
+        // Disable JavaScript rules that conflict with TypeScript
+        // TypeScript compiler handles type checking, so we disable ESLint rules
+        'no-undef': 'off', // TypeScript handles this
+        'no-unused-vars': 'off', // TypeScript handles this
+        'no-redeclare': 'off', // TypeScript handles this
+        'no-trailing-spaces': 'error'
       }
     },
     {
@@ -118,8 +119,7 @@ module.exports = {
     {
       files: ['**/*.test.js', '**/*.test.jsx', '**/*.test.ts', '**/*.test.tsx'],
       rules: {
-        'no-unused-expressions': 'off',
-        '@typescript-eslint/no-explicit-any': 'off'
+        'no-unused-expressions': 'off'
       }
     }
   ]

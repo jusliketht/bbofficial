@@ -29,8 +29,9 @@ const ITRFiling = sequelize.define('ITRFiling', {
   },
   itrType: {
     type: DataTypes.ENUM('ITR-1', 'ITR-2', 'ITR-3', 'ITR-4'),
-    allowNull: false,
+    allowNull: true, // Nullable initially, must be set once determined
     field: 'itr_type',
+    comment: 'ITR type (ITR-1, ITR-2, ITR-3, ITR-4). Nullable initially, must be set once determined, must not change after LOCKED state. Domain Core enforces immutability.',
   },
   assessmentYear: {
     type: DataTypes.STRING,
@@ -50,6 +51,24 @@ const ITRFiling = sequelize.define('ITRFiling', {
     type: DataTypes.ENUM('draft', 'paused', 'submitted', 'acknowledged', 'processed', 'rejected'),
     defaultValue: 'draft',
     allowNull: false,
+    comment: 'Deprecated: Use lifecycleState instead. Will be removed in future migration.',
+  },
+  lifecycleState: {
+    type: DataTypes.ENUM(
+      'DRAFT_INIT',
+      'ITR_DETERMINED',
+      'DATA_COLLECTED',
+      'DATA_CONFIRMED',
+      'COMPUTED',
+      'LOCKED',
+      'FILED',
+      'ACKNOWLEDGED',
+      'COMPLETED'
+    ),
+    allowNull: false,
+    defaultValue: 'DRAFT_INIT',
+    field: 'lifecycle_state',
+    comment: 'Domain Core lifecycle state. This is the authoritative state for ITR filing lifecycle.',
   },
   pausedAt: {
     type: DataTypes.DATE,
@@ -171,7 +190,13 @@ const ITRFiling = sequelize.define('ITRFiling', {
     type: DataTypes.ENUM('old', 'new'),
     allowNull: true,
     field: 'regime',
-    comment: 'Tax regime selected: old or new',
+    comment: 'Deprecated: Use regimeSelected instead. Will be removed in future migration.',
+  },
+  regimeSelected: {
+    type: DataTypes.ENUM('old', 'new'),
+    allowNull: true,
+    field: 'regime_selected',
+    comment: 'Tax regime selected for this filing (old or new). Should match regime in return_versions.',
   },
   previousYearFilingId: {
     type: DataTypes.UUID,
@@ -195,6 +220,61 @@ const ITRFiling = sequelize.define('ITRFiling', {
     allowNull: true,
     field: 'tax_computation',
     comment: 'Stored tax computation result with breakdown',
+  },
+  lockedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'locked_at',
+    comment: 'Timestamp when filing was locked. Domain Core uses this as a guard (not SQL constraint).',
+  },
+  lockedBy: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    field: 'locked_by',
+    references: {
+      model: 'users',
+      key: 'id',
+    },
+    comment: 'User ID who locked the filing. Domain Core uses this for audit trails.',
+  },
+  filedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'filed_at',
+    comment: 'Timestamp when filing was submitted/filed. Domain Core uses this as a guard (not SQL constraint).',
+  },
+  filedBy: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    field: 'filed_by',
+    references: {
+      model: 'users',
+      key: 'id',
+    },
+    comment: 'User ID who filed the ITR. Domain Core uses this for audit trails.',
+  },
+  computationVersion: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    defaultValue: 1,
+    field: 'computation_version',
+    comment: 'Version number of tax computation. Incremented each time tax is recomputed.',
+  },
+  computedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'computed_at',
+    comment: 'Timestamp when tax computation was last performed.',
+  },
+  computedBy: {
+    type: DataTypes.UUID,
+    allowNull: true,
+    field: 'computed_by',
+    references: {
+      model: 'users',
+      key: 'id',
+    },
+    comment: 'User ID who performed the computation. NULL for system computations.',
   },
   createdAt: {
     type: DataTypes.DATE,
@@ -225,6 +305,9 @@ const ITRFiling = sequelize.define('ITRFiling', {
     },
     {
       fields: ['status'],
+    },
+    {
+      fields: ['lifecycle_state'],
     },
     {
       fields: ['ack_number'],

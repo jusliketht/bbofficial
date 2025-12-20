@@ -116,6 +116,25 @@ ITRDraft.prototype.markCompleted = async function() {
 
 ITRDraft.prototype.updateData = async function(newData, validationErrors = null) {
   try {
+    // Defensive check: Verify filing is not in LOCKED state
+    const { ITRFiling } = require('./index');
+
+    if (this.filingId) {
+      const filing = await ITRFiling.findByPk(this.filingId, {
+        attributes: ['id', 'status'],
+      });
+
+      if (filing) {
+        // Map status to domain state (simplified check)
+        if (filing.status === 'submitted' || filing.status === 'acknowledged' || filing.status === 'processed') {
+          // These statuses imply LOCKED or later states
+          const error = new Error('Filing is locked. No mutations allowed.');
+          error.statusCode = 403;
+          throw error;
+        }
+      }
+    }
+
     const updateData = {
       data: newData,
       lastSavedAt: new Date(),

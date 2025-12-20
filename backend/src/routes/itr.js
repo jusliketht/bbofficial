@@ -7,6 +7,7 @@
 const express = require('express');
 const ITRController = require('../controllers/ITRController');
 const { authenticateToken } = require('../middleware/auth');
+const domainGuard = require('../middleware/domainGuard');
 const { successResponse, errorResponse, notFoundResponse } = require('../utils/responseFormatter');
 
 const router = express.Router();
@@ -17,12 +18,12 @@ const itrController = new ITRController();
 // =====================================================
 
 // Create new ITR draft
-router.post('/drafts', authenticateToken, async (req, res) => {
+router.post('/drafts', authenticateToken, domainGuard('determine_itr_type', { filingIdSource: 'body' }), async (req, res) => {
   await itrController.createDraft(req, res);
 });
 
 // Update existing draft
-router.put('/drafts/:draftId', authenticateToken, async (req, res) => {
+router.put('/drafts/:draftId', authenticateToken, domainGuard('edit_data', { filingIdSource: 'auto' }), async (req, res) => {
   await itrController.updateDraft(req, res);
 });
 
@@ -112,15 +113,15 @@ router.get('/deductions/:section', authenticateToken, async (req, res) => {
   await itrController.getDeductions(req, res);
 });
 
-router.post('/deductions/:section', authenticateToken, async (req, res) => {
+router.post('/deductions/:section', authenticateToken, domainGuard('edit_data', { filingIdSource: 'body' }), async (req, res) => {
   await itrController.createDeduction(req, res);
 });
 
-router.put('/deductions/:section/:deductionId', authenticateToken, async (req, res) => {
+router.put('/deductions/:section/:deductionId', authenticateToken, domainGuard('edit_data', { filingIdSource: 'body' }), async (req, res) => {
   await itrController.updateDeduction(req, res);
 });
 
-router.delete('/deductions/:section/:deductionId', authenticateToken, async (req, res) => {
+router.delete('/deductions/:section/:deductionId', authenticateToken, domainGuard('edit_data', { filingIdSource: 'body' }), async (req, res) => {
   await itrController.deleteDeduction(req, res);
 });
 
@@ -129,7 +130,7 @@ router.delete('/deductions/:section/:deductionId', authenticateToken, async (req
 // =====================================================
 
 // Validate draft
-router.post('/drafts/:draftId/validate', authenticateToken, async (req, res) => {
+router.post('/drafts/:draftId/validate', authenticateToken, domainGuard('validate_data', { filingIdSource: 'auto' }), async (req, res) => {
   await itrController.validateDraft(req, res);
 });
 
@@ -138,7 +139,7 @@ router.post('/drafts/:draftId/validate', authenticateToken, async (req, res) => 
 // =====================================================
 
 // Compute tax for draft
-router.post('/drafts/:draftId/compute', authenticateToken, async (req, res) => {
+router.post('/drafts/:draftId/compute', authenticateToken, domainGuard('compute_tax', { filingIdSource: 'auto' }), async (req, res) => {
   await itrController.computeTax(req, res);
 });
 
@@ -362,11 +363,67 @@ router.get('/filings/:filingId/discrepancies/history', authenticateToken, async 
 });
 
 // =====================================================
+// ITR TYPE CHANGE ROUTES
+// =====================================================
+
+// Change ITR type (must go through Domain Core)
+router.put('/filings/:filingId/itr-type', authenticateToken, domainGuard('change_itr_type', { filingIdSource: 'params' }), async (req, res) => {
+  await itrController.changeITRType(req, res);
+});
+
+// Get allowed actions for filing (Domain Core driven)
+router.get('/filings/:filingId/allowed-actions', authenticateToken, async (req, res) => {
+  try {
+    const { filingId } = req.params;
+    const domainCore = require('../domain/ITRDomainCore');
+    const { getCurrentDomainState } = require('../middleware/domainGuard');
+    const { ITRFiling } = require('../models');
+
+    const currentState = await getCurrentDomainState(filingId);
+    const actor = {
+      role: req.user?.role || 'END_USER',
+      permissions: req.user?.permissions || [],
+    };
+
+    const allowedActions = domainCore.getAllowedActions(currentState, actor);
+
+    // Fetch ITR type from filing (Phase 4 enhancement)
+    let itrType = null;
+    try {
+      const filing = await ITRFiling.findByPk(filingId, {
+        attributes: ['itr_type'],
+      });
+      itrType = filing?.itrType || null;
+    } catch (filingError) {
+      // Non-critical - itrType can be null
+      const enterpriseLogger = require('../utils/logger');
+      enterpriseLogger.warn('Could not fetch ITR type for allowed-actions', {
+        filingId,
+        error: filingError.message,
+      });
+    }
+
+    return successResponse(res, {
+      allowedActions,
+      state: currentState,
+      itrType,
+    }, 'Allowed actions retrieved');
+  } catch (error) {
+    return errorResponse(res, error, 500);
+  }
+});
+
+// Get Financial Blueprint (read-only summary)
+router.get('/filings/:filingId/financial-blueprint', authenticateToken, async (req, res) => {
+  await itrController.getFinancialBlueprint(req, res);
+});
+
+// =====================================================
 // SUBMISSION ROUTES
 // =====================================================
 
 // Submit ITR
-router.post('/drafts/:draftId/submit', authenticateToken, async (req, res) => {
+router.post('/drafts/:draftId/submit', authenticateToken, domainGuard('file_itr', { filingIdSource: 'auto' }), async (req, res) => {
   await itrController.submitITR(req, res);
 });
 

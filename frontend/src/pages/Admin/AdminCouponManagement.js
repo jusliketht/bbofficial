@@ -128,7 +128,7 @@ const AdminCouponManagement = () => {
 
   const handleDelete = async (couponId) => {
     // eslint-disable-next-line no-alert
-    if (!confirm('Are you sure you want to delete this coupon?')) {
+    if (!window.confirm('Are you sure you want to delete this coupon?')) {
       return;
     }
 

@@ -202,6 +202,13 @@ router.use('/notifications', generalLimiter, require('./notifications'));
 router.use('/ca-marketplace', generalLimiter, require('./ca-marketplace'));
 
 // =====================================================
+// FINANCE ROUTES
+// =====================================================
+
+// Finance routes (invoices, payments, reconciliation)
+router.use('/finance', generalLimiter, require('./finance'));
+
+// =====================================================
 // ERROR HANDLING
 // =====================================================
 

@@ -60,7 +60,7 @@ const AdminCAVerificationQueue = () => {
 
   const handleApprove = async (firmId) => {
     // eslint-disable-next-line no-alert
-    if (!confirm('Are you sure you want to approve this CA firm verification?')) {
+    if (!window.confirm('Are you sure you want to approve this CA firm verification?')) {
       return;
     }
 

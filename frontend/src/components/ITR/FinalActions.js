@@ -32,7 +32,10 @@ const FinalActions = ({
   validationErrors = [],
   isSubmitting = false,
   isDraftSaving = false,
-  filingStatus = 'ready',
+  filingStatus = 'ready', // Deprecated: kept for backward compatibility
+  // Phase 4: New props for domain-driven gating
+  allowedActions = [],
+  lifecycleState = null,
 }) => {
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -47,7 +50,14 @@ const FinalActions = ({
     }
   };
 
-  const canSubmit = filingStatus === 'ready' && validationErrors.length === 0;
+  // Phase 4: Gate actions using allowedActions (preferred) or fallback to filingStatus
+  const canSubmit = allowedActions.includes('file_itr') 
+    ? (allowedActions.includes('file_itr') && validationErrors.length === 0)
+    : (filingStatus === 'ready' && validationErrors.length === 0);
+  const canSave = allowedActions.includes('edit_data');
+  const canPreview = allowedActions.includes('review_computation');
+  const canDownload = allowedActions.includes('download_documents');
+  const canDownloadAck = allowedActions.includes('download_acknowledgment');
   const hasTaxLiability = taxCalculation?.taxPayable > 0;
   const hasRefund = taxCalculation?.refundDue > 0;
 
@@ -155,7 +165,7 @@ const FinalActions = ({
             icon={Save}
             label={isDraftSaving ? 'Saving...' : 'Save Draft'}
             onClick={onSaveDraft}
-            disabled={isDraftSaving}
+            disabled={!canSave || isDraftSaving}
             loading={isDraftSaving}
             variant="secondary"
           />
@@ -167,6 +177,7 @@ const FinalActions = ({
             icon={Eye}
             label="Preview"
             onClick={onPreview}
+            disabled={!canPreview}
             variant="secondary"
           />
 
@@ -174,6 +185,7 @@ const FinalActions = ({
             icon={Download}
             label="Generate PDF"
             onClick={onGeneratePDF}
+            disabled={!canDownload}
             variant="secondary"
           />
 
@@ -222,7 +234,7 @@ const FinalActions = ({
               icon={FileText}
               label="Download Acknowledgment"
               variant="secondary"
-              disabled={filingStatus !== 'submitted'}
+              disabled={!canDownloadAck}
             />
           </div>
         </div>

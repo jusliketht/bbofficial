@@ -22,6 +22,42 @@ class ITRService {
     }
   }
 
+  // Change ITR type (must go through Domain Core)
+  async changeITRType(filingId, itrType, reason = null) {
+    try {
+      const response = await apiClient.put(`/itr/filings/${filingId}/itr-type`, {
+        itrType,
+        reason,
+      });
+      return this._unwrap(response);
+    } catch (error) {
+      errorHandler.handle(error);
+      throw error;
+    }
+  }
+
+  // Get allowed actions for filing (Domain Core driven)
+  async getAllowedActions(filingId) {
+    try {
+      const response = await apiClient.get(`/itr/filings/${filingId}/allowed-actions`);
+      return this._unwrap(response);
+    } catch (error) {
+      errorHandler.handle(error);
+      throw error;
+    }
+  }
+
+  // Get Financial Blueprint (read-only summary)
+  async getFinancialBlueprint(filingId) {
+    try {
+      const response = await apiClient.get(`/itr/filings/${filingId}/financial-blueprint`);
+      return this._unwrap(response);
+    } catch (error) {
+      errorHandler.handle(error);
+      throw error;
+    }
+  }
+
   // Create new ITR filing (creates both filing and draft)
   async createITR(filingData, config = {}) {
     try {

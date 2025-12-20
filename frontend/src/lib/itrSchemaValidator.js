@@ -178,18 +178,6 @@ const addWarning = (result, path, message, code = 'WARNING') => {
 };
 
 /**
- * Validate required fields exist
- */
-const validateRequired = (data, requiredFields, basePath, result) => {
-  for (const field of requiredFields) {
-    const value = data?.[field];
-    if (value === undefined || value === null || value === '') {
-      addError(result, `${basePath}.${field}`, `Missing required field: ${field}`);
-    }
-  }
-};
-
-/**
  * Validate PAN format
  */
 const validatePAN = (pan) => {
@@ -353,6 +341,187 @@ const validateITR1 = (json, result) => {
 };
 
 /**
+ * Validate ITR-2 JSON structure
+ */
+const validateITR2 = (json, result) => {
+  const form = json.Form_ITR2;
+  if (!form) {
+    addError(result, 'Form_ITR2', 'Missing Form_ITR2 root element');
+    return;
+  }
+
+  // Validate PartA_GEN (not PartA_GEN1)
+  if (form.PartA_GEN) {
+    const gen = form.PartA_GEN;
+
+    // Personal Info
+    if (gen.PersonalInfo) {
+      const pi = gen.PersonalInfo;
+      if (!validatePAN(pi.PAN)) {
+        addError(result, 'PartA_GEN.PersonalInfo.PAN', 'Invalid PAN format', 'INVALID_FORMAT');
+      }
+      if (pi.AadhaarCardNo && !validateAadhaar(pi.AadhaarCardNo)) {
+        addError(result, 'PartA_GEN.PersonalInfo.AadhaarCardNo', 'Invalid Aadhaar format', 'INVALID_FORMAT');
+      }
+    } else {
+      addError(result, 'PartA_GEN.PersonalInfo', 'Missing PersonalInfo section');
+    }
+
+    // Address
+    if (gen.AddressDetails) {
+      const addr = gen.AddressDetails;
+      if (addr.PinCode && !validatePincode(addr.PinCode)) {
+        addError(result, 'PartA_GEN.AddressDetails.PinCode', 'Invalid PIN code format', 'INVALID_FORMAT');
+      }
+    }
+  } else {
+    addError(result, 'PartA_GEN', 'Missing PartA_GEN section');
+  }
+
+  // Validate required schedules
+  const requiredSchedules = ['ScheduleS', 'ScheduleHP', 'ScheduleCG', 'ScheduleOS', 'ScheduleVIA', 'Schedule80G', 'ScheduleTDS1', 'ScheduleTDS2', 'ScheduleIT', 'ScheduleAL'];
+  for (const schedule of requiredSchedules) {
+    if (!form[schedule]) {
+      addError(result, schedule, `Missing required schedule: ${schedule}`);
+    }
+  }
+
+  // Validate PartB_TI and PartB_TTI
+  if (!form.PartB_TI) {
+    addError(result, 'PartB_TI', 'Missing PartB_TI section');
+  }
+  if (!form.PartB_TTI) {
+    addError(result, 'PartB_TTI', 'Missing PartB_TTI section');
+  }
+
+  // Validate Schedule AL structure (required per schema)
+  if (form.ScheduleAL) {
+    const al = form.ScheduleAL;
+    if (!al.Assets || !al.Liabilities) {
+      addError(result, 'ScheduleAL', 'ScheduleAL must have Assets and Liabilities');
+    }
+  }
+
+  // Validate Verification
+  if (!form.Verification) {
+    addError(result, 'Verification', 'Missing Verification section');
+  } else {
+    if (!form.Verification.Declaration) {
+      addError(result, 'Verification.Declaration', 'Declaration is required');
+    }
+    if (!form.Verification.Place) {
+      addError(result, 'Verification.Place', 'Place of filing is required');
+    }
+  }
+
+  // Schedule EI and Schedule FA are optional (conditional)
+  // No validation needed for these
+};
+
+/**
+ * Validate ITR-3 JSON structure
+ */
+const validateITR3 = (json, result) => {
+  const form = json.Form_ITR3;
+  if (!form) {
+    addError(result, 'Form_ITR3', 'Missing Form_ITR3 root element');
+    return;
+  }
+
+  // Validate PartA_GEN (not PartA_GEN1)
+  if (form.PartA_GEN) {
+    const gen = form.PartA_GEN;
+
+    // Personal Info
+    if (gen.PersonalInfo) {
+      const pi = gen.PersonalInfo;
+      if (!validatePAN(pi.PAN)) {
+        addError(result, 'PartA_GEN.PersonalInfo.PAN', 'Invalid PAN format', 'INVALID_FORMAT');
+      }
+      if (pi.AadhaarCardNo && !validateAadhaar(pi.AadhaarCardNo)) {
+        addError(result, 'PartA_GEN.PersonalInfo.AadhaarCardNo', 'Invalid Aadhaar format', 'INVALID_FORMAT');
+      }
+    } else {
+      addError(result, 'PartA_GEN.PersonalInfo', 'Missing PersonalInfo section');
+    }
+
+    // Address
+    if (gen.AddressDetails) {
+      const addr = gen.AddressDetails;
+      if (addr.PinCode && !validatePincode(addr.PinCode)) {
+        addError(result, 'PartA_GEN.AddressDetails.PinCode', 'Invalid PIN code format', 'INVALID_FORMAT');
+      }
+    }
+  } else {
+    addError(result, 'PartA_GEN', 'Missing PartA_GEN section');
+  }
+
+  // Validate required schedules
+  const requiredSchedules = ['ScheduleS', 'ScheduleHP', 'ScheduleBP', 'ScheduleCG', 'ScheduleOS', 'ScheduleVIA', 'ScheduleCYLA', 'ScheduleBFLA', 'Schedule80G', 'ScheduleTDS1', 'ScheduleTDS2', 'ScheduleIT', 'ScheduleAL'];
+  for (const schedule of requiredSchedules) {
+    if (!form[schedule]) {
+      addError(result, schedule, `Missing required schedule: ${schedule}`);
+    }
+  }
+
+  // Validate PartA_BS (Balance Sheet - MANDATORY)
+  if (!form.PartA_BS) {
+    addError(result, 'PartA_BS', 'PartA_BS (Balance Sheet) is MANDATORY for ITR-3');
+  } else {
+    // Validate balance sheet structure
+    const bs = form.PartA_BS;
+    if (!bs.Assets || !bs.Liabilities) {
+      addError(result, 'PartA_BS', 'Balance Sheet must have Assets and Liabilities');
+    } else {
+      // Validate balance: Assets = Liabilities + Capital
+      const totalAssets = parseFloat(bs.Assets?.TotalAssets || 0);
+      const totalLiabilities = parseFloat(bs.Liabilities?.TotalLiabilities || 0);
+      const capital = parseFloat(bs.Liabilities?.Capital || 0);
+      const expectedTotal = totalLiabilities + capital;
+      if (Math.abs(totalAssets - expectedTotal) > 0.01) {
+        addError(result, 'PartA_BS', `Balance Sheet does not balance: Assets (${totalAssets}) != Liabilities + Capital (${expectedTotal})`, 'BALANCE_MISMATCH');
+      }
+    }
+  }
+
+  // Validate PartA_PL (Profit & Loss - MANDATORY)
+  if (!form.PartA_PL) {
+    addError(result, 'PartA_PL', 'PartA_PL (Profit & Loss) is MANDATORY for ITR-3');
+  }
+
+  // Validate PartB_TI and PartB_TTI
+  if (!form.PartB_TI) {
+    addError(result, 'PartB_TI', 'Missing PartB_TI section');
+  }
+  if (!form.PartB_TTI) {
+    addError(result, 'PartB_TTI', 'Missing PartB_TTI section');
+  }
+
+  // Validate Schedule AL structure (required per schema)
+  if (form.ScheduleAL) {
+    const al = form.ScheduleAL;
+    if (!al.Assets || !al.Liabilities) {
+      addError(result, 'ScheduleAL', 'ScheduleAL must have Assets and Liabilities');
+    }
+  }
+
+  // Validate Verification
+  if (!form.Verification) {
+    addError(result, 'Verification', 'Missing Verification section');
+  } else {
+    if (!form.Verification.Declaration) {
+      addError(result, 'Verification.Declaration', 'Declaration is required');
+    }
+    if (!form.Verification.Place) {
+      addError(result, 'Verification.Place', 'Place of filing is required');
+    }
+  }
+
+  // Schedule DEP, Schedule EI, and Schedule FA are optional (conditional)
+  // No validation needed for these
+};
+
+/**
  * Validate ITR-4 JSON structure
  */
 const validateITR4 = (json, result) => {
@@ -437,6 +606,14 @@ export const validateITRJson = (json, itrType) => {
       case 'ITR-1':
       case 'ITR1':
         validateITR1(json, result);
+        break;
+      case 'ITR-2':
+      case 'ITR2':
+        validateITR2(json, result);
+        break;
+      case 'ITR-3':
+      case 'ITR3':
+        validateITR3(json, result);
         break;
       case 'ITR-4':
       case 'ITR4':

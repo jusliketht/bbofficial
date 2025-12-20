@@ -71,24 +71,36 @@ const ITRJsonDownload = ({
 
   /**
    * Handle alternative download (government format)
+   * Now uses backend API for consistency
    */
   const handleGovernmentFormatDownload = useCallback(async () => {
     try {
       setIsDownloading(true);
       setError(null);
+      setDownloadProgress(0);
 
-      const governmentJson = itrJsonExportService.generateGovernmentJson(
+      // Use the same backend API endpoint
+      setDownloadProgress(30);
+      const exportResult = await itrJsonExportService.exportToJson(
         itrData,
         itrType,
         assessmentYear,
-        await itrJsonExportService.authService.getCurrentUser(),
       );
 
-      const fileName = itrJsonExportService.generateFileName(itrType, assessmentYear);
-      itrJsonExportService.downloadJsonFile(governmentJson, fileName);
+      setDownloadProgress(70);
+      if (exportResult.jsonPayload) {
+        itrJsonExportService.downloadJsonFile(
+          exportResult.jsonPayload,
+          exportResult.fileName,
+        );
+      } else if (exportResult.downloadUrl) {
+        // Fallback: trigger download from URL
+        window.open(exportResult.downloadUrl, '_blank');
+      }
 
+      setDownloadProgress(100);
       setDownloadResult({
-        fileName,
+        fileName: exportResult.fileName,
         format: 'government',
         instructions: 'Use this file for direct upload to Income Tax Department e-filing portal',
       });
@@ -98,6 +110,9 @@ const ITRJsonDownload = ({
       setError(err.message);
     } finally {
       setIsDownloading(false);
+      setTimeout(() => {
+        setDownloadProgress(0);
+      }, 2000);
     }
   }, [itrData, itrType, assessmentYear]);
 

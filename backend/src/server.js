@@ -294,6 +294,17 @@ const startServer = async () => {
         });
       }
 
+      // Phase 5: Initialize finance event handlers
+      try {
+        const { initializeFinanceEventHandlers } = require('./events/financeEventHandlers');
+        initializeFinanceEventHandlers();
+        enterpriseLogger.info('Finance event handlers initialized');
+      } catch (financeError) {
+        enterpriseLogger.warn('Finance event handlers initialization failed (non-blocking)', {
+          error: financeError.message,
+        });
+      }
+
       // Initialize WebSocket server
       try {
         await wsManager.initialize(server);

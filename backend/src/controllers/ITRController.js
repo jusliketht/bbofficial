@@ -35,7 +35,32 @@ const eVerificationService = require('../services/business/EVerificationService'
 const refundTrackingService = require('../services/business/RefundTrackingService');
 const dataMatchingService = require('../services/business/DataMatchingService');
 const DiscrepancyResolution = require('../models/DiscrepancyResolution');
+const { ITRFiling } = require('../models');
 const wsManager = require('../services/websocket/WebSocketManager');
+// New ITR-1 JSON Generation Pipeline
+const Form16AggregationService = require('../services/business/Form16AggregationService');
+const ITR1JsonBuilder = require('../services/business/ITR1JsonBuilder');
+const ITRBusinessValidator = require('../services/business/ITRBusinessValidator');
+
+/**
+ * Normalize ITR type string (uppercase, remove dashes/underscores)
+ * @param {string} itrType - ITR type (e.g., 'ITR-1', 'itr1', 'ITR_2')
+ * @returns {string|null} Normalized ITR type (e.g., 'ITR1') or null if invalid
+ */
+function normalizeItrType(itrType) {
+  if (!itrType) return null;
+  return itrType.toUpperCase().replace(/[-_]/g, '');
+}
+
+/**
+ * Normalize ITR type for validation engine (lowercase)
+ * @param {string} itrType - ITR type
+ * @returns {string|null} Normalized ITR type in lowercase
+ */
+function normalizeItrTypeForValidation(itrType) {
+  if (!itrType) return null;
+  return itrType.replace(/[-_]/g, '').toLowerCase();
+}
 
 class ITRController {
   constructor() {
@@ -401,9 +426,9 @@ class ITRController {
         });
       }
 
-      // Get draft to determine ITR type (join with itr_filings to get user_id)
+      // Get draft with existing data and filing info (join with itr_filings to get user_id, status, filing_id)
       const getDraftQuery = `
-        SELECT d.id, f.itr_type
+        SELECT d.id, d.data, f.itr_type, f.status, f.id as filing_id
         FROM itr_drafts d
         JOIN itr_filings f ON d.filing_id = f.id
         WHERE d.id = $1 AND f.user_id = $2
@@ -414,12 +439,49 @@ class ITRController {
         return notFoundResponse(res, 'Draft');
       }
 
-      const itrType = draft.rows[0].itr_type;
+      const draftRow = draft.rows[0];
+      const itrType = draftRow.itr_type;
+      const filingId = draftRow.filing_id;
+      const existingData = draftRow.data ? (typeof draftRow.data === 'string' ? JSON.parse(draftRow.data) : draftRow.data) : {};
+
+      // Extract previous domain snapshot (before update)
+      const domainCore = require('../domain/ITRDomainCore');
+      const { getCurrentDomainState } = require('../middleware/domainGuard');
+      const prevDomainSnapshot = domainCore.extractDomainSnapshot(existingData);
+      const currentState = await getCurrentDomainState(filingId);
 
       // Validate form data
       const validation = this.validationEngine.validate(itrType.replace('-', '').toLowerCase(), formData);
       if (!validation.isValid) {
         return validationErrorResponse(res, validation.errors);
+      }
+
+      // Extract new domain snapshot (after update)
+      const newDomainSnapshot = domainCore.extractDomainSnapshot(formData);
+
+      // Check if rollback required
+      const rollbackDecision = domainCore.requiresStateRollback(
+        currentState,
+        prevDomainSnapshot,
+        newDomainSnapshot
+      );
+
+      let rollbackApplied = false;
+      if (rollbackDecision.required) {
+        // Rollback state
+        await dbQuery(
+          `UPDATE itr_filings SET status = $1, lifecycle_state = $1, tax_computation = NULL, tax_liability = NULL, refund_amount = NULL WHERE id = $2`,
+          [rollbackDecision.targetState, filingId]
+        );
+
+        enterpriseLogger.info('State rollback triggered', {
+          filingId,
+          fromState: currentState,
+          toState: rollbackDecision.targetState,
+          reason: rollbackDecision.reason,
+        });
+
+        rollbackApplied = true;
       }
 
       // Update draft (join with itr_filings to verify user_id)
@@ -443,16 +505,31 @@ class ITRController {
         return notFoundResponse(res, 'Draft', 'Draft not found or not editable');
       }
 
+      // Check if recomputation needed (using domain snapshots)
+      const needsRecompute = domainCore.shouldRecompute(prevDomainSnapshot, newDomainSnapshot);
+
+      if (needsRecompute) {
+        enterpriseLogger.info('Draft data changed, recomputation required', {
+          draftId,
+          filingId,
+        });
+      }
+
       enterpriseLogger.info('ITR draft updated', {
         userId,
         draftId,
         itrType: result.rows[0].itr_type,
+        rollbackApplied,
+        needsRecompute,
       });
 
       return successResponse(res, {
         id: result.rows[0].id,
         itrType: result.rows[0].itr_type,
         updatedAt: result.rows[0].updated_at,
+        rollbackApplied,
+        rollbackReason: rollbackDecision.required ? rollbackDecision.reason : null,
+        needsRecompute,
       }, 'Draft updated successfully');
     } catch (error) {
       return errorResponse(res, error, 500);
@@ -626,6 +703,12 @@ class ITRController {
       formData.deductions = formData.deductions || {};
       const list = Array.isArray(formData.deductionsItems[section]) ? formData.deductionsItems[section] : [];
 
+      // Extract domain snapshot before mutation
+      const domainCore = require('../domain/ITRDomainCore');
+      const { getCurrentDomainState } = require('../middleware/domainGuard');
+      const prevDomainSnapshot = domainCore.extractDomainSnapshot(formData);
+      const currentState = await getCurrentDomainState(filingId);
+
       const item = {
         id: uuidv4(),
         section,
@@ -650,6 +733,36 @@ class ITRController {
         formData.deductions[this._deductionKeyForSection(t)] = amt;
       });
 
+      // Extract domain snapshot after mutation
+      const newDomainSnapshot = domainCore.extractDomainSnapshot(formData);
+
+      // Check if recomputation needed
+      const needsRecompute = domainCore.shouldRecompute(prevDomainSnapshot, newDomainSnapshot);
+
+      // Optional: Check for rollback (unlikely but possible edge cases)
+      const rollbackDecision = domainCore.requiresStateRollback(
+        currentState,
+        prevDomainSnapshot,
+        newDomainSnapshot
+      );
+
+      let rollbackApplied = false;
+      if (rollbackDecision.required) {
+        // Apply rollback (rare case)
+        await dbQuery(
+          `UPDATE itr_filings SET status = $1, lifecycle_state = $1, tax_computation = NULL, tax_liability = NULL, refund_amount = NULL WHERE id = $2`,
+          [rollbackDecision.targetState, filingId]
+        );
+        enterpriseLogger.info('State rollback triggered by deduction change', {
+          filingId,
+          fromState: currentState,
+          toState: rollbackDecision.targetState,
+          reason: rollbackDecision.reason,
+          section,
+        });
+        rollbackApplied = true;
+      }
+
       await dbQuery(
         `UPDATE itr_drafts d
          SET data = $1, updated_at = NOW(), last_saved_at = NOW()
@@ -658,6 +771,19 @@ class ITRController {
          RETURNING d.id`,
         [JSON.stringify(formData), draftRow.id, userId],
       );
+
+      // Mark for recomputation if needed
+      if (needsRecompute) {
+        await dbQuery(
+          `UPDATE itr_filings SET needs_recompute = TRUE WHERE id = $1`,
+          [filingId]
+        );
+        enterpriseLogger.info('Deduction changed, recomputation required', {
+          draftId: draftRow.id,
+          filingId,
+          section,
+        });
+      }
 
       const limit = this._getDeductionLimit(section);
       const remainingLimit = typeof limit === 'number' ? Math.max(0, limit - totalAmount) : 0;
@@ -699,6 +825,12 @@ class ITRController {
       formData.deductions = formData.deductions || {};
       const list = Array.isArray(formData.deductionsItems[section]) ? formData.deductionsItems[section] : [];
 
+      // Extract domain snapshot before mutation
+      const domainCore = require('../domain/ITRDomainCore');
+      const { getCurrentDomainState } = require('../middleware/domainGuard');
+      const prevDomainSnapshot = domainCore.extractDomainSnapshot(formData);
+      const currentState = await getCurrentDomainState(filingId);
+
       const idx = list.findIndex(it => String(it.id) === String(deductionId));
       if (idx === -1) return notFoundResponse(res, 'Deduction');
 
@@ -725,6 +857,36 @@ class ITRController {
         formData.deductions[this._deductionKeyForSection(t)] = amt;
       });
 
+      // Extract domain snapshot after mutation
+      const newDomainSnapshot = domainCore.extractDomainSnapshot(formData);
+
+      // Check if recomputation needed
+      const needsRecompute = domainCore.shouldRecompute(prevDomainSnapshot, newDomainSnapshot);
+
+      // Optional: Check for rollback (unlikely but possible edge cases)
+      const rollbackDecision = domainCore.requiresStateRollback(
+        currentState,
+        prevDomainSnapshot,
+        newDomainSnapshot
+      );
+
+      let rollbackApplied = false;
+      if (rollbackDecision.required) {
+        // Apply rollback (rare case)
+        await dbQuery(
+          `UPDATE itr_filings SET status = $1, lifecycle_state = $1, tax_computation = NULL, tax_liability = NULL, refund_amount = NULL WHERE id = $2`,
+          [rollbackDecision.targetState, filingId]
+        );
+        enterpriseLogger.info('State rollback triggered by deduction change', {
+          filingId,
+          fromState: currentState,
+          toState: rollbackDecision.targetState,
+          reason: rollbackDecision.reason,
+          section,
+        });
+        rollbackApplied = true;
+      }
+
       await dbQuery(
         `UPDATE itr_drafts d
          SET data = $1, updated_at = NOW(), last_saved_at = NOW()
@@ -733,6 +895,19 @@ class ITRController {
          RETURNING d.id`,
         [JSON.stringify(formData), draftRow.id, userId],
       );
+
+      // Mark for recomputation if needed
+      if (needsRecompute) {
+        await dbQuery(
+          `UPDATE itr_filings SET needs_recompute = TRUE WHERE id = $1`,
+          [filingId]
+        );
+        enterpriseLogger.info('Deduction changed, recomputation required', {
+          draftId: draftRow.id,
+          filingId,
+          section,
+        });
+      }
 
       const limit = this._getDeductionLimit(section);
       const remainingLimit = typeof limit === 'number' ? Math.max(0, limit - totalAmount) : 0;
@@ -774,6 +949,12 @@ class ITRController {
       formData.deductions = formData.deductions || {};
       const list = Array.isArray(formData.deductionsItems[section]) ? formData.deductionsItems[section] : [];
 
+      // Extract domain snapshot before mutation
+      const domainCore = require('../domain/ITRDomainCore');
+      const { getCurrentDomainState } = require('../middleware/domainGuard');
+      const prevDomainSnapshot = domainCore.extractDomainSnapshot(formData);
+      const currentState = await getCurrentDomainState(filingId);
+
       const nextList = list.filter(it => String(it.id) !== String(deductionId));
       if (nextList.length === list.length) return notFoundResponse(res, 'Deduction');
 
@@ -789,6 +970,36 @@ class ITRController {
         formData.deductions[this._deductionKeyForSection(t)] = amt;
       });
 
+      // Extract domain snapshot after mutation
+      const newDomainSnapshot = domainCore.extractDomainSnapshot(formData);
+
+      // Check if recomputation needed
+      const needsRecompute = domainCore.shouldRecompute(prevDomainSnapshot, newDomainSnapshot);
+
+      // Optional: Check for rollback (unlikely but possible edge cases)
+      const rollbackDecision = domainCore.requiresStateRollback(
+        currentState,
+        prevDomainSnapshot,
+        newDomainSnapshot
+      );
+
+      let rollbackApplied = false;
+      if (rollbackDecision.required) {
+        // Apply rollback (rare case)
+        await dbQuery(
+          `UPDATE itr_filings SET status = $1, lifecycle_state = $1, tax_computation = NULL, tax_liability = NULL, refund_amount = NULL WHERE id = $2`,
+          [rollbackDecision.targetState, filingId]
+        );
+        enterpriseLogger.info('State rollback triggered by deduction change', {
+          filingId,
+          fromState: currentState,
+          toState: rollbackDecision.targetState,
+          reason: rollbackDecision.reason,
+          section,
+        });
+        rollbackApplied = true;
+      }
+
       await dbQuery(
         `UPDATE itr_drafts d
          SET data = $1, updated_at = NOW(), last_saved_at = NOW()
@@ -797,6 +1008,19 @@ class ITRController {
          RETURNING d.id`,
         [JSON.stringify(formData), draftRow.id, userId],
       );
+
+      // Mark for recomputation if needed
+      if (needsRecompute) {
+        await dbQuery(
+          `UPDATE itr_filings SET needs_recompute = TRUE WHERE id = $1`,
+          [filingId]
+        );
+        enterpriseLogger.info('Deduction changed, recomputation required', {
+          draftId: draftRow.id,
+          filingId,
+          section,
+        });
+      }
 
       const limit = this._getDeductionLimit(section);
       const remainingLimit = typeof limit === 'number' ? Math.max(0, limit - totalAmount) : 0;
@@ -823,9 +1047,9 @@ class ITRController {
       const userId = req.user.userId;
       const { draftId } = req.params;
 
-      // Get draft (join with itr_filings to verify user_id and get itr_type)
+      // Get draft (join with itr_filings to verify user_id and get itr_type, filing_id)
       const getDraftQuery = `
-        SELECT d.id, d.data, f.itr_type, f.status
+        SELECT d.id, d.data, f.itr_type, f.status, f.id as filing_id
         FROM itr_drafts d
         JOIN itr_filings f ON d.filing_id = f.id
         WHERE d.id = $1 AND f.user_id = $2
@@ -838,6 +1062,27 @@ class ITRController {
       }
 
       const draftRow = draft.rows[0];
+      const filingId = draftRow.filing_id;
+
+      // Check if validation is allowed in current state (Domain Core gating)
+      const domainCore = require('../domain/ITRDomainCore');
+      const { getCurrentDomainState } = require('../middleware/domainGuard');
+      const currentState = await getCurrentDomainState(filingId);
+      const actor = {
+        role: req.user?.role || 'END_USER',
+        permissions: req.user?.permissions || [],
+      };
+
+      const allowedActions = domainCore.getAllowedActions(currentState, actor);
+
+      if (!allowedActions.includes('validate_data')) {
+        return res.status(403).json({
+          success: false,
+          message: 'Validation not allowed in current state',
+          state: currentState,
+          allowedActions,
+        });
+      }
       let formData;
       try {
         formData = draftRow.data ? (typeof draftRow.data === 'string' ? JSON.parse(draftRow.data) : draftRow.data) : {};
@@ -850,10 +1095,9 @@ class ITRController {
         return errorResponse(res, parseError, 500);
       }
       const itrType = draftRow.itr_type;
-      const normalizedItrType = itrType.replace('-', '').toLowerCase();
 
       // Validate form data
-      const validation = this.validationEngine.validateAll(formData, normalizedItrType);
+      const validation = this.validationEngine.validateAll(formData, normalizeItrTypeForValidation(itrType));
 
       // Additional ITR-specific validation
       const itrSpecificValidation = this.validationEngine.validateITRSpecific(itrType, formData);
@@ -1013,8 +1257,7 @@ class ITRController {
       }
 
       // Final validation
-      const normalizedItrType = itrType.replace('-', '').toLowerCase();
-      const validation = this.validationEngine.validateAll(formData, normalizedItrType);
+      const validation = this.validationEngine.validateAll(formData, normalizeItrTypeForValidation(itrType));
       if (!validation.isValid) {
         return validationErrorResponse(res, validation.errors);
       }
@@ -1025,8 +1268,9 @@ class ITRController {
         return validationErrorResponse(res, itrSpecificValidation.errors, 'ITR-specific validation failed');
       }
 
-      // ITR-3 specific validations
-      if (itrType === 'ITR-3' || itrType === 'ITR3') {
+      // ITR-3 specific validations (using Domain Core for section applicability)
+      const domainCore = require('../domain/ITRDomainCore');
+      if (domainCore.isSectionApplicable(itrType, 'auditInfo') || domainCore.isSectionApplicable(itrType, 'balanceSheet')) {
         // Check audit applicability
         const auditCheck = taxAuditChecker.checkAuditApplicability(formData);
         if (auditCheck.applicable) {
@@ -1055,8 +1299,8 @@ class ITRController {
         }
       }
 
-      // ITR-4 specific validations (presumptive taxation)
-      if (itrType === 'ITR-4' || itrType === 'ITR4') {
+      // ITR-4 specific validations (presumptive taxation) - using Domain Core
+      if (domainCore.isSectionApplicable(itrType, 'presumptiveIncome')) {
         const businessIncome = formData.income?.businessIncome || formData.income?.presumptiveBusiness || 0;
         const professionalIncome = formData.income?.professionalIncome || formData.income?.presumptiveProfessional || 0;
         
@@ -1079,29 +1323,285 @@ class ITRController {
       const filingData = { ...formData, itrType };
       const taxComputation = await this.taxComputationEngine.computeTax(filingData, assessmentYear);
 
+      // Generate ITR JSON using new pipeline (if ITR-1/2/3/4)
+      let itrJsonPayload = formData; // Default to formData
+      const itrTypeNormalized = normalizeItrType(itrType);
+      if (itrTypeNormalized === 'ITR1') {
+        try {
+          // Get user for JSON generation
+          const User = require('../models/User');
+          const user = await User.findByPk(userId);
+          if (!user) {
+            return notFoundResponse(res, 'User');
+          }
+
+          // Generate ITR-1 JSON using new pipeline
+          const pipelineResult = await this.generateITR1JsonWithPipeline(
+            formData,
+            taxComputation,
+            assessmentYear,
+            user,
+            existingFilingId
+          );
+
+          itrJsonPayload = pipelineResult.json;
+
+          // Validate business rules
+          if (!pipelineResult.validation.isValid) {
+            enterpriseLogger.error('ITR-1 business validation failed', {
+              errors: pipelineResult.validation.errors,
+              filingId: existingFilingId,
+              userId,
+            });
+            return validationErrorResponse(res, {
+              validationErrors: pipelineResult.validation.errors,
+              warnings: pipelineResult.validation.warnings,
+            }, 'ITR-1 JSON validation failed. Please review and correct the errors.');
+          }
+
+          // Log warnings if any
+          if (pipelineResult.validation.warnings.length > 0) {
+            enterpriseLogger.warn('ITR-1 JSON validation warnings', {
+              warnings: pipelineResult.validation.warnings,
+              filingId: existingFilingId,
+              userId,
+            });
+          }
+
+          enterpriseLogger.info('ITR-1 JSON generated and validated successfully', {
+            filingId: existingFilingId,
+            userId,
+          });
+        } catch (pipelineError) {
+          enterpriseLogger.error('ITR-1 JSON generation failed', {
+            error: pipelineError.message,
+            stack: pipelineError.stack,
+            filingId: existingFilingId,
+            userId,
+          });
+          // Don't fail submission, but log the error
+          // Continue with formData as json_payload
+        }
+      } else if (itrTypeNormalized === 'ITR2') {
+        try {
+          // Get user for JSON generation
+          const User = require('../models/User');
+          const user = await User.findByPk(userId);
+          if (!user) {
+            return notFoundResponse(res, 'User');
+          }
+
+          // Generate ITR-2 JSON using new pipeline
+          const pipelineResult = await this.generateITR2JsonWithPipeline(
+            formData,
+            taxComputation,
+            assessmentYear,
+            user,
+            existingFilingId
+          );
+
+          itrJsonPayload = pipelineResult.json;
+
+          // Validate business rules
+          if (!pipelineResult.validation.isValid) {
+            enterpriseLogger.error('ITR-2 business validation failed', {
+              errors: pipelineResult.validation.errors,
+              filingId: existingFilingId,
+              userId,
+            });
+            await transaction.rollback();
+            return validationErrorResponse(res, {
+              validationErrors: pipelineResult.validation.errors,
+              warnings: pipelineResult.validation.warnings,
+            }, 'ITR-2 JSON validation failed. Please review and correct the errors.');
+          }
+
+          // Log warnings if any
+          if (pipelineResult.validation.warnings.length > 0) {
+            enterpriseLogger.warn('ITR-2 JSON validation warnings', {
+              warnings: pipelineResult.validation.warnings,
+              filingId: existingFilingId,
+              userId,
+            });
+          }
+
+          enterpriseLogger.info('ITR-2 JSON generated and validated successfully', {
+            filingId: existingFilingId,
+            userId,
+          });
+        } catch (pipelineError) {
+          enterpriseLogger.error('ITR-2 JSON generation failed', {
+            error: pipelineError.message,
+            stack: pipelineError.stack,
+            filingId: existingFilingId,
+            userId,
+          });
+          // Don't fail submission, but log the error
+          // Continue with formData as json_payload
+        }
+      } else if (itrTypeNormalized === 'ITR3') {
+        try {
+          // Get user for JSON generation
+          const User = require('../models/User');
+          const user = await User.findByPk(userId);
+          if (!user) {
+            return notFoundResponse(res, 'User');
+          }
+
+          // Generate ITR-3 JSON using new pipeline
+          const pipelineResult = await this.generateITR3JsonWithPipeline(
+            formData,
+            taxComputation,
+            assessmentYear,
+            user,
+            existingFilingId
+          );
+
+          itrJsonPayload = pipelineResult.json;
+
+          // Validate business rules
+          if (!pipelineResult.validation.isValid) {
+            enterpriseLogger.error('ITR-3 business validation failed', {
+              errors: pipelineResult.validation.errors,
+              filingId: existingFilingId,
+              userId,
+            });
+            await transaction.rollback();
+            return validationErrorResponse(res, {
+              validationErrors: pipelineResult.validation.errors,
+              warnings: pipelineResult.validation.warnings,
+            }, 'ITR-3 JSON validation failed. Please review and correct the errors.');
+          }
+
+          // Log warnings if any
+          if (pipelineResult.validation.warnings.length > 0) {
+            enterpriseLogger.warn('ITR-3 JSON validation warnings', {
+              warnings: pipelineResult.validation.warnings,
+              filingId: existingFilingId,
+              userId,
+            });
+          }
+
+          enterpriseLogger.info('ITR-3 JSON generated and validated successfully', {
+            filingId: existingFilingId,
+            userId,
+          });
+        } catch (pipelineError) {
+          enterpriseLogger.error('ITR-3 JSON generation failed', {
+            error: pipelineError.message,
+            stack: pipelineError.stack,
+            filingId: existingFilingId,
+            userId,
+          });
+          // Don't fail submission, but log the error
+          // Continue with formData as json_payload
+        }
+      } else if (itrTypeNormalized === 'ITR4') {
+        try {
+          // Get user for JSON generation
+          const User = require('../models/User');
+          const user = await User.findByPk(userId);
+          if (!user) {
+            return notFoundResponse(res, 'User');
+          }
+
+          // Generate ITR-4 JSON using new pipeline
+          const pipelineResult = await this.generateITR4JsonWithPipeline(
+            formData,
+            taxComputation,
+            assessmentYear,
+            user,
+            existingFilingId
+          );
+
+          itrJsonPayload = pipelineResult.json;
+
+          // Validate business rules
+          if (!pipelineResult.validation.isValid) {
+            enterpriseLogger.error('ITR-4 business validation failed', {
+              errors: pipelineResult.validation.errors,
+              filingId: existingFilingId,
+              userId,
+            });
+            await transaction.rollback();
+            return validationErrorResponse(res, {
+              validationErrors: pipelineResult.validation.errors,
+              warnings: pipelineResult.validation.warnings,
+            }, 'ITR-4 JSON validation failed. Please review and correct the errors.');
+          }
+
+          // Log warnings if any
+          if (pipelineResult.validation.warnings.length > 0) {
+            enterpriseLogger.warn('ITR-4 JSON validation warnings', {
+              warnings: pipelineResult.validation.warnings,
+              filingId: existingFilingId,
+              userId,
+            });
+          }
+
+          enterpriseLogger.info('ITR-4 JSON generated and validated successfully', {
+            filingId: existingFilingId,
+            userId,
+          });
+        } catch (pipelineError) {
+          enterpriseLogger.error('ITR-4 JSON generation failed', {
+            error: pipelineError.message,
+            stack: pipelineError.stack,
+            filingId: existingFilingId,
+            userId,
+          });
+          // Don't fail submission, but log the error
+          // Continue with formData as json_payload
+        }
+      }
+
       // Update existing filing record (created at draft creation time)
+      // Phase 3: Set lifecycle_state and metadata
       const updateFilingQuery = `
         UPDATE itr_filings
         SET
           status = 'submitted',
+          lifecycle_state = 'FILED',
           submitted_at = NOW(),
+          filed_at = NOW(),
+          filed_by = $5,
           assessment_year = $1,
           json_payload = $2::jsonb,
           tax_computation = $3::jsonb,
           updated_at = NOW()
         WHERE id = $4 AND user_id = $5
-        RETURNING id, itr_type, status, submitted_at, assessment_year
+        RETURNING id, itr_type, status, lifecycle_state, submitted_at, assessment_year
       `;
 
       const updatedFiling = await dbQuery(updateFilingQuery, [
         assessmentYear,
-        JSON.stringify(formData || {}),
+        JSON.stringify(itrJsonPayload || {}),
         JSON.stringify(taxComputation || {}),
         existingFilingId,
         userId,
       ]);
 
       const filingId = updatedFiling.rows[0]?.id || existingFilingId;
+
+      // Phase 5: Emit state transition event (FILED)
+      try {
+        const domainEventEmitter = require('../events/DomainEventEmitter');
+        const { getCurrentDomainState } = require('../middleware/domainGuard');
+        const previousState = await getCurrentDomainState(filingId);
+        // Note: getCurrentDomainState will return FILED after the update, so we need to get it before
+        // For now, we'll use 'draft' as the previous state since we know it was draft before submission
+        domainEventEmitter.emitITRStateTransition(filingId, 'draft', 'FILED', {
+          userId,
+          itrType,
+          assessmentYear,
+        });
+      } catch (eventError) {
+        // Don't fail submission if event emission fails
+        enterpriseLogger.error('Failed to emit state transition event (non-blocking)', {
+          filingId,
+          error: eventError.message,
+        });
+      }
 
       // Mark draft as completed (itr_drafts does not reliably have a status column)
       await dbQuery(
@@ -2818,9 +3318,10 @@ class ITRController {
         return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
-      // Validate ITR type - Foreign Assets are allowed for ITR-2 and ITR-3
+      // Validate ITR type - Foreign Assets are allowed for ITR-2 and ITR-3 (using Domain Core)
       const itrType = verifyResult.rows[0].itr_type;
-      if (itrType !== 'ITR-2' && itrType !== 'ITR2' && itrType !== 'ITR-3' && itrType !== 'ITR3') {
+      const domainCore = require('../domain/ITRDomainCore');
+      if (!domainCore.isSectionApplicable(itrType, 'foreignIncome')) {
         return validationErrorResponse(res, {
           itrType: `Foreign assets are not applicable for ${itrType}. This feature is only available for ITR-2 and ITR-3.`,
         });
@@ -2866,9 +3367,10 @@ class ITRController {
         return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
-      // Validate ITR type - Foreign Assets are allowed for ITR-2 and ITR-3
+      // Validate ITR type - Foreign Assets are allowed for ITR-2 and ITR-3 (using Domain Core)
       const itrType = verifyResult.rows[0].itr_type;
-      if (itrType !== 'ITR-2' && itrType !== 'ITR2' && itrType !== 'ITR-3' && itrType !== 'ITR3') {
+      const domainCore = require('../domain/ITRDomainCore');
+      if (!domainCore.isSectionApplicable(itrType, 'foreignIncome')) {
         return validationErrorResponse(res, {
           itrType: `Foreign assets are not applicable for ${itrType}. This feature is only available for ITR-2 and ITR-3.`,
         });
@@ -2913,9 +3415,10 @@ class ITRController {
         return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
-      // Validate ITR type - Foreign Assets are allowed for ITR-2 and ITR-3
+      // Validate ITR type - Foreign Assets are allowed for ITR-2 and ITR-3 (using Domain Core)
       const itrType = verifyResult.rows[0].itr_type;
-      if (itrType !== 'ITR-2' && itrType !== 'ITR2' && itrType !== 'ITR-3' && itrType !== 'ITR3') {
+      const domainCore = require('../domain/ITRDomainCore');
+      if (!domainCore.isSectionApplicable(itrType, 'foreignIncome')) {
         return validationErrorResponse(res, {
           itrType: `Foreign assets are not applicable for ${itrType}. This feature is only available for ITR-2 and ITR-3.`,
         });
@@ -2961,9 +3464,10 @@ class ITRController {
         return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
-      // Validate ITR type - Foreign Assets are allowed for ITR-2 and ITR-3
+      // Validate ITR type - Foreign Assets are allowed for ITR-2 and ITR-3 (using Domain Core)
       const itrType = verifyResult.rows[0].itr_type;
-      if (itrType !== 'ITR-2' && itrType !== 'ITR2' && itrType !== 'ITR-3' && itrType !== 'ITR3') {
+      const domainCore = require('../domain/ITRDomainCore');
+      if (!domainCore.isSectionApplicable(itrType, 'foreignIncome')) {
         return validationErrorResponse(res, {
           itrType: `Foreign assets are not applicable for ${itrType}. This feature is only available for ITR-2 and ITR-3.`,
         });
@@ -3638,9 +4142,13 @@ class ITRController {
         return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
-      // Validate ITR type - Capital Gains is only allowed for ITR-2
+      // Validate ITR type - Capital Gains is only allowed for ITR-2 (using Domain Core)
       const itrType = verifyResult.rows[0].itr_type;
-      if (itrType !== 'ITR-2' && itrType !== 'ITR2') {
+      const domainCore = require('../domain/ITRDomainCore');
+      // Capital gains is part of income section, but only ITR-2 explicitly supports it
+      // For now, we check if income section is applicable (ITR-2 has income section)
+      // In future, we can add a more specific check for capital gains
+      if (!domainCore.isSectionApplicable(itrType, 'income')) {
         return validationErrorResponse(res, {
           itrType: `Capital gains income is not applicable for ${itrType}. This income type is only available for ITR-2.`,
         });
@@ -3685,9 +4193,13 @@ class ITRController {
         return unauthorizedResponse(res, 'Unauthorized access to filing');
       }
 
-      // Validate ITR type - Capital Gains is only allowed for ITR-2
+      // Validate ITR type - Capital Gains is only allowed for ITR-2 (using Domain Core)
       const itrType = verifyResult.rows[0].itr_type;
-      if (itrType !== 'ITR-2' && itrType !== 'ITR2') {
+      const domainCore = require('../domain/ITRDomainCore');
+      // Capital gains is part of income section, but only ITR-2 explicitly supports it
+      // For now, we check if income section is applicable (ITR-2 has income section)
+      // In future, we can add a more specific check for capital gains
+      if (!domainCore.isSectionApplicable(itrType, 'income')) {
         return validationErrorResponse(res, {
           itrType: `Capital gains income is not applicable for ${itrType}. This income type is only available for ITR-2.`,
         });
@@ -4345,7 +4857,11 @@ class ITRController {
 
       // Validate ITR type - Business Income is allowed for ITR-3 and ITR-4
       const itrType = verifyResult.rows[0].itr_type;
-      if (itrType !== 'ITR-3' && itrType !== 'ITR3' && itrType !== 'ITR-4' && itrType !== 'ITR4') {
+      const domainCore = require('../domain/ITRDomainCore');
+      // Business income is part of 'income' section, but only ITR-3 and ITR-4 support it
+      // Check if income section is applicable and ITR type is ITR-3 or ITR-4
+      if (!domainCore.isSectionApplicable(itrType, 'income') || 
+          (itrType !== 'ITR-3' && itrType !== 'ITR3' && itrType !== 'ITR-4' && itrType !== 'ITR4')) {
         return validationErrorResponse(res, {
           itrType: `Business income is not applicable for ${itrType}. This income type is only available for ITR-3 and ITR-4.`,
         });
@@ -4387,7 +4903,11 @@ class ITRController {
 
       // Validate ITR type - Business Income is allowed for ITR-3 and ITR-4
       const itrType = verifyResult.rows[0].itr_type;
-      if (itrType !== 'ITR-3' && itrType !== 'ITR3' && itrType !== 'ITR-4' && itrType !== 'ITR4') {
+      const domainCore = require('../domain/ITRDomainCore');
+      // Business income is part of 'income' section, but only ITR-3 and ITR-4 support it
+      // Check if income section is applicable and ITR type is ITR-3 or ITR-4
+      if (!domainCore.isSectionApplicable(itrType, 'income') || 
+          (itrType !== 'ITR-3' && itrType !== 'ITR3' && itrType !== 'ITR-4' && itrType !== 'ITR4')) {
         return validationErrorResponse(res, {
           itrType: `Business income is not applicable for ${itrType}. This income type is only available for ITR-3 and ITR-4.`,
         });
@@ -4429,7 +4949,10 @@ class ITRController {
 
       // Validate ITR type - Professional Income is only allowed for ITR-3
       const itrType = verifyResult.rows[0].itr_type;
-      if (itrType !== 'ITR-3' && itrType !== 'ITR3') {
+      const domainCore = require('../domain/ITRDomainCore');
+      // Professional income is part of 'income' section, but only ITR-3 supports it
+      if (!domainCore.isSectionApplicable(itrType, 'income') || 
+          (itrType !== 'ITR-3' && itrType !== 'ITR3')) {
         return validationErrorResponse(res, {
           itrType: `Professional income is not applicable for ${itrType}. This income type is only available for ITR-3.`,
         });
@@ -4471,7 +4994,10 @@ class ITRController {
 
       // Validate ITR type - Professional Income is only allowed for ITR-3
       const itrType = verifyResult.rows[0].itr_type;
-      if (itrType !== 'ITR-3' && itrType !== 'ITR3') {
+      const domainCore = require('../domain/ITRDomainCore');
+      // Professional income is part of 'income' section, but only ITR-3 supports it
+      if (!domainCore.isSectionApplicable(itrType, 'income') || 
+          (itrType !== 'ITR-3' && itrType !== 'ITR3')) {
         return validationErrorResponse(res, {
           itrType: `Professional income is not applicable for ${itrType}. This income type is only available for ITR-3.`,
         });
@@ -4518,7 +5044,8 @@ class ITRController {
 
       // Validate ITR type - Balance Sheet is only allowed for ITR-3
       const itrType = verifyResult.rows[0].itr_type;
-      if (itrType !== 'ITR-3' && itrType !== 'ITR3') {
+      const domainCore = require('../domain/ITRDomainCore');
+      if (!domainCore.isSectionApplicable(itrType, 'balanceSheet')) {
         return validationErrorResponse(res, {
           itrType: `Balance sheet is not applicable for ${itrType}. This feature is only available for ITR-3.`,
         });
@@ -4565,7 +5092,8 @@ class ITRController {
 
       // Validate ITR type - Audit Information is only allowed for ITR-3
       const itrType = verifyResult.rows[0].itr_type;
-      if (itrType !== 'ITR-3' && itrType !== 'ITR3') {
+      const domainCore = require('../domain/ITRDomainCore');
+      if (!domainCore.isSectionApplicable(itrType, 'auditInfo')) {
         return validationErrorResponse(res, {
           itrType: `Audit information is not applicable for ${itrType}. This feature is only available for ITR-3.`,
         });
@@ -4616,7 +5144,8 @@ class ITRController {
 
       // Validate ITR type - Audit Information is only allowed for ITR-3
       const itrType = verifyResult.rows[0].itr_type;
-      if (itrType !== 'ITR-3' && itrType !== 'ITR3') {
+      const domainCore = require('../domain/ITRDomainCore');
+      if (!domainCore.isSectionApplicable(itrType, 'auditInfo')) {
         return validationErrorResponse(res, {
           itrType: `Audit information is not applicable for ${itrType}. This feature is only available for ITR-3.`,
         });
@@ -4709,7 +5238,8 @@ class ITRController {
 
       // Validate ITR type - Balance Sheet is only allowed for ITR-3
       const itrType = verifyResult.rows[0].itr_type;
-      if (itrType !== 'ITR-3' && itrType !== 'ITR3') {
+      const domainCore = require('../domain/ITRDomainCore');
+      if (!domainCore.isSectionApplicable(itrType, 'balanceSheet')) {
         return validationErrorResponse(res, {
           itrType: `Balance sheet is not applicable for ${itrType}. This feature is only available for ITR-3.`,
         });
@@ -4815,6 +5345,293 @@ class ITRController {
   // =====================================================
 
   /**
+   * Generate ITR-1 JSON using new pipeline (with Form-16 aggregation and validation)
+   * @param {object} sectionSnapshot - Section snapshot from draft/filing
+   * @param {object} computationResult - Tax computation result
+   * @param {string} assessmentYear - Assessment year
+   * @param {object} user - User model instance
+   * @param {string} filingId - Optional filing ID for Form-16 aggregation
+   * @returns {Promise<object>} Generated ITR-1 JSON with validation results
+   */
+  /**
+   * Helper: Generate ITR-4 JSON using the new pipeline and perform validations.
+   * @param {object} sectionSnapshot - The section-based snapshot (formData).
+   * @param {object} computationResult - The final tax computation result.
+   * @param {string} assessmentYear - The assessment year.
+   * @param {object} user - The user model.
+   * @param {string} [filingId] - Optional filing ID for Schedule FA.
+   * @returns {Promise<{json: object, validation: object, aggregatedSalary?: object}>}
+   */
+  async generateITR4JsonWithPipeline(sectionSnapshot, computationResult, assessmentYear, user, filingId = null) {
+    try {
+      // Aggregate Form-16s if available (for salary income)
+      let aggregatedSalary = null;
+      try {
+        aggregatedSalary = await Form16AggregationService.aggregateForm16s(
+          user.id,
+          assessmentYear,
+          filingId
+        );
+        // If no Form-16s found, aggregatedSalary will have empty structure
+        if (aggregatedSalary.employers.length === 0) {
+          aggregatedSalary = null; // Use manual entry instead
+        }
+      } catch (form16Error) {
+        enterpriseLogger.warn('Form-16 aggregation failed, using manual entry', {
+          error: form16Error.message,
+          userId: user.id,
+        });
+        // Continue with manual entry
+      }
+
+      // Build ITR-4 JSON
+      const ITR4JsonBuilder = require('../services/business/ITR4JsonBuilder');
+      const itr4Json = await ITR4JsonBuilder.buildITR4(
+        sectionSnapshot,
+        computationResult,
+        assessmentYear,
+        user,
+        aggregatedSalary,
+        filingId
+      );
+
+      // Schema validation (using frontend validator for now)
+      const { validateITRJson } = require('../../../frontend/src/lib/itrSchemaValidator');
+      const schemaValidation = validateITRJson(itr4Json, 'ITR-4');
+
+      // Business rule validation
+      const businessValidation = ITRBusinessValidator.validateITR4BusinessRules(
+        itr4Json,
+        sectionSnapshot,
+        computationResult
+      );
+
+      // Combine validations
+      const validation = {
+        isValid: schemaValidation.isValid && businessValidation.isValid,
+        errors: [...(schemaValidation.errors || []), ...(businessValidation.errors || [])],
+        warnings: [...(schemaValidation.warnings || []), ...(businessValidation.warnings || [])],
+      };
+
+      return {
+        json: itr4Json,
+        validation,
+        aggregatedSalary,
+      };
+    } catch (error) {
+      enterpriseLogger.error('Error generating ITR-4 JSON with pipeline', {
+        error: error.message,
+        stack: error.stack,
+        userId: user.id,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Helper: Generate ITR-3 JSON using the new pipeline and perform validations.
+   * @param {object} sectionSnapshot - The section-based snapshot (formData).
+   * @param {object} computationResult - The final tax computation result.
+   * @param {string} assessmentYear - The assessment year.
+   * @param {object} user - The user model.
+   * @param {string} [filingId] - Optional filing ID for Form-16 aggregation and Schedule FA.
+   * @returns {Promise<{json: object, validation: object, aggregatedSalary?: object}>}
+   */
+  async generateITR3JsonWithPipeline(sectionSnapshot, computationResult, assessmentYear, user, filingId = null) {
+    try {
+      // Aggregate Form-16s if available
+      let aggregatedSalary = null;
+      try {
+        aggregatedSalary = await Form16AggregationService.aggregateForm16s(
+          user.id,
+          assessmentYear,
+          filingId
+        );
+        // If no Form-16s found, aggregatedSalary will have empty structure
+        if (aggregatedSalary.employers.length === 0) {
+          aggregatedSalary = null; // Use manual entry instead
+        }
+      } catch (form16Error) {
+        enterpriseLogger.warn('Form-16 aggregation failed, using manual entry', {
+          error: form16Error.message,
+          userId: user.id,
+        });
+        // Continue with manual entry
+      }
+
+      // Build ITR-3 JSON
+      const ITR3JsonBuilder = require('../services/business/ITR3JsonBuilder');
+      const itr3Json = await ITR3JsonBuilder.buildITR3(
+        sectionSnapshot,
+        computationResult,
+        assessmentYear,
+        user,
+        aggregatedSalary,
+        filingId
+      );
+
+      // Schema validation (using frontend validator for now)
+      const { validateITRJson } = require('../../../frontend/src/lib/itrSchemaValidator');
+      const schemaValidation = validateITRJson(itr3Json, 'ITR-3');
+
+      // Business rule validation
+      const businessValidation = ITRBusinessValidator.validateITR3BusinessRules(
+        itr3Json,
+        sectionSnapshot,
+        computationResult
+      );
+
+      // Combine validations
+      const validation = {
+        isValid: schemaValidation.isValid && businessValidation.isValid,
+        errors: [...(schemaValidation.errors || []), ...(businessValidation.errors || [])],
+        warnings: [...(schemaValidation.warnings || []), ...(businessValidation.warnings || [])],
+      };
+
+      return {
+        json: itr3Json,
+        validation,
+        aggregatedSalary,
+      };
+    } catch (error) {
+      enterpriseLogger.error('Error generating ITR-3 JSON with pipeline', {
+        error: error.message,
+        stack: error.stack,
+        userId: user.id,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Helper: Generate ITR-2 JSON using the new pipeline and perform validations.
+   * @param {object} sectionSnapshot - The section-based snapshot (formData).
+   * @param {object} computationResult - The final tax computation result.
+   * @param {string} assessmentYear - The assessment year.
+   * @param {object} user - The user model.
+   * @param {string} [filingId] - Optional filing ID for Form-16 aggregation and Schedule FA.
+   * @returns {Promise<{json: object, validation: object, aggregatedSalary?: object}>}
+   */
+  async generateITR2JsonWithPipeline(sectionSnapshot, computationResult, assessmentYear, user, filingId = null) {
+    try {
+      // Aggregate Form-16s if available
+      let aggregatedSalary = null;
+      try {
+        aggregatedSalary = await Form16AggregationService.aggregateForm16s(
+          user.id,
+          assessmentYear,
+          filingId
+        );
+        // If no Form-16s found, aggregatedSalary will have empty structure
+        if (aggregatedSalary.employers.length === 0) {
+          aggregatedSalary = null; // Use manual entry instead
+        }
+      } catch (form16Error) {
+        enterpriseLogger.warn('Form-16 aggregation failed, using manual entry', {
+          error: form16Error.message,
+          userId: user.id,
+        });
+        // Continue with manual entry
+      }
+
+      // Build ITR-2 JSON
+      const ITR2JsonBuilder = require('../services/business/ITR2JsonBuilder');
+      const itr2Json = await ITR2JsonBuilder.buildITR2(
+        sectionSnapshot,
+        computationResult,
+        assessmentYear,
+        user,
+        aggregatedSalary,
+        filingId
+      );
+
+      // Schema validation (using frontend validator for now)
+      const { validateITRJson } = require('../../../frontend/src/lib/itrSchemaValidator');
+      const schemaValidation = validateITRJson(itr2Json, 'ITR-2');
+
+      // Business rule validation
+      const businessValidation = ITRBusinessValidator.validateITR2BusinessRules(
+        itr2Json,
+        sectionSnapshot,
+        computationResult
+      );
+
+      // Combine validations
+      const validation = {
+        isValid: schemaValidation.isValid && businessValidation.isValid,
+        errors: [...(schemaValidation.errors || []), ...(businessValidation.errors || [])],
+        warnings: [...(schemaValidation.warnings || []), ...(businessValidation.warnings || [])],
+      };
+
+      return {
+        json: itr2Json,
+        validation,
+        aggregatedSalary,
+      };
+    } catch (error) {
+      enterpriseLogger.error('Error generating ITR-2 JSON with pipeline', {
+        error: error.message,
+        stack: error.stack,
+        userId: user.id,
+      });
+      throw error;
+    }
+  }
+
+  async generateITR1JsonWithPipeline(sectionSnapshot, computationResult, assessmentYear, user, filingId = null) {
+    try {
+      // Aggregate Form-16s if available
+      let aggregatedSalary = null;
+      try {
+        aggregatedSalary = await Form16AggregationService.aggregateForm16s(
+          user.id,
+          assessmentYear,
+          filingId
+        );
+        // If no Form-16s found, aggregatedSalary will have empty structure
+        if (aggregatedSalary.employers.length === 0) {
+          aggregatedSalary = null; // Use manual entry instead
+        }
+      } catch (form16Error) {
+        enterpriseLogger.warn('Form-16 aggregation failed, using manual entry', {
+          error: form16Error.message,
+          userId: user.id,
+        });
+        // Continue with manual entry
+      }
+
+      // Build ITR-1 JSON
+      const itr1Json = ITR1JsonBuilder.buildITR1(
+        sectionSnapshot,
+        computationResult,
+        assessmentYear,
+        user,
+        aggregatedSalary
+      );
+
+      // Validate business rules
+      const businessValidation = ITRBusinessValidator.validateITR1BusinessRules(
+        itr1Json,
+        sectionSnapshot,
+        computationResult
+      );
+
+      return {
+        json: itr1Json,
+        validation: businessValidation,
+        aggregatedSalary,
+      };
+    } catch (error) {
+      enterpriseLogger.error('Error generating ITR-1 JSON with pipeline', {
+        error: error.message,
+        stack: error.stack,
+        userId: user.id,
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Export ITR data as government-compliant JSON
    * POST /api/itr/export
    */
@@ -4833,8 +5650,8 @@ class ITRController {
 
       // Validate ITR type
       const validTypes = ['ITR-1', 'ITR-2', 'ITR-3', 'ITR-4', 'ITR1', 'ITR2', 'ITR3', 'ITR4'];
-      const normalizedItrType = itrType.toUpperCase().replace('-', '');
-      if (!validTypes.includes(itrType) && !validTypes.includes(normalizedItrType)) {
+      const itrTypeNormalized = normalizeItrType(itrType);
+      if (!validTypes.includes(itrType) && !validTypes.includes(itrTypeNormalized)) {
         return validationErrorResponse(res, {
           itrType: 'Invalid ITR type. Must be ITR-1, ITR-2, ITR-3, or ITR-4',
         });
@@ -4847,8 +5664,192 @@ class ITRController {
         return notFoundResponse(res, 'User');
       }
 
-      // Generate government-compliant JSON
-      const jsonPayload = this.generateGovernmentJson(itrData, itrType, assessmentYear || getDefaultAssessmentYear(), user);
+      const finalAssessmentYear = assessmentYear || getDefaultAssessmentYear();
+      let jsonPayload;
+      let validationResult = { isValid: true, errors: [], warnings: [] };
+
+      // Use new pipeline for ITR-1 and ITR-2
+      // itrTypeNormalized already declared above
+      if (itrTypeNormalized === 'ITR1') {
+        try {
+          // Get computation result (compute if not available)
+          let computationResult = itrData.taxComputation || itrData.tax_computation;
+          if (!computationResult) {
+            // Compute tax if not available
+            const filingData = { ...itrData, itrType };
+            computationResult = await this.taxComputationEngine.computeTax(filingData, finalAssessmentYear);
+          }
+
+          // Generate ITR-1 JSON using new pipeline
+          const pipelineResult = await this.generateITR1JsonWithPipeline(
+            itrData,
+            computationResult,
+            finalAssessmentYear,
+            user,
+            itrData.filingId || null
+          );
+
+          jsonPayload = pipelineResult.json;
+          validationResult = pipelineResult.validation;
+
+          // Log validation warnings
+          if (validationResult.warnings.length > 0) {
+            enterpriseLogger.warn('ITR-1 JSON validation warnings', {
+              warnings: validationResult.warnings,
+              userId,
+            });
+          }
+
+          // Return validation errors if any
+          if (!validationResult.isValid) {
+            return validationErrorResponse(res, {
+              validationErrors: validationResult.errors,
+            }, 'ITR-1 JSON validation failed');
+          }
+        } catch (pipelineError) {
+          enterpriseLogger.error('ITR-1 pipeline generation failed, falling back to old method', {
+            error: pipelineError.message,
+            userId,
+          });
+          // Fallback to old method
+          jsonPayload = this.generateGovernmentJson(itrData, itrType, finalAssessmentYear, user);
+        }
+      } else if (itrTypeNormalized === 'ITR2') {
+        try {
+          // Get computation result (compute if not available)
+          let computationResult = itrData.taxComputation || itrData.tax_computation;
+          if (!computationResult) {
+            // Compute tax if not available
+            const filingData = { ...itrData, itrType };
+            computationResult = await this.taxComputationEngine.computeTax(filingData, finalAssessmentYear);
+          }
+
+          // Generate ITR-2 JSON using new pipeline
+          const pipelineResult = await this.generateITR2JsonWithPipeline(
+            itrData,
+            computationResult,
+            finalAssessmentYear,
+            user,
+            itrData.filingId || null
+          );
+
+          jsonPayload = pipelineResult.json;
+          validationResult = pipelineResult.validation;
+
+          // Log validation warnings
+          if (validationResult.warnings.length > 0) {
+            enterpriseLogger.warn('ITR-2 JSON validation warnings', {
+              warnings: validationResult.warnings,
+              userId,
+            });
+          }
+
+          // Return validation errors if any
+          if (!validationResult.isValid) {
+            return validationErrorResponse(res, {
+              validationErrors: validationResult.errors,
+            }, 'ITR-2 JSON validation failed');
+          }
+        } catch (pipelineError) {
+          enterpriseLogger.error('ITR-2 pipeline generation failed, falling back to old method', {
+            error: pipelineError.message,
+            userId,
+          });
+          // Fallback to old method
+          jsonPayload = this.generateGovernmentJson(itrData, itrType, finalAssessmentYear, user);
+        }
+      } else if (itrTypeNormalized === 'ITR3') {
+        try {
+          // Get computation result (compute if not available)
+          let computationResult = itrData.taxComputation || itrData.tax_computation;
+          if (!computationResult) {
+            // Compute tax if not available
+            const filingData = { ...itrData, itrType };
+            computationResult = await this.taxComputationEngine.computeTax(filingData, finalAssessmentYear);
+          }
+
+          // Generate ITR-3 JSON using new pipeline
+          const pipelineResult = await this.generateITR3JsonWithPipeline(
+            itrData,
+            computationResult,
+            finalAssessmentYear,
+            user,
+            itrData.filingId || null
+          );
+
+          jsonPayload = pipelineResult.json;
+          validationResult = pipelineResult.validation;
+
+          // Log validation warnings
+          if (validationResult.warnings.length > 0) {
+            enterpriseLogger.warn('ITR-3 JSON validation warnings', {
+              warnings: validationResult.warnings,
+              userId,
+            });
+          }
+
+          // Return validation errors if any
+          if (!validationResult.isValid) {
+            return validationErrorResponse(res, {
+              validationErrors: validationResult.errors,
+            }, 'ITR-3 JSON validation failed');
+          }
+        } catch (pipelineError) {
+          enterpriseLogger.error('ITR-3 pipeline generation failed, falling back to old method', {
+            error: pipelineError.message,
+            userId,
+          });
+          // Fallback to old method
+          jsonPayload = this.generateGovernmentJson(itrData, itrType, finalAssessmentYear, user);
+        }
+      } else if (itrTypeNormalized === 'ITR4') {
+        try {
+          // Get computation result (compute if not available)
+          let computationResult = itrData.taxComputation || itrData.tax_computation;
+          if (!computationResult) {
+            // Compute tax if not available
+            const filingData = { ...itrData, itrType };
+            computationResult = await this.taxComputationEngine.computeTax(filingData, finalAssessmentYear);
+          }
+
+          // Generate ITR-4 JSON using new pipeline
+          const pipelineResult = await this.generateITR4JsonWithPipeline(
+            itrData,
+            computationResult,
+            finalAssessmentYear,
+            user,
+            itrData.filingId || null
+          );
+
+          jsonPayload = pipelineResult.json;
+          validationResult = pipelineResult.validation;
+
+          // Log validation warnings
+          if (validationResult.warnings.length > 0) {
+            enterpriseLogger.warn('ITR-4 JSON validation warnings', {
+              warnings: validationResult.warnings,
+              userId,
+            });
+          }
+
+          // Return validation errors if any
+          if (!validationResult.isValid) {
+            return validationErrorResponse(res, {
+              validationErrors: validationResult.errors,
+            }, 'ITR-4 JSON validation failed');
+          }
+        } catch (pipelineError) {
+          enterpriseLogger.error('ITR-4 pipeline generation failed, falling back to old method', {
+            error: pipelineError.message,
+            userId,
+          });
+          // Fallback to old method
+          jsonPayload = this.generateGovernmentJson(itrData, itrType, finalAssessmentYear, user);
+        }
+      } else {
+        // Use old method for other ITR types (if any)
+        jsonPayload = this.generateGovernmentJson(itrData, itrType, finalAssessmentYear, user);
+      }
 
       // Generate filename
       const currentDate = new Date().toISOString().split('T')[0];
@@ -5135,6 +6136,9 @@ class ITRController {
 
   /**
    * Helper: Generate government-compliant JSON
+   * @deprecated For ITR-1, use generateITR1JsonWithPipeline() instead.
+   * This method is kept for backward compatibility and for ITR-2, ITR-3, ITR-4.
+   * The new pipeline provides Form-16 aggregation, proper ComputationResult mapping, and business validation.
    */
   generateGovernmentJson(itrData, itrType, assessmentYear, user) {
     const currentDate = new Date().toISOString();
@@ -5498,6 +6502,427 @@ class ITRController {
       grossReceipts: this.formatAmount(presumptiveIncome.grossReceipts || 0),
       section: presumptiveIncome.section || '',
     };
+  }
+
+  /**
+   * Change ITR type (must go through Domain Core)
+   * PUT /api/itr/filings/:filingId/itr-type
+   */
+  async changeITRType(req, res) {
+    const transaction = await sequelize.transaction();
+    try {
+      const { filingId } = req.params;
+      const { itrType, reason } = req.body;
+      const userId = req.user.userId;
+
+      if (!itrType) {
+        await transaction.rollback();
+        return validationErrorResponse(res, {
+          itrType: 'ITR type is required',
+        });
+      }
+
+      // Validate ITR type
+      const itrTypeValidation = validateITRType(itrType);
+      if (!itrTypeValidation.isValid) {
+        await transaction.rollback();
+        return validationErrorResponse(res, {
+          itrType: itrTypeValidation.error.message,
+        });
+      }
+
+      // Get filing
+      const filing = await ITRFiling.findByPk(filingId, {
+        where: { userId },
+        transaction,
+      });
+
+      if (!filing) {
+        await transaction.rollback();
+        return notFoundResponse(res, 'Filing');
+      }
+
+      // Check if ITR type is actually changing
+      if (filing.itrType === itrType) {
+        await transaction.rollback();
+        return successResponse(res, {
+          filing: {
+            id: filing.id,
+            itrType: filing.itrType,
+            message: 'ITR type unchanged',
+          },
+        });
+      }
+
+      // Get current draft data (using raw query since we're in transaction)
+      const draftQuery = `
+        SELECT d.id, d.data, d.filing_id
+        FROM itr_drafts d
+        WHERE d.filing_id = $1
+        ORDER BY d.updated_at DESC NULLS LAST, d.created_at DESC
+        LIMIT 1
+      `;
+      const draftResult = await dbQuery(draftQuery, [filingId]);
+      const draftRow = draftResult.rows[0] || null;
+      
+      // Get current form data from draft or filing
+      const currentFormData = draftRow?.data 
+        ? (typeof draftRow.data === 'string' ? JSON.parse(draftRow.data) : draftRow.data)
+        : (filing.jsonPayload || {});
+      
+      // Extract domain snapshots for rollback check
+      const domainCore = require('../domain/ITRDomainCore');
+      const { getCurrentDomainState } = require('../middleware/domainGuard');
+      
+      const prevDomainSnapshot = domainCore.extractDomainSnapshot(currentFormData);
+      const currentState = await getCurrentDomainState(filingId);
+      
+      // Create new snapshot with changed ITR type
+      const newFormData = { ...currentFormData, itrType };
+      const newDomainSnapshot = domainCore.extractDomainSnapshot(newFormData);
+      
+      // Check if rollback required (ITR type change always requires rollback)
+      const rollbackDecision = domainCore.requiresStateRollback(
+        currentState,
+        prevDomainSnapshot,
+        newDomainSnapshot
+      );
+      
+      let rollbackApplied = false;
+      if (rollbackDecision.required) {
+        // Rollback state to ITR_DETERMINED and invalidate computation
+        // Phase 3: Also update lifecycle_state
+        await filing.update({
+          status: rollbackDecision.targetState,
+          lifecycleState: rollbackDecision.targetState,
+          tax_computation: null,
+          tax_liability: null,
+          refund_amount: null,
+        }, { transaction });
+        
+        enterpriseLogger.info('State rollback triggered by ITR type change', {
+          filingId,
+          fromState: currentState,
+          toState: rollbackDecision.targetState,
+          reason: rollbackDecision.reason,
+          oldITR: filing.itrType,
+          newITR: itrType,
+          userId,
+        });
+        
+        rollbackApplied = true;
+      }
+      
+      // Use Domain Core to determine if new ITR type is appropriate (for recommendation)
+      const recommendation = domainCore.determineITR(currentFormData);
+      
+      // Warn if recommended ITR doesn't match requested ITR
+      if (recommendation.recommendedITR !== itrType) {
+        enterpriseLogger.warn('ITR type change may not be optimal', {
+          filingId,
+          currentITR: filing.itrType,
+          requestedITR: itrType,
+          recommendedITR: recommendation.recommendedITR,
+          reason: recommendation.reason,
+          userId,
+        });
+      }
+
+      // Update ITR type
+      await filing.update({
+        itrType,
+      }, { transaction });
+      
+      // Update draft data with new ITR type
+      if (draftRow) {
+        await dbQuery(
+          `UPDATE itr_drafts SET data = $1, updated_at = NOW() WHERE id = $2`,
+          [JSON.stringify(newFormData), draftRow.id]
+        );
+      } else {
+        // Create draft if doesn't exist
+        await dbQuery(
+          `INSERT INTO itr_drafts (id, filing_id, step, data, created_at, updated_at, last_saved_at)
+           VALUES ($1, $2, $3, $4, NOW(), NOW(), NOW())`,
+          [uuidv4(), filingId, 'data_collection', JSON.stringify(newFormData)]
+        );
+      }
+
+      await transaction.commit();
+
+      enterpriseLogger.info('ITR type changed', {
+        filingId,
+        oldITR: filing.itrType,
+        newITR: itrType,
+        userId,
+        reason,
+        rollbackApplied,
+      });
+
+      return successResponse(res, {
+        filing: {
+          id: filing.id,
+          itrType: filing.itrType,
+          status: filing.status,
+          message: 'ITR type changed successfully',
+          rollbackApplied,
+          rollbackReason: rollbackDecision.required ? rollbackDecision.reason : null,
+          recommendation: recommendation.recommendedITR !== itrType ? {
+            recommended: recommendation.recommendedITR,
+            reason: recommendation.reason,
+            confidence: recommendation.confidence,
+          } : null,
+        },
+      }, 'ITR type changed successfully');
+    } catch (error) {
+      await transaction.rollback();
+      enterpriseLogger.error('Change ITR type failed', {
+        error: error.message,
+        filingId: req.params.filingId,
+        userId: req.user?.userId,
+        stack: error.stack,
+      });
+      return errorResponse(res, error);
+    }
+  }
+
+  // =====================================================
+  // FINANCIAL BLUEPRINT (READ-ONLY)
+  // =====================================================
+
+  /**
+   * Get Financial Blueprint for an ITR filing
+   * Returns read-only summary of income, tax, savings, missed opportunities, and filing state
+   * @param {object} req - Express request
+   * @param {object} res - Express response
+   */
+  async getFinancialBlueprint(req, res) {
+    try {
+      const userId = req.user.userId;
+      const { filingId } = req.params;
+
+      const { dbQuery } = require('../utils/dbQuery');
+      const { getCurrentDomainState } = require('../middleware/domainGuard');
+      const domainCore = require('../domain/ITRDomainCore');
+      const { ITRFiling, ITRDraft } = require('../models');
+      const { successResponse, errorResponse, notFoundResponse } = require('../utils/responseFormatter');
+
+      // Get filing
+      const filing = await ITRFiling.findOne({
+        where: { id: filingId, userId },
+        attributes: ['id', 'itrType', 'status', 'lifecycleState', 'assessmentYear', 'jsonPayload'],
+      });
+
+      if (!filing) {
+        return notFoundResponse(res, 'Filing');
+      }
+
+      // Get draft data
+      const draft = await ITRDraft.findOne({
+        where: { filingId },
+        attributes: ['id', 'data'],
+        order: [['updatedAt', 'DESC']],
+      });
+
+      let draftData = {};
+      if (draft && draft.data) {
+        try {
+          draftData = typeof draft.data === 'string' ? JSON.parse(draft.data) : draft.data;
+        } catch (parseError) {
+          enterpriseLogger.warn('Failed to parse draft data for financial blueprint', {
+            filingId,
+            error: parseError.message,
+          });
+        }
+      }
+
+      // Get lifecycle state and allowed actions
+      const currentState = await getCurrentDomainState(filingId);
+      const actor = {
+        role: req.user?.role || 'END_USER',
+        permissions: req.user?.permissions || [],
+      };
+      const allowedActions = domainCore.getAllowedActions(currentState, actor);
+
+      // Extract domain snapshot
+      const snapshot = domainCore.extractDomainSnapshot(draftData);
+
+      // Compute tax if we have draft data
+      let computationResult = null;
+      if (draftData && Object.keys(draftData).length > 0) {
+        try {
+          const filingData = { ...draftData, itrType: filing.itrType };
+          const assessmentYear = filing.assessmentYear || '2024-25';
+          computationResult = await this.taxComputationEngine.computeTax(filingData, assessmentYear);
+        } catch (computeError) {
+          enterpriseLogger.warn('Failed to compute tax for financial blueprint', {
+            filingId,
+            error: computeError.message,
+          });
+        }
+      }
+
+      // Calculate income summary with sources array
+      const calculatedGrossIncome = (snapshot.salary || 0) +
+        (snapshot.businessIncome || 0) +
+        (snapshot.professionalIncome || 0) +
+        (snapshot.capitalGains || 0) +
+        (snapshot.interestIncome || 0) +
+        (snapshot.rentalIncome || 0) +
+        (snapshot.foreignIncome || 0);
+
+      const grossTotal = computationResult?.grossTotalIncome || calculatedGrossIncome;
+
+      // Build income sources array (only include non-zero sources)
+      const incomeSources = [];
+      if (snapshot.salary > 0) incomeSources.push({ type: 'salary', amount: snapshot.salary });
+      if (snapshot.businessIncome > 0) incomeSources.push({ type: 'business', amount: snapshot.businessIncome });
+      if (snapshot.professionalIncome > 0) incomeSources.push({ type: 'professional', amount: snapshot.professionalIncome });
+      if (snapshot.capitalGains > 0) incomeSources.push({ type: 'capitalGains', amount: snapshot.capitalGains });
+      if (snapshot.interestIncome > 0) incomeSources.push({ type: 'interest', amount: snapshot.interestIncome });
+      if (snapshot.rentalIncome > 0) incomeSources.push({ type: 'rental', amount: snapshot.rentalIncome });
+      if (snapshot.foreignIncome > 0) incomeSources.push({ type: 'foreign', amount: snapshot.foreignIncome });
+      if (snapshot.agriculturalIncome > 0) incomeSources.push({ type: 'agricultural', amount: snapshot.agriculturalIncome });
+
+      const incomeSummary = {
+        grossTotal,
+        sources: incomeSources,
+        // Keep flat structure for backward compatibility (deprecated)
+        grossTotalIncome: grossTotal,
+        salary: snapshot.salary || 0,
+        businessIncome: snapshot.businessIncome || 0,
+        professionalIncome: snapshot.professionalIncome || 0,
+        capitalGains: snapshot.capitalGains || 0,
+        interestIncome: snapshot.interestIncome || 0,
+        rentalIncome: snapshot.rentalIncome || 0,
+        foreignIncome: snapshot.foreignIncome || 0,
+        agriculturalIncome: snapshot.agriculturalIncome || 0,
+        otherIncome: 0,
+      };
+
+      // Calculate tax summary
+      const taxWithoutSavings = computationResult ? computationResult.totalTax + computationResult.cess : 0;
+      const taxAfterSavings = computationResult?.finalTax || 0;
+      const totalDeductions = computationResult?.totalDeductions || 0;
+      const savings = taxWithoutSavings - taxAfterSavings;
+
+      // Calculate missed opportunities (simple comparison)
+      // This is a basic implementation - compare claimed vs potential deductions
+      const missedOpportunities = [];
+      const limits = this.taxComputationEngine.deductionLimits[filing.assessmentYear || '2024-25'] || this.taxComputationEngine.deductionLimits['2024-25'];
+
+      // Check Section 80C (max ₹1,50,000)
+      const claimed80C = draftData.deductions?.section80C
+        ? Object.values(draftData.deductions.section80C).reduce((sum, val) => sum + (parseFloat(val) || 0), 0)
+        : 0;
+      const potential80C = limits?.section80C || 150000;
+      if (claimed80C < potential80C && incomeSummary.grossTotalIncome > 150000) {
+        missedOpportunities.push({
+          section: '80C',
+          name: 'Section 80C Deductions',
+          claimed: claimed80C,
+          potential: potential80C,
+          missed: potential80C - claimed80C,
+          description: 'Investments in ELSS, PPF, NSC, Life Insurance, etc.',
+        });
+      }
+
+      // Check Section 80D (max ₹25,000 for self, ₹50,000 for senior citizens)
+      const claimed80D = draftData.deductions?.section80D
+        ? Object.values(draftData.deductions.section80D).reduce((sum, val) => sum + (parseFloat(val) || 0), 0)
+        : 0;
+      const potential80D = limits?.section80D || 25000;
+      if (claimed80D < potential80D) {
+        missedOpportunities.push({
+          section: '80D',
+          name: 'Section 80D (Health Insurance)',
+          claimed: claimed80D,
+          potential: potential80D,
+          missed: potential80D - claimed80D,
+          description: 'Health insurance premium payments',
+        });
+      }
+
+      // Check Section 24 (Home Loan Interest - max ₹2,00,000)
+      const claimed24 = draftData.deductions?.section24?.homeLoanInterest || 0;
+      const potential24 = limits?.section24 || 200000;
+      if (claimed24 < potential24 && snapshot.rentalIncome > 0) {
+        missedOpportunities.push({
+          section: '24',
+          name: 'Section 24 (Home Loan Interest)',
+          claimed: claimed24,
+          potential: potential24,
+          missed: potential24 - claimed24,
+          description: 'Interest on home loan for self-occupied or let-out property',
+        });
+      }
+
+      // Calculate estimated additional tax savings from missed opportunities
+      const estimatedAdditionalSavings = missedOpportunities.reduce((total, opp) => {
+        // Rough estimate: missed deduction * marginal tax rate
+        // Use taxable income to calculate effective rate, fallback to 20% if not available
+        const taxableIncome = computationResult?.taxableIncome || (incomeSummary.grossTotal - totalDeductions);
+        let avgTaxRate = 20; // Default 20%
+        if (taxAfterSavings > 0 && taxableIncome > 0) {
+          avgTaxRate = (taxAfterSavings / taxableIncome) * 100;
+          // Cap at 30% (highest slab rate)
+          avgTaxRate = Math.min(avgTaxRate, 30);
+        }
+        return total + (opp.missed * (avgTaxRate / 100));
+      }, 0);
+
+      // Build response
+      const blueprint = {
+        filingId: filing.id,
+        itrType: filing.itrType,
+        assessmentYear: filing.assessmentYear || '2024-25',
+        lifecycleState: currentState,
+        allowedActions,
+        income: incomeSummary,
+        tax: {
+          taxWithoutSavings,
+          taxAfterSavings,
+          totalDeductions,
+          savings,
+          refundOrPayable: computationResult?.refundAmount || 0,
+          taxPaid: computationResult?.taxPaid || 0,
+          // Backward compatibility aliases (deprecated)
+          beforeDeductions: taxWithoutSavings,
+          afterDeductions: taxAfterSavings,
+        },
+        savings: {
+          total: savings,
+          fromDeductions: totalDeductions,
+          rebate87A: computationResult?.rebate87A?.amount || 0,
+        },
+        missedOpportunities: {
+          count: missedOpportunities.length,
+          items: missedOpportunities,
+          estimatedAdditionalSavings,
+          // Backward compatibility alias (deprecated)
+          estimatedSavings: estimatedAdditionalSavings,
+        },
+        filingState: {
+          canEdit: allowedActions.includes('edit_data'),
+          canCompute: allowedActions.includes('compute_tax'),
+          canFile: allowedActions.includes('file_itr'),
+          label: currentState.replace(/_/g, ' '),
+          // Backward compatibility (deprecated)
+          status: filing.status,
+        },
+        computedAt: computationResult?.computedAt || null,
+      };
+
+      return successResponse(res, blueprint, 'Financial blueprint retrieved');
+    } catch (error) {
+      enterpriseLogger.error('Error getting financial blueprint', {
+        error: error.message,
+        filingId: req.params.filingId,
+        userId: req.user?.userId,
+        stack: error.stack,
+      });
+      return errorResponse(res, error, 500);
+    }
   }
 }
 

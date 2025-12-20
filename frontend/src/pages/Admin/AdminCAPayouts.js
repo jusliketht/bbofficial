@@ -68,7 +68,7 @@ const AdminCAPayouts = () => {
     }
 
     // eslint-disable-next-line no-alert
-    if (!confirm(`Process payouts for ${selectedFirms.length} CA firm(s)?`)) {
+    if (!window.confirm(`Process payouts for ${selectedFirms.length} CA firm(s)?`)) {
       return;
     }
 

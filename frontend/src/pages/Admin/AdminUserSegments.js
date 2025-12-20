@@ -139,7 +139,7 @@ const AdminUserSegments = () => {
 
   const handleDelete = async (segmentId) => {
     // eslint-disable-next-line no-alert
-    if (!confirm('Are you sure you want to delete this segment?')) {
+    if (!window.confirm('Are you sure you want to delete this segment?')) {
       return;
     }
 

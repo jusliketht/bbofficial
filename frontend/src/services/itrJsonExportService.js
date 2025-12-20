@@ -17,10 +17,10 @@ class ITRJsonExportService {
 
   /**
    * Export ITR data as government-compliant JSON
-   * @param {Object} itrData - Complete ITR form data
+   * @param {Object} itrData - Complete ITR form data (section snapshot)
    * @param {string} itrType - Type of ITR (ITR-1, ITR-2, etc.)
    * @param {string} assessmentYear - Assessment year (e.g., '2024-25')
-   * @returns {Promise<Object>} Export result with download URL
+   * @returns {Promise<Object>} Export result with download URL and JSON payload
    */
   async exportToJson(itrData, itrType, assessmentYear = '2024-25') {
     try {
@@ -30,7 +30,7 @@ class ITRJsonExportService {
         throw new Error('User must be logged in to export ITR data');
       }
 
-      // Fetch Schedule FA for ITR-2 and ITR-3
+      // Fetch Schedule FA for ITR-2 and ITR-3 (backend will handle this, but we can pre-fetch for completeness)
       if (itrType === 'ITR-2' || itrType === 'ITR2' || itrType === 'ITR-3' || itrType === 'ITR3') {
         try {
           const filingId = itrData.filingId || itrData.id;
@@ -59,21 +59,11 @@ class ITRJsonExportService {
           }
         } catch (error) {
           console.warn('Failed to fetch Schedule FA:', error);
-          // Continue without Schedule FA if fetch fails
+          // Continue without Schedule FA if fetch fails (backend will handle)
         }
       }
 
-      // Generate government-compliant JSON structure matching ITD official schema
-      const jsonPayload = this.generateITDCompliantJson(itrData, itrType, assessmentYear, user);
-
-      // Validate against ITD schema before export
-      const validationResult = validateITRJson(jsonPayload, itrType);
-      if (!validationResult.isValid) {
-        const errorMessages = validationResult.errors.map(e => e.message).join('; ');
-        throw new Error(`JSON validation failed: ${errorMessages}`);
-      }
-
-      // Call backend to generate downloadable JSON
+      // Call backend to generate JSON using the new pipeline
       const token = apiClient.getAuthToken();
       if (!token) {
         throw new Error('Authentication token not found. Please log in again.');
@@ -86,35 +76,50 @@ class ITRJsonExportService {
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          itrData: jsonPayload,
+          itrData, // Send formData/sectionSnapshot, not pre-generated JSON
           itrType,
           assessmentYear,
-          userId: user.id,
           exportFormat: 'JSON',
           purpose: 'FILING',
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`Export failed: ${response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Export failed: ${response.statusText}`);
       }
 
       const result = await response.json();
 
-      // Use ITD-compliant JSON for download (already validated)
+      // Fetch the generated JSON from the download URL
+      let jsonPayload = null;
+      if (result.data?.downloadUrl) {
+        try {
+          const downloadResponse = await fetch(result.data.downloadUrl, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+          if (downloadResponse.ok) {
+            jsonPayload = await downloadResponse.json();
+          }
+        } catch (error) {
+          console.warn('Failed to fetch JSON from download URL:', error);
+          // Continue without JSON payload (download URL is still available)
+        }
+      }
+
       return {
         success: true,
-        downloadUrl: result.downloadUrl,
-        jsonPayload: jsonPayload, // Use the validated ITD-compliant JSON
-        fileName: this.generateFileName(itrType, assessmentYear),
+        downloadUrl: result.data?.downloadUrl || null,
+        jsonPayload: jsonPayload, // Generated JSON from backend
+        fileName: result.data?.fileName || this.generateFileName(itrType, assessmentYear),
         metadata: {
+          ...(result.data?.metadata || {}),
           itrType,
           assessmentYear,
           generatedAt: new Date().toISOString(),
-          fileSize: JSON.stringify(jsonPayload).length,
-          checksum: this.generateChecksum(jsonPayload),
           validated: true,
-          validationErrors: [],
         },
       };
 
@@ -385,474 +390,15 @@ class ITRJsonExportService {
   }
 
   /**
-   * Generate ITD-compliant JSON structure
-   * Routes to ITR-specific generation methods based on ITR type
+   * @deprecated JSON generation is now handled by backend API
+   * These methods have been removed. Use exportToJson() which calls /api/itr/export
    */
-  generateITDCompliantJson(itrData, itrType, assessmentYear, user) {
-    const normalizedITRType = this.normalizeITRType(itrType);
-
-    switch (normalizedITRType) {
-      case 'ITR-1':
-      case 'ITR1':
-        return this.generateITR1Json(itrData, assessmentYear, user);
-      case 'ITR-2':
-      case 'ITR2':
-        return this.generateITR2Json(itrData, assessmentYear, user);
-      case 'ITR-3':
-      case 'ITR3':
-        return this.generateITR3Json(itrData, assessmentYear, user);
-      case 'ITR-4':
-      case 'ITR4':
-        return this.generateITR4Json(itrData, assessmentYear, user);
-      default:
-        throw new Error(`Unsupported ITR type: ${itrType}`);
-    }
-  }
 
   /**
-   * Normalize ITR type string
+   * @deprecated Removed - JSON generation now handled by backend API
+   * Use exportToJson() which calls /api/itr/export
+   * All ITR-specific JSON generation methods (generateITR1Json, generateITR2Json, generateITR3Json, generateITR4Json, generateClientJson) have been removed.
    */
-  normalizeITRType(itrType) {
-    if (!itrType) return 'ITR-1';
-    const normalized = itrType.toUpperCase().trim();
-    if (normalized === 'ITR1') return 'ITR-1';
-    if (normalized === 'ITR2') return 'ITR-2';
-    if (normalized === 'ITR3') return 'ITR-3';
-    if (normalized === 'ITR4') return 'ITR-4';
-    return normalized;
-  }
-
-  /**
-   * Generate ITR-1 (Sahaj) JSON - Official ITD Schema Format
-   */
-  generateITR1Json(itrData, assessmentYear, user) {
-    const transformedData = this.transformFormDataToExportFormat(itrData, 'ITR-1');
-    const personalInfo = transformedData.personal || {};
-    const income = transformedData.income || {};
-    const deductions = transformedData.deductions || {};
-    const taxes = transformedData.taxes || {};
-    const tds = transformedData.tds || {};
-    const bank = transformedData.bank || {};
-
-    // Calculate totals
-    const grossSalary = parseFloat(income.salaryIncome || 0);
-    const salary16ia = parseFloat(income.salary16ia || 0); // Standard deduction
-    const professionalTax = parseFloat(income.professionalTax || 0);
-    const netSalary = Math.max(0, grossSalary - salary16ia - professionalTax);
-
-    const incomeFromHP = parseFloat(income.housePropertyIncome || 0);
-    const incFromOthSources = parseFloat(income.otherIncome || 0);
-    const grossTotIncome = grossSalary + incomeFromHP + incFromOthSources;
-
-    const deductUndChapVIA = parseFloat(deductions.section80C || 0) +
-                             parseFloat(deductions.section80D || 0) +
-                             parseFloat(deductions.section80E || 0) +
-                             parseFloat(deductions.section80G || 0) +
-                             parseFloat(deductions.section80TTA || 0);
-    const totalIncome = Math.max(0, grossTotIncome - deductUndChapVIA);
-
-    // Calculate tax payable
-    const taxPayableOnTI = this.calculateTaxPayable(totalIncome);
-
-    // Format name
-    const fullName = personalInfo.firstName && personalInfo.lastName
-      ? `${personalInfo.firstName} ${personalInfo.middleName ? personalInfo.middleName + ' ' : ''}${personalInfo.lastName}`.trim()
-      : user.fullName || user.name || '';
-
-    // Format DOB (ITD expects DD/MM/YYYY)
-    const dob = this.formatDateForITD(personalInfo.dateOfBirth || user.dateOfBirth);
-
-    // Format address
-    const address = personalInfo.address || {};
-
-    return {
-      // eslint-disable-next-line camelcase
-      Form_ITR1: {
-        // eslint-disable-next-line camelcase
-        PartA_GEN1: {
-          PersonalInfo: {
-            PAN: (personalInfo.pan || user.pan || '').toUpperCase(),
-            AssesseeName: fullName,
-            DOB: dob,
-            AadhaarCardNo: personalInfo.aadhaar || user.aadhaarNumber || '',
-          },
-          FilingStatus: {
-            ReturnFileSec: '139(1)', // Regular filing
-            SesTypeReturn: 'ORIGINAL', // Original return
-          },
-          AddressDetails: {
-            FlatDoorBuildingBlockNo: address.flat || address.addressLine1 || '',
-            AreaLocality: address.area || address.addressLine2 || '',
-            CityTownDistrict: address.city || '',
-            StateCode: this.getStateCode(address.state || ''),
-            PinCode: address.pincode || '',
-          },
-        },
-        // eslint-disable-next-line camelcase
-        PartB_TI: {
-          Salaries: {
-            GrossSalary: this.formatAmount(grossSalary),
-            Salary16ia: this.formatAmount(salary16ia),
-            ProfessionalTaxUs16iii: this.formatAmount(professionalTax),
-            NetSalary: this.formatAmount(netSalary),
-          },
-          IncomeFromHP: {
-            AnnualValue: this.formatAmount(incomeFromHP),
-            NetAnnualValue: this.formatAmount(incomeFromHP),
-            DeductionUs24: this.formatAmount(0),
-            IncomeFromHP: this.formatAmount(incomeFromHP),
-          },
-          IncFromOthSources: {
-            InterestIncome: this.formatAmount(incFromOthSources),
-            OtherIncome: this.formatAmount(0),
-            TotalOthSrcInc: this.formatAmount(incFromOthSources),
-          },
-        },
-        // eslint-disable-next-line camelcase
-        PartB_TTI: {
-          GrossTotIncome: this.formatAmount(grossTotIncome),
-          DeductUndChapVIA: this.formatAmount(deductUndChapVIA),
-          TotalIncome: this.formatAmount(totalIncome),
-          TaxPayableOnTI: this.formatAmount(taxPayableOnTI),
-        },
-        PartC: {
-          TaxesPaid: {
-            AdvanceTax: this.formatAmount(taxes.advanceTax || 0),
-            SelfAssessmentTax: this.formatAmount(taxes.selfAssessmentTax || 0),
-            TotalTaxesPaid: this.formatAmount((taxes.advanceTax || 0) + (taxes.selfAssessmentTax || 0)),
-          },
-          TDS: {
-            TotalTDS: this.formatAmount(tds.totalTDS || 0),
-          },
-          BankDetails: {
-            AccountNumber: bank.accountNumber || '',
-            IFSCCode: bank.ifscCode || '',
-            BankName: bank.bankName || '',
-          },
-        },
-        PartD: {
-          RefundOrTaxPayable: {
-            RefundDue: this.formatAmount(Math.max(0, (tds.totalTDS || 0) + (taxes.advanceTax || 0) - taxPayableOnTI)),
-            BalTaxPayable: this.formatAmount(Math.max(0, taxPayableOnTI - (tds.totalTDS || 0) - (taxes.advanceTax || 0))),
-          },
-        },
-        Verification: {
-          Declaration: 'I declare that the information furnished above is true to the best of my knowledge and belief.',
-          Place: address.city || user.address?.city || '',
-          Date: this.formatDateForITD(new Date().toISOString()),
-        },
-      },
-    };
-  }
-
-  /**
-   * Generate ITR-2 JSON - Official ITD Schema Format
-   */
-  generateITR2Json(itrData, assessmentYear, user) {
-    const transformedData = this.transformFormDataToExportFormat(itrData, 'ITR-2');
-    const personalInfo = transformedData.personal || {};
-    const income = transformedData.income || {};
-
-    // Format name and DOB
-    const fullName = personalInfo.firstName && personalInfo.lastName
-      ? `${personalInfo.firstName} ${personalInfo.middleName ? personalInfo.middleName + ' ' : ''}${personalInfo.lastName}`.trim()
-      : user.fullName || user.name || '';
-    const dob = this.formatDateForITD(personalInfo.dateOfBirth || user.dateOfBirth);
-    const address = personalInfo.address || {};
-
-    return {
-      // eslint-disable-next-line camelcase
-      Form_ITR2: {
-        // eslint-disable-next-line camelcase
-        PartA_GEN: {
-          PersonalInfo: {
-            PAN: (personalInfo.pan || user.pan || '').toUpperCase(),
-            AssesseeName: fullName,
-            DOB: dob,
-            AadhaarCardNo: personalInfo.aadhaar || user.aadhaarNumber || '',
-          },
-          FilingStatus: {
-            ReturnFileSec: '139(1)',
-            SesTypeReturn: 'ORIGINAL',
-          },
-          AddressDetails: {
-            FlatDoorBuildingBlockNo: address.flat || address.addressLine1 || '',
-            AreaLocality: address.area || address.addressLine2 || '',
-            CityTownDistrict: address.city || '',
-            StateCode: this.getStateCode(address.state || ''),
-            PinCode: address.pincode || '',
-          },
-        },
-        ScheduleS: {
-          GrossSalary: this.formatAmount(income.salaryIncome || 0),
-          NetSalary: this.formatAmount(income.salaryIncome || 0),
-        },
-        ScheduleHP: this.formatHousePropertySchedule(income.housePropertyDetails || income.houseProperty),
-        ScheduleCG: this.formatCapitalGainsSchedule(income.capitalGainsDetails || income.capitalGains),
-        ScheduleOS: {
-          InterestIncome: this.formatAmount(income.otherIncome || 0),
-          OtherIncome: this.formatAmount(0),
-        },
-        ScheduleVIA: this.formatDeductionsSchedule(transformedData.deductions || {}),
-        // eslint-disable-next-line camelcase
-        PartB_TI: {
-          GrossTotIncome: this.formatAmount(
-            (income.salaryIncome || 0) +
-            (income.housePropertyIncome || 0) +
-            (income.capitalGains || 0) +
-            (income.otherIncome || 0),
-          ),
-        },
-        // eslint-disable-next-line camelcase
-        PartB_TTI: {
-          TotalIncome: this.formatAmount(0), // Will be calculated
-          TaxPayableOnTI: this.formatAmount(0), // Will be calculated
-        },
-        Schedule80G: {
-          Total80G: this.formatAmount(transformedData.deductions?.section80G || 0),
-        },
-        ScheduleTDS1: {
-          TotalTDS: this.formatAmount(transformedData.tds?.totalTDS || 0),
-        },
-        ScheduleTDS2: {},
-        ScheduleIT: {
-          AdvanceTax: this.formatAmount(transformedData.taxes?.advanceTax || 0),
-          SelfAssessmentTax: this.formatAmount(transformedData.taxes?.selfAssessmentTax || 0),
-        },
-        ScheduleAL: {},
-        ScheduleFA: this.formatScheduleFAForExport(itrData.scheduleFA),
-        Verification: {
-          Declaration: 'I declare that the information furnished above is true to the best of my knowledge and belief.',
-          Place: address.city || user.address?.city || '',
-          Date: this.formatDateForITD(new Date().toISOString()),
-        },
-      },
-    };
-  }
-
-  /**
-   * Generate ITR-3 JSON - Official ITD Schema Format
-   */
-  generateITR3Json(itrData, assessmentYear, user) {
-    const transformedData = this.transformFormDataToExportFormat(itrData, 'ITR-3');
-    const personalInfo = transformedData.personal || {};
-
-    const fullName = personalInfo.firstName && personalInfo.lastName
-      ? `${personalInfo.firstName} ${personalInfo.middleName ? personalInfo.middleName + ' ' : ''}${personalInfo.lastName}`.trim()
-      : user.fullName || user.name || '';
-    const dob = this.formatDateForITD(personalInfo.dateOfBirth || user.dateOfBirth);
-    const address = personalInfo.address || {};
-
-    return {
-      // eslint-disable-next-line camelcase
-      Form_ITR3: {
-        // eslint-disable-next-line camelcase
-        PartA_GEN: {
-          PersonalInfo: {
-            PAN: (personalInfo.pan || user.pan || '').toUpperCase(),
-            AssesseeName: fullName,
-            DOB: dob,
-            AadhaarCardNo: personalInfo.aadhaar || user.aadhaarNumber || '',
-          },
-          FilingStatus: {
-            ReturnFileSec: '139(1)',
-            SesTypeReturn: 'ORIGINAL',
-          },
-          AddressDetails: {
-            FlatDoorBuildingBlockNo: address.flat || address.addressLine1 || '',
-            AreaLocality: address.area || address.addressLine2 || '',
-            CityTownDistrict: address.city || '',
-            StateCode: this.getStateCode(address.state || ''),
-            PinCode: address.pincode || '',
-          },
-        },
-        ScheduleS: {
-          GrossSalary: this.formatAmount(transformedData.income?.salaryIncome || 0),
-        },
-        ScheduleHP: this.formatHousePropertySchedule(transformedData.income?.housePropertyDetails),
-        ScheduleBP: this.formatBusinessIncomeSchedule(transformedData.businessIncomeDetails || transformedData.income?.businessIncome),
-        ScheduleCG: this.formatCapitalGainsSchedule(transformedData.income?.capitalGainsDetails),
-        ScheduleOS: {
-          InterestIncome: this.formatAmount(transformedData.income?.otherIncome || 0),
-        },
-        ScheduleVIA: this.formatDeductionsSchedule(transformedData.deductions || {}),
-        ScheduleCYLA: {},
-        ScheduleBFLA: {},
-        // eslint-disable-next-line camelcase
-        PartB_TI: {
-          GrossTotIncome: this.formatAmount(0), // Calculated
-        },
-        // eslint-disable-next-line camelcase
-        PartB_TTI: {
-          TotalIncome: this.formatAmount(0), // Calculated
-          TaxPayableOnTI: this.formatAmount(0), // Calculated
-        },
-        // eslint-disable-next-line camelcase
-        PartA_BS: this.formatBalanceSheet(transformedData.balanceSheetDetails || itrData.balanceSheet),
-        // eslint-disable-next-line camelcase
-        PartA_PL: this.formatProfitLoss(transformedData.balanceSheetDetails || itrData.balanceSheet),
-        Schedule80G: {
-          Total80G: this.formatAmount(transformedData.deductions?.section80G || 0),
-        },
-        ScheduleTDS1: {
-          TotalTDS: this.formatAmount(transformedData.tds?.totalTDS || 0),
-        },
-        ScheduleTDS2: {},
-        ScheduleIT: {
-          AdvanceTax: this.formatAmount(transformedData.taxes?.advanceTax || 0),
-          SelfAssessmentTax: this.formatAmount(transformedData.taxes?.selfAssessmentTax || 0),
-        },
-        ScheduleAL: {},
-        ScheduleFA: this.formatScheduleFAForExport(itrData.scheduleFA),
-        Verification: {
-          Declaration: 'I declare that the information furnished above is true to the best of my knowledge and belief.',
-          Place: address.city || user.address?.city || '',
-          Date: this.formatDateForITD(new Date().toISOString()),
-        },
-      },
-    };
-  }
-
-  /**
-   * Generate ITR-4 (Sugam) JSON - Official ITD Schema Format
-   */
-  generateITR4Json(itrData, assessmentYear, user) {
-    const transformedData = this.transformFormDataToExportFormat(itrData, 'ITR-4');
-    const personalInfo = transformedData.personal || {};
-    const fullName = personalInfo.firstName && personalInfo.lastName
-      ? `${personalInfo.firstName} ${personalInfo.middleName ? personalInfo.middleName + ' ' : ''}${personalInfo.lastName}`.trim()
-      : user.fullName || user.name || '';
-    const dob = this.formatDateForITD(personalInfo.dateOfBirth || user.dateOfBirth);
-    const address = personalInfo.address || {};
-
-    const presumptiveBusiness = transformedData.income?.presumptiveBusinessDetails || transformedData.income?.presumptiveBusiness || {};
-    const presumptiveProfessional = transformedData.income?.presumptiveProfessionalDetails || transformedData.income?.presumptiveProfessional || {};
-
-    return {
-      // eslint-disable-next-line camelcase
-      Form_ITR4: {
-        // eslint-disable-next-line camelcase
-        PartA_GEN1: {
-          PersonalInfo: {
-            PAN: (personalInfo.pan || user.pan || '').toUpperCase(),
-            AssesseeName: fullName,
-            DOB: dob,
-            AadhaarCardNo: personalInfo.aadhaar || user.aadhaarNumber || '',
-          },
-          FilingStatus: {
-            ReturnFileSec: '139(1)',
-            SesTypeReturn: 'ORIGINAL',
-          },
-          AddressDetails: {
-            FlatDoorBuildingBlockNo: address.flat || address.addressLine1 || '',
-            AreaLocality: address.area || address.addressLine2 || '',
-            CityTownDistrict: address.city || '',
-            StateCode: this.getStateCode(address.state || ''),
-            PinCode: address.pincode || '',
-          },
-        },
-        ScheduleBP: {
-          NatOfBus44AD: presumptiveBusiness.hasPresumptiveBusiness ? 'YES' : 'NO',
-          PresumpIncDtls: {
-            TotPresumpBusInc: this.formatAmount(presumptiveBusiness.presumptiveIncome || 0),
-            GrossTurnoverReceipts: this.formatAmount(presumptiveBusiness.grossTurnover || 0),
-          },
-          PresumpProfDtls: presumptiveProfessional.hasPresumptiveProfessional ? {
-            PresumpProfInc: this.formatAmount(presumptiveProfessional.presumptiveIncome || 0),
-            GrossReceipts: this.formatAmount(presumptiveProfessional.grossReceipts || 0),
-          } : {},
-          Section44AE: this.formatSection44AEForExport(itrData.goodsCarriage || itrData.income?.goodsCarriage),
-        },
-        ScheduleVIA: this.formatDeductionsSchedule(transformedData.deductions || {}),
-        // eslint-disable-next-line camelcase
-        PartB_TI: {
-          GrossTotIncome: this.formatAmount(
-            (presumptiveBusiness.presumptiveIncome || 0) +
-            (presumptiveProfessional.presumptiveIncome || 0) +
-            (transformedData.income?.housePropertyIncome || 0) +
-            (transformedData.income?.salaryIncome || 0),
-          ),
-        },
-        // eslint-disable-next-line camelcase
-        PartB_TTI: {
-          TotalIncome: this.formatAmount(0), // Calculated
-          TaxPayableOnTI: this.formatAmount(0), // Calculated
-        },
-        PartC: {
-          TaxesPaid: {
-            AdvanceTax: this.formatAmount(transformedData.taxes?.advanceTax || 0),
-            SelfAssessmentTax: this.formatAmount(transformedData.taxes?.selfAssessmentTax || 0),
-          },
-          TDS: {
-            TotalTDS: this.formatAmount(transformedData.tds?.totalTDS || 0),
-          },
-        },
-        Verification: {
-          Declaration: 'I declare that the information furnished above is true to the best of my knowledge and belief.',
-          Place: address.city || user.address?.city || '',
-          Date: this.formatDateForITD(new Date().toISOString()),
-        },
-      },
-    };
-  }
-
-  /**
-   * Generate client-side JSON for immediate download
-   */
-  generateClientJson(itrData, itrType, assessmentYear, user) {
-    const currentDate = new Date().toISOString();
-    const transformedData = this.transformFormDataToExportFormat(itrData, itrType);
-
-    return {
-      // Metadata
-      'metadata': {
-        'itrType': itrType,
-        'assessmentYear': assessmentYear,
-        'generatedAt': currentDate,
-        'generatedBy': 'BurnBlack ITR Platform',
-        'version': '1.0',
-        'purpose': 'TAX_FILING',
-        'format': 'GOVT_COMPLIANT',
-      },
-
-      // Taxpayer information
-      'taxpayer': {
-        'pan': transformedData.personal?.pan || user.pan || '',
-        'name': `${transformedData.personal?.firstName || user.firstName || ''} ${transformedData.personal?.lastName || user.lastName || ''}`,
-        'email': transformedData.personal?.email || user.email || '',
-        'phone': transformedData.personal?.phone || user.phone || '',
-        'address': transformedData.personal?.address || user.address || {},
-      },
-
-      // Complete form data (transformed)
-      'formData': transformedData,
-
-      // Original form data for reference
-      'originalFormData': itrData,
-
-      // Calculations
-      'calculations': {
-        'grossIncome': this.calculateGrossIncome(itrData),
-        'totalDeductions': this.calculateTotalDeductions(itrData),
-        'taxableIncome': this.calculateTaxableIncome(itrData),
-        'totalTax': this.calculateTotalTax(itrData),
-      },
-
-      // Download information
-      'downloadInfo': {
-        'fileName': this.generateFileName(itrType, assessmentYear),
-        'instructions': [
-          '1. Download this JSON file',
-          '2. Visit Income Tax Department e-filing portal',
-          '3. Go to "Upload Return" section',
-          '4. Select "Upload JSON" option',
-          '5. Upload this JSON file',
-          '6. Verify the data and submit',
-          '7. Download acknowledgement',
-        ],
-      },
-    };
-  }
 
   /**
    * Format date for ITD (DD/MM/YYYY format)

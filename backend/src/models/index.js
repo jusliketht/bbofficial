@@ -22,6 +22,7 @@ const ReturnVersion = require('./ReturnVersion');
 const Consent = require('./Consent');
 const DataSource = require('./DataSource');
 const TaxPayment = require('./TaxPayment');
+const Payment = require('./Payment');
 const ForeignAsset = require('./ForeignAsset');
 const RefundTracking = require('./RefundTracking');
 const ITRVProcessing = require('./ITRVProcessing');
@@ -64,6 +65,7 @@ module.exports = {
   Consent,
   DataSource,
   TaxPayment,
+  Payment,
   ForeignAsset,
   RefundTracking,
   ITRVProcessing,

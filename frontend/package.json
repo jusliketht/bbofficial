@@ -70,6 +70,17 @@
           "react-hooks/rules-of-hooks": "off",
           "react-hooks/exhaustive-deps": "off"
         }
+      },
+      {
+        "files": [
+          "**/*.ts",
+          "**/*.tsx"
+        ],
+        "rules": {
+          "no-undef": "off",
+          "no-unused-vars": "off",
+          "no-redeclare": "off"
+        }
       }
     ],
     "rules": {

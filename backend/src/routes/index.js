@@ -129,7 +129,7 @@ async function initializeRouteDiscovery() {
 
     // Mount the automatically discovered routes
     // Mount at root path since routes already have their paths (e.g., /auth, /health)
-    router.use('/', autoRouter);
+    // router.use('/', autoRouter);
 
     routeDiscoveryInitialized = true;
     enterpriseLogger.info('Automatic route discovery completed successfully');
@@ -146,13 +146,13 @@ async function initializeRouteDiscovery() {
 // Initialize routes when this module is loaded
 // Handle async initialization without blocking
 // Note: Routes will be available after initialization completes
-initializeRouteDiscovery().catch(error => {
-  enterpriseLogger.error('Failed to initialize route discovery during module load', {
-    error: error.message,
-    stack: error.stack,
-  });
-  // Don't crash the app, continue with basic routes
-});
+// initializeRouteDiscovery().catch(error => {
+//   enterpriseLogger.error('Failed to initialize route discovery during module load', {
+//     error: error.message,
+//     stack: error.stack,
+//   });
+//   // Don't crash the app, continue with basic routes
+// });
 
 // Export initialization function for synchronous access if needed
 module.exports.initializeRouteDiscovery = initializeRouteDiscovery;

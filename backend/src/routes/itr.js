@@ -1,3 +1,8 @@
+if (process.env.LEGACY_CONTROLLER_MODE !== 'ENABLED') {
+  module.exports = require('express').Router();
+  return;
+}
+
 // =====================================================
 // ITR ROUTES - CANONICAL FILING SYSTEM
 // Single entry point for all ITR types (ITR1, ITR2, ITR3, ITR4)
@@ -5,7 +10,7 @@
 // =====================================================
 
 const express = require('express');
-const ITRController = require('../controllers/ITRController');
+const ITRController = require('../_legacy/controllers/ITRController');
 const { authenticateToken } = require('../middleware/auth');
 const domainGuard = require('../middleware/domainGuard');
 const { successResponse, errorResponse, notFoundResponse } = require('../utils/responseFormatter');
@@ -1732,51 +1737,7 @@ const taxDemandRoutes = require('./tax-demands');
 router.use('/tax-demands', taxDemandRoutes);
 
 // =====================================================
-// FILING ANALYTICS ROUTES
+// ERROR HANDLING
 // =====================================================
-
-const filingAnalyticsController = require('../controllers/FilingAnalyticsController');
-
-// Get comprehensive filing analytics
-router.get('/analytics', authenticateToken, async (req, res, next) => {
-  await filingAnalyticsController.getAnalytics(req, res, next);
-});
-
-// =====================================================
-// SCENARIO MANAGEMENT ROUTES
-// =====================================================
-
-const scenarioController = require('../controllers/ScenarioController');
-
-// Save a scenario
-router.post('/scenarios', authenticateToken, async (req, res, next) => {
-  await scenarioController.saveScenario(req, res, next);
-});
-
-// Get user scenarios
-router.get('/scenarios', authenticateToken, async (req, res, next) => {
-  await scenarioController.getUserScenarios(req, res, next);
-});
-
-// Get scenario by ID
-router.get('/scenarios/:id', authenticateToken, async (req, res, next) => {
-  await scenarioController.getScenario(req, res, next);
-});
-
-// Update scenario
-router.patch('/scenarios/:id', authenticateToken, async (req, res, next) => {
-  await scenarioController.updateScenario(req, res, next);
-});
-
-// Delete scenario
-router.delete('/scenarios/:id', authenticateToken, async (req, res, next) => {
-  await scenarioController.deleteScenario(req, res, next);
-});
-
-// Resolving CA Requests (User Side)
-const caController = require('../controllers/CAController'); // Reusing controller for logic
-router.post('/filing/:filingId/requests/:requestId/resolve', caController.resolveRequest);
-
-router.post('/filing/:filingId/submit-to-ca', itrController.submitToCA);
 
 module.exports = router;

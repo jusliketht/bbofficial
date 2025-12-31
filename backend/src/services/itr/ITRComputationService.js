@@ -109,98 +109,96 @@ class ITRComputationService {
                 computationResult.confidence = { trustScore: 0, confidenceBand: 'LOW', error: 'Evaluation Failed' };
             }
 
-            computationResult.confidence = { trustScore: 0, confidenceBand: 'LOW', error: 'Evaluation Failed' };
-        }
 
             // V2.3 CA Assist Engine: Determine CA Context
             try {
-            const CAAssistEngine = require('../../intelligence/CAAssistEngine');
+                const CAAssistEngine = require('../../intelligence/CAAssistEngine');
 
-            const caContext = CAAssistEngine.evaluateCAContext({
-                confidence: computationResult.confidence,
-                signals: computationResult.signals || [],
-                itrType,
-                status: row.status
-            });
+                const caContext = CAAssistEngine.evaluateCAContext({
+                    confidence: computationResult.confidence,
+                    signals: computationResult.signals || [],
+                    itrType,
+                    status: row.status
+                });
 
-            // V3.3: Preserve existing CA Requests (Manual override/Feedback loop)
-            // If we recompute, we must not lose the active requests.
-            const existingContext = (draftData.taxComputation || {}).caContext || (row.tax_computation || {}).caContext || {};
-            if (existingContext.requests && Array.isArray(existingContext.requests)) {
-                caContext.requests = existingContext.requests;
+                // V3.3: Preserve existing CA Requests (Manual override/Feedback loop)
+                // If we recompute, we must not lose the active requests.
+                const existingContext = (draftData.taxComputation || {}).caContext || (row.tax_computation || {}).caContext || {};
+                if (existingContext.requests && Array.isArray(existingContext.requests)) {
+                    caContext.requests = existingContext.requests;
+                }
+
+                computationResult.caContext = caContext; // Persist under tax_computation.caContext
+                enterpriseLogger.info('CA Context evaluated', {
+                    eligible: caContext.caAssistEligible,
+                    recommended: caContext.caAssistRecommended,
+                    urgency: caContext.urgency,
+                    filingId
+                });
+
+            } catch (caError) {
+                enterpriseLogger.error('CA Assist Engine failed', { error: caError.message, filingId });
+                computationResult.caContext = null;
             }
 
-            computationResult.caContext = caContext; // Persist under tax_computation.caContext
-            enterpriseLogger.info('CA Context evaluated', {
-                eligible: caContext.caAssistEligible,
-                recommended: caContext.caAssistRecommended,
-                urgency: caContext.urgency,
-                filingId
-            });
+            // 4. Update Filing with Computation Result
+            // Also update status to COMPUTATION_DONE?
+            // Or DOMAIN STATE transition.
 
-        } catch (caError) {
-            enterpriseLogger.error('CA Assist Engine failed', { error: caError.message, filingId });
-            computationResult.caContext = null;
-        }
-
-        // 4. Update Filing with Computation Result
-        // Also update status to COMPUTATION_DONE?
-        // Or DOMAIN STATE transition.
-
-        await sequelize.query(
-            `UPDATE itr_filings 
+            await sequelize.query(
+                `UPDATE itr_filings 
            SET tax_computation = $1, 
                tax_liability = $2, 
                refund_amount = $3,
                updated_at = NOW()
            WHERE id = $4`,
-            {
-                bind: [
-                    JSON.stringify(computationResult),
-                    computationResult.netTaxPayable || 0,
-                    computationResult.refundDue || 0,
-                    filingId
-                ],
-                transaction
+                {
+                    bind: [
+                        JSON.stringify(computationResult),
+                        computationResult.netTaxPayable || 0,
+                        computationResult.refundDue || 0,
+                        filingId
+                    ],
+                    transaction
+                }
+            );
+
+            // 5. Transition State (if needed)
+            // If current state is DRAFT, move to COMPUTATION_DONE
+            // Using DomainCore to manage transition
+            // We do this AFTER DB update to ensure data is there (Invariant check might check it)
+            // But DomainInvariant checks BEFORE? No, validateInvariant checks DB.
+            // So we update DB first, then transition.
+
+            // Determine target state. If already > COMPUTATION_DONE (e.g. VALIDATED), maybe don't downgrade?
+            // Use DomainCore logic? 
+            // For now, straightforward: compute -> COMPUTATION_DONE.
+            // But we shouldn't overwrite VALIDATION_SUCCESS unless validation is invalidated.
+            // DomainCore logic `requiresStateRollback` handles invalidation on data update.
+            // Here we are just computing.
+
+            if (currentState !== 'VALIDATION_SUCCESS' && currentState !== 'COMPUTATION_DONE') {
+                // Attempt transition
+                if (DomainCore.canTransition(currentState, 'COMPUTATION_DONE')) {
+                    await DomainCore.transitionState(filingId, 'COMPUTATION_DONE', { userId });
+                }
             }
-        );
 
-        // 5. Transition State (if needed)
-        // If current state is DRAFT, move to COMPUTATION_DONE
-        // Using DomainCore to manage transition
-        // We do this AFTER DB update to ensure data is there (Invariant check might check it)
-        // But DomainInvariant checks BEFORE? No, validateInvariant checks DB.
-        // So we update DB first, then transition.
+            await transaction.commit();
 
-        // Determine target state. If already > COMPUTATION_DONE (e.g. VALIDATED), maybe don't downgrade?
-        // Use DomainCore logic? 
-        // For now, straightforward: compute -> COMPUTATION_DONE.
-        // But we shouldn't overwrite VALIDATION_SUCCESS unless validation is invalidated.
-        // DomainCore logic `requiresStateRollback` handles invalidation on data update.
-        // Here we are just computing.
+            return {
+                success: true,
+                filingId,
+                computation: computationResult,
+                timestamp: new Date()
+            };
 
-        if (currentState !== 'VALIDATION_SUCCESS' && currentState !== 'COMPUTATION_DONE') {
-            // Attempt transition
-            if (DomainCore.canTransition(currentState, 'COMPUTATION_DONE')) {
-                await DomainCore.transitionState(filingId, 'COMPUTATION_DONE', { userId });
-            }
+        } catch (error) {
+            if (transaction && !transaction.finished) await transaction.rollback();
+            enterpriseLogger.error('Tax computation failed', { error: error.message, draftId });
+            throw error;
         }
-
-        await transaction.commit();
-
-        return {
-            success: true,
-            filingId,
-            computation: computationResult,
-            timestamp: new Date()
-        };
-
-    } catch(error) {
-        if (transaction && !transaction.finished) await transaction.rollback();
-        enterpriseLogger.error('Tax computation failed', { error: error.message, draftId });
-        throw error;
     }
-}
 }
 
 module.exports = new ITRComputationService();

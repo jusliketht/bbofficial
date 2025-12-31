@@ -10,12 +10,18 @@ const morgan = require('morgan');
 const compression = require('compression');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
+console.log('TRACE: session loaded');
 // RedisStore is loaded lazily when Redis is available (see server.js)
 const passport = require('./config/passport');
+console.log('TRACE: passport loaded');
 const enterpriseLogger = require('./utils/logger');
+console.log('TRACE: logger loaded');
 const redisService = require('./services/core/RedisService');
+console.log('TRACE: redis service loaded');
 const routes = require('./routes');
+console.log('TRACE: routes loaded');
 const { globalErrorHandler } = require('./middleware/errorHandler');
+console.log('TRACE: error handler loaded');
 
 // =====================================================
 // EXPRESS APP INITIALIZATION;

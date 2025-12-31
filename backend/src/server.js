@@ -190,6 +190,7 @@ const startServer = async () => {
       }
     });
   } catch (error) {
+    console.error('CRITICAL SERVER STARTUP ERROR:', error);
     enterpriseLogger.error('Failed to start server', {
       error: error.message,
       stack: error.stack,

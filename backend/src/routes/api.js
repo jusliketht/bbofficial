@@ -117,12 +117,6 @@ router.use('/auth', strictLimiter, require('./auth'));
 // ITR routes with general rate limiting
 router.use('/itr', generalLimiter, require('./itr'));
 
-// =====================================================
-// USER ROUTES
-// =====================================================
-
-// User routes with general rate limiting
-router.use('/users', generalLimiter, require('./user'));
 
 // =====================================================
 // MEMBER ROUTES
@@ -145,68 +139,14 @@ router.use('/admin', strictLimiter, require('./admin'));
 // Document management routes
 router.use('/documents', generalLimiter, require('./documents'));
 
-// =====================================================
-// OCR ROUTES
-// =====================================================
 
-// OCR routes for document processing
-router.use('/ocr', generalLimiter, require('./ocr'));
 
-// =====================================================
-// PUBLIC ROUTES
-// =====================================================
 
-// Public routes (stats, testimonials) - no rate limiting for landing page
-router.use('/public', require('./public'));
 
-// =====================================================
-// ANALYTICS ROUTES
-// =====================================================
 
-// Analytics routes (web vitals, performance tracking)
-router.use('/analytics', generalLimiter, require('./analytics'));
 
-// =====================================================
-// HELP ROUTES
-// =====================================================
 
-// Help content routes (public)
-router.use('/help', generalLimiter, require('./help'));
 
-// =====================================================
-// SUPPORT ROUTES
-// =====================================================
-
-// Support ticket routes (authenticated)
-router.use('/support', generalLimiter, require('./support'));
-
-// =====================================================
-// BROKER ROUTES
-// =====================================================
-
-// Broker file processing routes
-router.use('/broker', generalLimiter, require('./broker'));
-
-// =====================================================
-// NOTIFICATION ROUTES
-// =====================================================
-
-// Notification routes
-router.use('/notifications', generalLimiter, require('./notifications'));
-
-// =====================================================
-// CA MARKETPLACE ROUTES
-// =====================================================
-
-// CA marketplace routes (public browsing, authenticated actions)
-router.use('/ca-marketplace', generalLimiter, require('./ca-marketplace'));
-
-// =====================================================
-// FINANCE ROUTES
-// =====================================================
-
-// Finance routes (invoices, payments, reconciliation)
-router.use('/finance', generalLimiter, require('./finance'));
 
 // =====================================================
 // CA WORKSPACE ROUTES (V3)

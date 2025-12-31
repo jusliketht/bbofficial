@@ -1,10 +1,15 @@
+if (process.env.LEGACY_CONTROLLER_MODE !== 'ENABLED') {
+  module.exports = require('express').Router();
+  return;
+}
+
 // =====================================================
 // ADMIN ROUTES
 // =====================================================
 
 const express = require('express');
 const router = express.Router();
-const adminController = require('../controllers/AdminController');
+const adminController = require('../_legacy/controllers/AdminController');
 const adminSettingsController = require('../controllers/AdminSettingsController');
 const adminFinancialRoutes = require('./admin/financial');
 const adminSupportRoutes = require('./admin/support');

@@ -12,7 +12,7 @@ const caController = require('../controllers/CAController');
 // Assuming 'auth' middleware is available globally or we import it.
 // For now, let's just use the controller.
 // We must protect this route.
-const { authenticate } = require('../middleware/cookieAuth'); // Or similar
+const { authenticateWithCookies: authenticate } = require('../middleware/cookieAuth'); // Or similar
 
 // Middleware to check role (Temporary inline or import)
 const checkCARole = (req, res, next) => {
@@ -28,7 +28,6 @@ router.use(checkCARole);
 
 router.get('/inbox', caController.getInbox);
 router.get('/filing/:filingId', caController.getFiling);
-router.post('/filing/:filingId/request-info', caController.requestInfo);
-router.post('/filing/:filingId/submit', caController.submitToITD);
+
 
 module.exports = router;

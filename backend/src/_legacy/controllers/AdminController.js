@@ -1,13 +1,35 @@
+// ⚠️ REQUIRE-TIME LOAD GUARD
+// Prevents legacy controller initialization during route loading
+// Legacy controllers are quarantined and should not execute
+if (process.env.LEGACY_CONTROLLER_MODE !== 'ENABLED') {
+  module.exports = {};
+  return;
+}
+
+/**
+ * ⚠️ LEGACY MONOLITH — DO NOT USE
+ *
+ * This controller is frozen and quarantined.
+ * It is NOT part of the active architecture.
+ *
+ * Replaced by:
+ * - SubmissionStateMachine
+ * - Async Workers
+ * - Domain Services
+ *
+ * Any new logic here is a violation.
+ */
+
 // =====================================================
 // ADMIN CONTROLLER (USER MANAGEMENT)
 // =====================================================
 
-const { User, ServiceTicket, ITRFiling, Document, Invoice, AuditLog, UserSession, PasswordResetToken, CAFirm, CAFirmReview, UserSegment } = require('../models');
+const { User, ServiceTicket, ITRFiling, Document, Invoice, AuditLog, UserSession, PasswordResetToken, CAFirm, CAFirmReview, UserSegment } = require('../../models');
 const { Op, QueryTypes } = require('sequelize');
-const { sequelize } = require('../config/database');
-const enterpriseLogger = require('../utils/logger');
-const { AppError } = require('../middleware/errorHandler');
-const auditService = require('../services/utils/AuditService');
+const { sequelize } = require('../../config/database');
+const enterpriseLogger = require('../../utils/logger');
+const { AppError } = require('../../middleware/errorHandler');
+const auditService = require('../../services/utils/AuditService');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
@@ -3280,7 +3302,7 @@ class AdminController {
 
       // Search by acknowledgment number, PAN, user name, or filing ID
       if (search) {
-        const { User } = require('../models');
+        const { User } = require('../../models');
         const users = await User.findAll({
           where: {
             [Op.or]: [
@@ -4506,7 +4528,7 @@ class AdminController {
 
       // Search by user, document category, or file name
       if (search) {
-        const { User } = require('../models');
+        const { User } = require('../../models');
         const users = await User.findAll({
           where: {
             [Op.or]: [
@@ -4945,7 +4967,7 @@ class AdminController {
    */
   async getDocumentTemplates(req, res, next) {
     try {
-      const { DocumentTemplate } = require('../models');
+      const { DocumentTemplate } = require('../../models');
       const { page = 1, limit = 20, type, isActive } = req.query;
       const offset = (page - 1) * limit;
 
@@ -5002,7 +5024,7 @@ class AdminController {
    */
   async createDocumentTemplate(req, res, next) {
     try {
-      const { DocumentTemplate } = require('../models');
+      const { DocumentTemplate } = require('../../models');
       const { type, name, description, fields, mapping, ocrConfig } = req.body;
       const adminId = req.user.id;
 
@@ -5473,7 +5495,7 @@ class AdminController {
       };
 
       // Load from database settings table
-      const { PlatformSettings } = require('../models');
+      const { PlatformSettings } = require('../../models');
       const dbSettings = await PlatformSettings.getSetting('platform', null);
 
       // Merge default settings with database settings (database takes precedence)
@@ -5544,7 +5566,7 @@ class AdminController {
       }
 
       // Save to database settings table
-      const { PlatformSettings } = require('../models');
+      const { PlatformSettings } = require('../../models');
       await PlatformSettings.setSetting('platform', settings, adminId, 'Platform-wide configuration settings');
 
       // Log audit event
@@ -8058,7 +8080,7 @@ class AdminController {
       // For simplicity, we'll use a groups table via Sequelize or metadata
       // Since we don't have a UserGroup model, we'll use metadata approach
       const { QueryTypes } = require('sequelize');
-      const { sequelize } = require('../config/database');
+      const { sequelize } = require('../../config/database');
 
       // Get all users and extract groups from metadata
       const users = await User.findAll({
@@ -8520,7 +8542,7 @@ class AdminController {
       // For simplicity, we'll use a templates table via Sequelize
       // Since we don't have a UserTemplate model, we'll use a simple approach
       const { QueryTypes } = require('sequelize');
-      const { sequelize } = require('../config/database');
+      const { sequelize } = require('../../config/database');
 
       // Check if templates table exists, if not return empty
       const templates = await sequelize.query(
@@ -8566,7 +8588,7 @@ class AdminController {
       }
 
       const { QueryTypes } = require('sequelize');
-      const { sequelize } = require('../config/database');
+      const { sequelize } = require('../../config/database');
       const uuidv4 = require('uuid').v4;
 
       const templateId = uuidv4();
@@ -8644,7 +8666,7 @@ class AdminController {
     try {
       const { id } = req.params;
       const { QueryTypes } = require('sequelize');
-      const { sequelize } = require('../config/database');
+      const { sequelize } = require('../../config/database');
 
       const templates = await sequelize.query(
         `SELECT * FROM user_templates WHERE id = $1`,
@@ -8690,7 +8712,7 @@ class AdminController {
       const adminId = req.user.id;
 
       const { QueryTypes } = require('sequelize');
-      const { sequelize } = require('../config/database');
+      const { sequelize } = require('../../config/database');
 
       const updateFields = [];
       const bindValues = [id];
@@ -8760,7 +8782,7 @@ class AdminController {
       const adminId = req.user.id;
 
       const { QueryTypes } = require('sequelize');
-      const { sequelize } = require('../config/database');
+      const { sequelize } = require('../../config/database');
 
       await sequelize.query(
         `DELETE FROM user_templates WHERE id = $1`,
@@ -8817,7 +8839,7 @@ class AdminController {
       }
 
       const { QueryTypes } = require('sequelize');
-      const { sequelize } = require('../config/database');
+      const { sequelize } = require('../../config/database');
 
       const templates = await sequelize.query(
         `SELECT * FROM user_templates WHERE id = $1`,
@@ -8890,7 +8912,7 @@ class AdminController {
     try {
       const { metrics, dimensions, filters, aggregation } = req.body;
 
-      const reportBuilderService = require('../services/itr/ReportBuilderService');
+      const reportBuilderService = require('../../services/itr/ReportBuilderService');
       const result = await reportBuilderService.buildCustomReport({
         metrics,
         dimensions,

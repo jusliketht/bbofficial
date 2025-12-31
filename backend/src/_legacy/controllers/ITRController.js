@@ -1,3 +1,22 @@
+if (process.env.LEGACY_CONTROLLER_MODE !== 'ENABLED') {
+  module.exports = {};
+  return;
+}
+
+/**
+ * ⚠️ LEGACY MONOLITH — DO NOT USE
+ *
+ * This controller is frozen and quarantined.
+ * It is NOT part of the active architecture.
+ *
+ * Replaced by:
+ * - SubmissionStateMachine
+ * - Async Workers
+ * - Domain Services
+ *
+ * Any new logic here is a violation.
+ */
+
 // CONTROLLER IS A ROUTER ONLY.
 // ALL BUSINESS LOGIC LIVES IN SERVICES OR DOMAIN CORE.
 // DO NOT ADD LOGIC HERE.
@@ -7,11 +26,11 @@
 // Handles create/validate/submit for all ITR types
 // =====================================================
 
-const { sequelize } = require('../config/database');
+const { sequelize } = require('../../config/database');
 const { QueryTypes } = require('sequelize');
 const { v4: uuidv4 } = require('uuid');
-const { query: dbQuery } = require('../utils/dbQuery');
-const enterpriseLogger = require('../utils/logger');
+const { query: dbQuery } = require('../../utils/dbQuery');
+const enterpriseLogger = require('../../utils/logger');
 const {
   successResponse,
   errorResponse,
@@ -19,35 +38,35 @@ const {
   notFoundResponse,
   unauthorizedResponse,
   paginatedResponse,
-} = require('../utils/responseFormatter');
+} = require('../../utils/responseFormatter');
 const {
   DEFAULT_ASSESSMENT_YEAR,
   getDefaultAssessmentYear,
   isValidAssessmentYear,
-} = require('../constants/assessmentYears');
+} = require('../../constants/assessmentYears');
 const {
   validateITRType,
   validateRequiredFields,
   validatePagination,
-} = require('../utils/validationUtils');
-const validationEngine = require('../services/core/ValidationEngine');
-const taxComputationEngine = require('../services/core/TaxComputationEngine');
-const serviceTicketService = require('../services/common/ServiceTicketService');
-const sseNotificationService = require('../services/utils/NotificationService');
-const taxAuditChecker = require('../services/itr/TaxAuditChecker');
-const eVerificationService = require('../services/eri/EVerificationService');
-const refundTrackingService = require('../services/itr/RefundTrackingService');
-const dataMatchingService = require('../services/itr/DataMatchingService');
-const DiscrepancyResolution = require('../models/DiscrepancyResolution');
-const { ITRFiling } = require('../models');
-const wsManager = require('../services/websocket/WebSocketManager');
+} = require('../../utils/validationUtils');
+// const validationEngine = require('../../services/core/ValidationEngine');
+const taxComputationEngine = require('../../services/core/TaxComputationEngine');
+const serviceTicketService = require('../../services/common/ServiceTicketService');
+const sseNotificationService = require('../../services/utils/NotificationService');
+const taxAuditChecker = require('../../services/itr/TaxAuditChecker');
+const eVerificationService = require('../../services/eri/EVerificationService');
+const refundTrackingService = require('../../services/itr/RefundTrackingService');
+const dataMatchingService = require('../../services/itr/DataMatchingService');
+const DiscrepancyResolution = require('../../models/DiscrepancyResolution');
+const { ITRFiling } = require('../../models');
+const wsManager = require('../../services/websocket/WebSocketManager');
 // New ITR-1 JSON Generation Pipeline
 
 
-const DomainCore = require('../domain/ITRDomainCore');
-const itrDraftService = require('../services/itr/ITRDraftService');
-const itrComputationService = require('../services/itr/ITRComputationService');
-const itrExportService = require('../services/itr/ITRExportService');
+const DomainCore = require('../../domain/ITRDomainCore');
+const itrDraftService = require('../../services/itr/ITRDraftService');
+const itrComputationService = require('../../services/itr/ITRComputationService');
+const itrExportService = require('../../services/itr/ITRExportService');
 
 /**
  * Normalize ITR type string (uppercase, remove dashes/underscores)
@@ -71,7 +90,7 @@ function normalizeItrTypeForValidation(itrType) {
 
 class ITRController {
   constructor() {
-    this.validationEngine = validationEngine;
+    // this.validationEngine = validationEngine;
     this.taxComputationEngine = taxComputationEngine;
   }
 
@@ -136,7 +155,7 @@ class ITRController {
 
   _deductionKeyForSection(section) {
     // Store totals in formData.deductions.section80C, section80D, ...
-    return `section${section}`;
+    return `section${section} `;
   }
 
   _getDeductionLimit(section) {
@@ -291,8 +310,8 @@ class ITRController {
       const list = Array.isArray(formData.deductionsItems[section]) ? formData.deductionsItems[section] : [];
 
       // Extract domain snapshot before mutation
-      const domainCore = require('../domain/ITRDomainCore');
-      const { getCurrentDomainState } = require('../middleware/domainGuard');
+      const domainCore = require('../../domain/ITRDomainCore');
+      const { getCurrentDomainState } = require('../../middleware/domainGuard');
       const prevDomainSnapshot = domainCore.extractDomainSnapshot(formData);
       const currentState = await getCurrentDomainState(filingId);
 
@@ -413,8 +432,8 @@ class ITRController {
       const list = Array.isArray(formData.deductionsItems[section]) ? formData.deductionsItems[section] : [];
 
       // Extract domain snapshot before mutation
-      const domainCore = require('../domain/ITRDomainCore');
-      const { getCurrentDomainState } = require('../middleware/domainGuard');
+      const domainCore = require('../../domain/ITRDomainCore');
+      const { getCurrentDomainState } = require('../../middleware/domainGuard');
       const prevDomainSnapshot = domainCore.extractDomainSnapshot(formData);
       const currentState = await getCurrentDomainState(filingId);
 
@@ -537,8 +556,8 @@ class ITRController {
       const list = Array.isArray(formData.deductionsItems[section]) ? formData.deductionsItems[section] : [];
 
       // Extract domain snapshot before mutation
-      const domainCore = require('../domain/ITRDomainCore');
-      const { getCurrentDomainState } = require('../middleware/domainGuard');
+      const domainCore = require('../../domain/ITRDomainCore');
+      const { getCurrentDomainState } = require('../../middleware/domainGuard');
       const prevDomainSnapshot = domainCore.extractDomainSnapshot(formData);
       const currentState = await getCurrentDomainState(filingId);
 
@@ -637,7 +656,7 @@ class ITRController {
       const { draftId } = req.params;
 
       // Basic existence check
-      const { ITRFiling } = require('../models');
+      const { ITRFiling } = require('../../models');
       const filing = await ITRFiling.findOne({ where: { id: draftId, userId } });
       if (!filing) return notFoundResponse(res, 'Draft');
 
@@ -678,11 +697,11 @@ class ITRController {
       const { verificationMethod, verificationToken } = req.body;
 
       // V4 Async Submission Pipeline
-      const { ITRFiling } = require('../models');
-      const SubmissionStateMachine = require('../domain/SubmissionStateMachine');
-      const STATES = require('../domain/SubmissionStates');
-      const SubmissionWorker = require('../workers/SubmissionWorker');
-      const { sequelize } = require('../config/database');
+      const { ITRFiling } = require('../../models');
+      const SubmissionStateMachine = require('../../domain/SubmissionStateMachine');
+      const STATES = require('../../domain/SubmissionStates');
+      const SubmissionWorker = require('../../workers/SubmissionWorker');
+      const { sequelize } = require('../../config/database');
 
       const result = await sequelize.transaction(async (t) => {
         const filing = await ITRFiling.findOne({
@@ -744,7 +763,7 @@ class ITRController {
         FROM itr_drafts d
         JOIN itr_filings f ON d.filing_id = f.id
         WHERE d.id = $1 AND f.user_id = $2
-      `;
+  `;
 
       const draft = await dbQuery(getDraftQuery, [draftId, userId]);
 
@@ -798,7 +817,7 @@ class ITRController {
         FROM itr_drafts d
         JOIN itr_filings f ON d.filing_id = f.id
         WHERE d.id = $1 AND f.user_id = $2
-      `;
+  `;
 
       const draft = await dbQuery(getDraftQuery, [draftId, userId]);
 
@@ -862,7 +881,7 @@ class ITRController {
         FROM itr_drafts d
         JOIN itr_filings f ON d.filing_id = f.id
         WHERE d.id = $1 AND f.user_id = $2
-      `;
+  `;
 
       const draft = await dbQuery(getDraftQuery, [draftId, userId]);
 
@@ -925,7 +944,7 @@ class ITRController {
         FROM itr_drafts d
         JOIN itr_filings f ON d.filing_id = f.id
         WHERE d.id = $1 AND f.user_id = $2
-      `;
+  `;
 
       const draft = await dbQuery(getDraftQuery, [draftId, userId]);
 
@@ -989,7 +1008,7 @@ class ITRController {
         FROM itr_drafts d
         JOIN itr_filings f ON d.filing_id = f.id
         WHERE d.id = $1 AND f.user_id = $2
-      `;
+  `;
 
       const draft = await dbQuery(getDraftQuery, [draftId, userId]);
 
@@ -1053,7 +1072,7 @@ class ITRController {
         FROM itr_drafts d
         JOIN itr_filings f ON d.filing_id = f.id
         WHERE d.id = $1 AND f.user_id = $2
-      `;
+  `;
 
       const draft = await dbQuery(getDraftQuery, [draftId, userId]);
 
@@ -1114,7 +1133,7 @@ class ITRController {
         FROM itr_drafts d
         JOIN itr_filings f ON d.filing_id = f.id
         WHERE d.id = $1 AND f.user_id = $2
-      `;
+  `;
 
       const draft = await dbQuery(getDraftQuery, [draftId, userId]);
 
@@ -1167,7 +1186,7 @@ class ITRController {
       // Verify filing belongs to user
       const verifyQuery = `
         SELECT id FROM itr_filings WHERE id = $1 AND user_id = $2
-      `;
+  `;
       const verify = await dbQuery(verifyQuery, [filingId, userId]);
 
       if (verify.rows.length === 0) {
@@ -1202,11 +1221,11 @@ class ITRController {
 
       let query = `
         SELECT d.id, d.step, d.is_completed, d.last_saved_at, d.created_at, d.updated_at,
-               f.itr_type, f.status, f.assessment_year, f.id as filing_id
+  f.itr_type, f.status, f.assessment_year, f.id as filing_id
         FROM itr_drafts d
         JOIN itr_filings f ON d.filing_id = f.id
         WHERE f.user_id = $1
-      `;
+  `;
       const params = [userId];
 
       if (status) {
@@ -1223,7 +1242,7 @@ class ITRController {
       const total = parseInt(countResult.rows[0].total, 10);
 
       query += ' ORDER BY d.created_at DESC';
-      query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+      query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2} `;
       params.push(limitNum, offset);
 
       const drafts = await dbQuery(query, params);
@@ -1267,13 +1286,13 @@ class ITRController {
       const offset = (pageNum - 1) * limitNum;
 
       // Get user details for role-based filtering - with eager loading
-      const User = require('../models/User');
+      const User = require('../../models/User');
       const user = await User.findByPk(userId, {
         attributes: ['id', 'role', 'caFirmId'], // Only fetch needed fields
         logging: (msg, timing) => {
           if (timing > 100 || process.env.NODE_ENV === 'development') {
             enterpriseLogger.info('User query executed', {
-              duration: `${timing}ms`,
+              duration: `${timing} ms`,
               userId,
             });
           }
@@ -1287,51 +1306,51 @@ class ITRController {
       if (userRole === 'END_USER') {
         // END_USER: Own filings + invoice status
         query = `
-          SELECT 
-            f.id, f.itr_type, f.status, f.submitted_at, f.assessment_year,
-            f.created_at, f.updated_at, f.paused_at, f.resumed_at,
-            i.id as invoice_id, i.invoice_number, i.status as invoice_status,
-            i.payment_status, i.total_amount as invoice_amount, i.due_date
+SELECT
+f.id, f.itr_type, f.status, f.submitted_at, f.assessment_year,
+  f.created_at, f.updated_at, f.paused_at, f.resumed_at,
+  i.id as invoice_id, i.invoice_number, i.status as invoice_status,
+  i.payment_status, i.total_amount as invoice_amount, i.due_date
           FROM itr_filings f
           LEFT JOIN invoices i ON f.id = i.filing_id
           WHERE f.user_id = $1
-        `;
+  `;
         params = [userId];
       } else if (['CA', 'CA_FIRM_ADMIN', 'PREPARER', 'REVIEWER'].includes(userRole)) {
         // CA/CA_FIRM: Assigned client filings + review status + billing info
         query = `
-          SELECT 
-            f.id, f.itr_type, f.status, f.submitted_at, f.assessment_year,
-            f.created_at, f.updated_at, f.paused_at, f.review_status,
-            f.assigned_to, f.firm_id,
-            u.id as client_id, u.full_name as client_name,
-            u.pan_number as client_pan,
-            assigned_user.full_name as assigned_to_name,
-            i.id as invoice_id, i.invoice_number, i.status as invoice_status,
-            i.payment_status, i.total_amount as invoice_amount
+SELECT
+f.id, f.itr_type, f.status, f.submitted_at, f.assessment_year,
+  f.created_at, f.updated_at, f.paused_at, f.review_status,
+  f.assigned_to, f.firm_id,
+  u.id as client_id, u.full_name as client_name,
+  u.pan_number as client_pan,
+  assigned_user.full_name as assigned_to_name,
+  i.id as invoice_id, i.invoice_number, i.status as invoice_status,
+  i.payment_status, i.total_amount as invoice_amount
           FROM itr_filings f
           LEFT JOIN users u ON f.user_id = u.id
           LEFT JOIN users assigned_user ON f.assigned_to = assigned_user.id
           LEFT JOIN invoices i ON f.id = i.filing_id
-          WHERE (f.firm_id = $1 OR f.assigned_to = $2)
-        `;
+WHERE(f.firm_id = $1 OR f.assigned_to = $2)
+  `;
         params = [user?.caFirmId || userId, userId];
       } else if (['SUPER_ADMIN', 'PLATFORM_ADMIN'].includes(userRole)) {
         // ADMIN: All filings + platform stats + revenue data
         query = `
-          SELECT 
-            f.id, f.itr_type, f.status, f.submitted_at, f.assessment_year,
-            f.created_at,
-            u.id as user_id, u.full_name as user_name, u.email as user_email,
-            firm.id as firm_id, firm.name as firm_name,
-            i.id as invoice_id, i.invoice_number, i.total_amount as invoice_amount,
-            i.status as invoice_status
+SELECT
+f.id, f.itr_type, f.status, f.submitted_at, f.assessment_year,
+  f.created_at,
+  u.id as user_id, u.full_name as user_name, u.email as user_email,
+  firm.id as firm_id, firm.name as firm_name,
+  i.id as invoice_id, i.invoice_number, i.total_amount as invoice_amount,
+  i.status as invoice_status
           FROM itr_filings f
           LEFT JOIN users u ON f.user_id = u.id
           LEFT JOIN ca_firms firm ON f.firm_id = firm.id
           LEFT JOIN invoices i ON f.id = i.filing_id
-          WHERE 1=1
-        `;
+          WHERE 1 = 1
+  `;
         params = [];
       } else {
         // Default: Own filings only
@@ -1339,20 +1358,20 @@ class ITRController {
           SELECT id, itr_type, status, submitted_at, assessment_year, created_at, updated_at
           FROM itr_filings 
           WHERE user_id = $1
-        `;
+  `;
         params = [userId];
       }
 
       if (status) {
         const paramIndex = params.length + 1;
         if (userRole === 'END_USER') {
-          query += ` AND f.status = $${paramIndex}`;
+          query += ` AND f.status = $${paramIndex} `;
         } else if (['CA', 'CA_FIRM_ADMIN', 'PREPARER', 'REVIEWER'].includes(userRole)) {
-          query += ` AND f.status = $${paramIndex}`;
+          query += ` AND f.status = $${paramIndex} `;
         } else if (['SUPER_ADMIN', 'PLATFORM_ADMIN'].includes(userRole)) {
-          query += ` AND f.status = $${paramIndex}`;
+          query += ` AND f.status = $${paramIndex} `;
         } else {
-          query += ` AND status = $${paramIndex}`;
+          query += ` AND status = $${paramIndex} `;
         }
         params.push(status);
       }
@@ -1379,7 +1398,7 @@ class ITRController {
 
       // Add pagination
       const paramIndex = params.length + 1;
-      query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+      query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1} `;
       params.push(limitNum, offset);
 
       const filings = await dbQuery(query, params);
@@ -1482,7 +1501,7 @@ class ITRController {
         SELECT id, user_id, status, json_payload
         FROM itr_filings 
         WHERE id = $1 AND user_id = $2
-      `;
+  `;
 
       const filing = await dbQuery(getFilingQuery, [filingId, userId]);
 
@@ -1495,7 +1514,7 @@ class ITRController {
       // Check if filing can be paused
       if (!['draft'].includes(filingData.status)) {
         return validationErrorResponse(res, {
-          status: `Filing cannot be paused. Current status: ${filingData.status}`,
+          status: `Filing cannot be paused.Current status: ${filingData.status} `,
         });
       }
 
@@ -1514,7 +1533,7 @@ class ITRController {
         SET status = 'paused', paused_at = NOW(), pause_reason = $1, updated_at = NOW()
         WHERE id = $2
         RETURNING id, status, paused_at, pause_reason
-      `;
+  `;
 
       const result = await dbQuery(pauseQuery, [reason || null, filingId]);
 
@@ -1558,7 +1577,7 @@ class ITRController {
         SELECT id, user_id, status, json_payload
         FROM itr_filings 
         WHERE id = $1 AND user_id = $2
-      `;
+  `;
 
       const filing = await dbQuery(getFilingQuery, [filingId, userId]);
 
@@ -1571,7 +1590,7 @@ class ITRController {
       // Check if filing can be resumed
       if (filingData.status !== 'paused') {
         return validationErrorResponse(res, {
-          status: `Filing cannot be resumed. Current status: ${filingData.status}`,
+          status: `Filing cannot be resumed.Current status: ${filingData.status} `,
         });
       }
 
@@ -1581,7 +1600,7 @@ class ITRController {
         SET status = 'draft', resumed_at = NOW(), updated_at = NOW()
         WHERE id = $1
         RETURNING id, status, resumed_at
-      `;
+  `;
 
       const result = await dbQuery(resumeQuery, [filingId]);
 
@@ -1622,7 +1641,7 @@ class ITRController {
       // Verify filing belongs to user
       const verifyQuery = `
         SELECT id FROM itr_filings WHERE id = $1 AND user_id = $2
-      `;
+  `;
       const verify = await dbQuery(verifyQuery, [filingId, userId]);
 
       if (verify.rows.length === 0) {
@@ -1688,7 +1707,7 @@ class ITRController {
       // Verify filing belongs to user
       const verifyQuery = `
         SELECT id FROM itr_filings WHERE id = $1 AND user_id = $2
-      `;
+  `;
       const verify = await dbQuery(verifyQuery, [filingId, userId]);
 
       if (verify.rows.length === 0) {
@@ -1718,7 +1737,7 @@ class ITRController {
       // Verify filing belongs to user
       const verifyQuery = `
         SELECT id FROM itr_filings WHERE id = $1 AND user_id = $2
-      `;
+  `;
       const verify = await dbQuery(verifyQuery, [filingId, userId]);
 
       if (verify.rows.length === 0) {
@@ -1732,7 +1751,7 @@ class ITRController {
 
       // Update status to processing
       const refundStatus = await refundTrackingService.updateRefundStatus(filingId, 'processing', {
-        message: `Refund re-issue requested: ${reason || 'No reason provided'}`,
+        message: `Refund re - issue requested: ${reason || 'No reason provided'} `,
       });
 
       enterpriseLogger.info('Refund re-issue requested', {
@@ -1765,7 +1784,7 @@ class ITRController {
       // Verify filing belongs to user
       const verifyQuery = `
         SELECT id, json_payload FROM itr_filings WHERE id = $1 AND user_id = $2
-      `;
+  `;
       const verify = await dbQuery(verifyQuery, [filingId, userId]);
 
       if (verify.rows.length === 0) {
@@ -1813,7 +1832,7 @@ class ITRController {
       // Verify filing belongs to user
       const verifyQuery = `
         SELECT id FROM itr_filings WHERE id = $1 AND user_id = $2
-      `;
+  `;
       const verify = await dbQuery(verifyQuery, [filingId, userId]);
 
       if (verify.rows.length === 0) {
@@ -1864,7 +1883,7 @@ class ITRController {
       // Verify filing belongs to user
       const verifyQuery = `
         SELECT id FROM itr_filings WHERE id = $1 AND user_id = $2
-      `;
+  `;
       const verify = await dbQuery(verifyQuery, [filingId, userId]);
 
       if (verify.rows.length === 0) {
@@ -1919,7 +1938,7 @@ class ITRController {
       // Verify filing belongs to user
       const verifyQuery = `
         SELECT id, json_payload FROM itr_filings WHERE id = $1 AND user_id = $2
-      `;
+  `;
       const verify = await dbQuery(verifyQuery, [filingId, userId]);
 
       if (verify.rows.length === 0) {
@@ -1958,7 +1977,7 @@ class ITRController {
       // Verify filing belongs to user
       const verifyQuery = `
         SELECT id FROM itr_filings WHERE id = $1 AND user_id = $2
-      `;
+  `;
       const verify = await dbQuery(verifyQuery, [filingId, userId]);
 
       if (verify.rows.length === 0) {
@@ -1992,7 +2011,7 @@ class ITRController {
       const userId = req.targetUserId || req.user.userId;
       const { memberId, currentAssessmentYear } = req.query;
 
-      const previousYearCopyService = require('../services/itr/PreviousYearCopyService');
+      const previousYearCopyService = require('../../services/itr/PreviousYearCopyService');
 
       const previousYears = await previousYearCopyService.getAvailablePreviousYears(
         userId,
@@ -2023,12 +2042,12 @@ class ITRController {
       const userId = req.targetUserId || req.user.userId;
       const { filingId } = req.params;
 
-      const previousYearCopyService = require('../services/itr/PreviousYearCopyService');
+      const previousYearCopyService = require('../../services/itr/PreviousYearCopyService');
 
       // Verify user owns this filing
       const verifyQuery = `
         SELECT user_id FROM itr_filings WHERE id = $1
-      `;
+  `;
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
@@ -2074,7 +2093,7 @@ class ITRController {
       // Verify user owns target filing
       const verifyTargetQuery = `
         SELECT user_id, status FROM itr_filings WHERE id = $1
-      `;
+  `;
       const verifyTargetResult = await dbQuery(verifyTargetQuery, [filingId]);
 
       if (verifyTargetResult.rows.length === 0) {
@@ -2097,7 +2116,7 @@ class ITRController {
       if (sourceFilingId !== 'eri') {
         const verifySourceQuery = `
           SELECT user_id FROM itr_filings WHERE id = $1
-        `;
+  `;
         const verifySourceResult = await dbQuery(verifySourceQuery, [sourceFilingId]);
 
         if (verifySourceResult.rows.length === 0) {
@@ -2109,7 +2128,7 @@ class ITRController {
         }
       }
 
-      const previousYearCopyService = require('../services/itr/PreviousYearCopyService');
+      const previousYearCopyService = require('../../services/itr/PreviousYearCopyService');
 
       const result = await previousYearCopyService.applyCopy(
         filingId,
@@ -2144,12 +2163,12 @@ class ITRController {
       const { filingId } = req.params;
       const challanData = req.body;
 
-      const taxPaymentService = require('../services/business/TaxPaymentService');
+      const taxPaymentService = require('../../services/business/TaxPaymentService');
 
       // Verify user owns this filing
       const verifyQuery = `
         SELECT user_id FROM itr_filings WHERE id = $1
-      `;
+  `;
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
@@ -2187,12 +2206,12 @@ class ITRController {
       const userId = req.targetUserId || req.user.userId;
       const { filingId } = req.params;
 
-      const ForeignAssetsService = require('../services/itr/ForeignAssetsService');
+      const ForeignAssetsService = require('../../services/itr/ForeignAssetsService');
 
       // Verify user owns this filing
       const verifyQuery = `
         SELECT user_id, itr_type FROM itr_filings WHERE id = $1
-      `;
+  `;
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
@@ -2205,10 +2224,10 @@ class ITRController {
 
       // Validate ITR type - Foreign Assets are allowed for ITR-2 and ITR-3 (using Domain Core)
       const itrType = verifyResult.rows[0].itr_type;
-      const domainCore = require('../domain/ITRDomainCore');
+      const domainCore = require('../../domain/ITRDomainCore');
       if (!domainCore.isSectionApplicable(itrType, 'foreignIncome')) {
         return validationErrorResponse(res, {
-          itrType: `Foreign assets are not applicable for ${itrType}. This feature is only available for ITR-2 and ITR-3.`,
+          itrType: `Foreign assets are not applicable for ${itrType}.This feature is only available for ITR - 2 and ITR - 3.`,
         });
       }
 
@@ -2236,12 +2255,12 @@ class ITRController {
       const { filingId } = req.params;
       const assetData = req.body;
 
-      const ForeignAssetsService = require('../services/itr/ForeignAssetsService');
+      const ForeignAssetsService = require('../../services/itr/ForeignAssetsService');
 
       // Verify user owns this filing
       const verifyQuery = `
         SELECT user_id, itr_type FROM itr_filings WHERE id = $1
-      `;
+  `;
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
@@ -2254,10 +2273,10 @@ class ITRController {
 
       // Validate ITR type - Foreign Assets are allowed for ITR-2 and ITR-3 (using Domain Core)
       const itrType = verifyResult.rows[0].itr_type;
-      const domainCore = require('../domain/ITRDomainCore');
+      const domainCore = require('../../domain/ITRDomainCore');
       if (!domainCore.isSectionApplicable(itrType, 'foreignIncome')) {
         return validationErrorResponse(res, {
-          itrType: `Foreign assets are not applicable for ${itrType}. This feature is only available for ITR-2 and ITR-3.`,
+          itrType: `Foreign assets are not applicable for ${itrType}.This feature is only available for ITR - 2 and ITR - 3.`,
         });
       }
 
@@ -2284,12 +2303,12 @@ class ITRController {
       const { filingId, assetId } = req.params;
       const assetData = req.body;
 
-      const ForeignAssetsService = require('../services/itr/ForeignAssetsService');
+      const ForeignAssetsService = require('../../services/itr/ForeignAssetsService');
 
       // Verify user owns this filing
       const verifyQuery = `
         SELECT user_id, itr_type FROM itr_filings WHERE id = $1
-      `;
+  `;
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
@@ -2302,10 +2321,10 @@ class ITRController {
 
       // Validate ITR type - Foreign Assets are allowed for ITR-2 and ITR-3 (using Domain Core)
       const itrType = verifyResult.rows[0].itr_type;
-      const domainCore = require('../domain/ITRDomainCore');
+      const domainCore = require('../../domain/ITRDomainCore');
       if (!domainCore.isSectionApplicable(itrType, 'foreignIncome')) {
         return validationErrorResponse(res, {
-          itrType: `Foreign assets are not applicable for ${itrType}. This feature is only available for ITR-2 and ITR-3.`,
+          itrType: `Foreign assets are not applicable for ${itrType}.This feature is only available for ITR - 2 and ITR - 3.`,
         });
       }
 
@@ -2333,12 +2352,12 @@ class ITRController {
       const userId = req.targetUserId || req.user.userId;
       const { filingId, assetId } = req.params;
 
-      const ForeignAssetsService = require('../services/itr/ForeignAssetsService');
+      const ForeignAssetsService = require('../../services/itr/ForeignAssetsService');
 
       // Verify user owns this filing
       const verifyQuery = `
         SELECT user_id, itr_type FROM itr_filings WHERE id = $1
-      `;
+  `;
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
@@ -2351,10 +2370,10 @@ class ITRController {
 
       // Validate ITR type - Foreign Assets are allowed for ITR-2 and ITR-3 (using Domain Core)
       const itrType = verifyResult.rows[0].itr_type;
-      const domainCore = require('../domain/ITRDomainCore');
+      const domainCore = require('../../domain/ITRDomainCore');
       if (!domainCore.isSectionApplicable(itrType, 'foreignIncome')) {
         return validationErrorResponse(res, {
-          itrType: `Foreign assets are not applicable for ${itrType}. This feature is only available for ITR-2 and ITR-3.`,
+          itrType: `Foreign assets are not applicable for ${itrType}.This feature is only available for ITR - 2 and ITR - 3.`,
         });
       }
 
@@ -2383,12 +2402,12 @@ class ITRController {
       const { filingId, assetId } = req.params;
       const { documentUrl, documentType } = req.body;
 
-      const ForeignAsset = require('../models/ForeignAsset');
+      const ForeignAsset = require('../../models/ForeignAsset');
 
       // Verify user owns this filing
       const verifyQuery = `
         SELECT user_id FROM itr_filings WHERE id = $1
-      `;
+  `;
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
@@ -2444,12 +2463,12 @@ class ITRController {
       const { filingId } = req.params;
       const { scenario, baseFormData } = req.body;
 
-      const TaxSimulationService = require('../services/itr/TaxSimulationService');
+      const TaxSimulationService = require('../../services/itr/TaxSimulationService');
 
       // Verify user owns this filing
       const verifyQuery = `
         SELECT user_id FROM itr_filings WHERE id = $1
-      `;
+  `;
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
@@ -2484,12 +2503,12 @@ class ITRController {
       const { filingId } = req.params;
       const { scenarios } = req.body;
 
-      const TaxSimulationService = require('../services/itr/TaxSimulationService');
+      const TaxSimulationService = require('../../services/itr/TaxSimulationService');
 
       // Verify user owns this filing
       const verifyQuery = `
         SELECT user_id FROM itr_filings WHERE id = $1
-      `;
+  `;
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
@@ -2524,12 +2543,12 @@ class ITRController {
       const { filingId } = req.params;
       const { scenarioId, changes } = req.body;
 
-      const TaxSimulationService = require('../services/itr/TaxSimulationService');
+      const TaxSimulationService = require('../../services/itr/TaxSimulationService');
 
       // Verify user owns this filing
       const verifyQuery = `
         SELECT user_id FROM itr_filings WHERE id = $1
-      `;
+  `;
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
@@ -2563,13 +2582,13 @@ class ITRController {
       const userId = req.targetUserId || req.user.userId;
       const { filingId } = req.params;
 
-      const TaxSimulationService = require('../services/itr/TaxSimulationService');
-      const ITRFiling = require('../models/ITRFiling');
+      const TaxSimulationService = require('../../services/itr/TaxSimulationService');
+      const ITRFiling = require('../../models/ITRFiling');
 
       // Verify user owns this filing
       const verifyQuery = `
         SELECT user_id FROM itr_filings WHERE id = $1
-      `;
+  `;
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
@@ -2612,9 +2631,9 @@ class ITRController {
       const userId = req.targetUserId || req.user.userId;
       const { draftId } = req.params;
 
-      const PDFGenerationService = require('../services/core/PDFGenerationService');
-      const ITRFiling = require('../models/ITRFiling');
-      const Draft = require('../models/Draft');
+      const PDFGenerationService = require('../../services/core/PDFGenerationService');
+      const ITRFiling = require('../../models/ITRFiling');
+      const Draft = require('../../models/Draft');
 
       // Get draft
       const draft = await Draft.findByPk(draftId);
@@ -2634,7 +2653,7 @@ class ITRController {
       // Get tax computation if available
       let taxComputation = null;
       try {
-        const TaxComputationEngine = require('../services/core/TaxComputationEngine');
+        const TaxComputationEngine = require('../../services/core/TaxComputationEngine');
         const filingData = { ...formData, itrType };
         taxComputation = await TaxComputationEngine.computeTax(
           filingData,
@@ -2654,7 +2673,7 @@ class ITRController {
 
       // Set response headers
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="itr-draft-${draftId}.pdf"`);
+      res.setHeader('Content-Disposition', `attachment; filename = "itr-draft-${draftId}.pdf"`);
       res.setHeader('Content-Length', pdfBuffer.length);
 
       res.send(pdfBuffer);
@@ -2678,14 +2697,14 @@ class ITRController {
       const userId = req.targetUserId || req.user.userId;
       const { filingId } = req.params;
 
-      const PDFGenerationService = require('../services/core/PDFGenerationService');
-      const ITRFiling = require('../models/ITRFiling');
-      const TaxComputationEngine = require('../services/core/TaxComputationEngine');
+      const PDFGenerationService = require('../../services/core/PDFGenerationService');
+      const ITRFiling = require('../../models/ITRFiling');
+      const TaxComputationEngine = require('../../services/core/TaxComputationEngine');
 
       // Verify user owns this filing
       const verifyQuery = `
         SELECT user_id FROM itr_filings WHERE id = $1
-      `;
+  `;
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
@@ -2717,7 +2736,7 @@ class ITRController {
 
       // Set response headers
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="tax-computation-${filingId}.pdf"`);
+      res.setHeader('Content-Disposition', `attachment; filename = "tax-computation-${filingId}.pdf"`);
       res.setHeader('Content-Length', pdfBuffer.length);
 
       res.send(pdfBuffer);
@@ -2741,13 +2760,13 @@ class ITRController {
       const userId = req.targetUserId || req.user.userId;
       const { filingId } = req.params;
 
-      const PDFGenerationService = require('../services/core/PDFGenerationService');
-      const DiscrepancyService = require('../services/itr/DiscrepancyService');
+      const PDFGenerationService = require('../../services/core/PDFGenerationService');
+      const DiscrepancyService = require('../../services/itr/DiscrepancyService');
 
       // Verify user owns this filing
       const verifyQuery = `
         SELECT user_id FROM itr_filings WHERE id = $1
-      `;
+  `;
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
@@ -2769,7 +2788,7 @@ class ITRController {
 
       // Set response headers
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="discrepancy-report-${filingId}.pdf"`);
+      res.setHeader('Content-Disposition', `attachment; filename = "discrepancy-report-${filingId}.pdf"`);
       res.setHeader('Content-Length', pdfBuffer.length);
 
       res.send(pdfBuffer);
@@ -2800,13 +2819,13 @@ class ITRController {
         });
       }
 
-      const EmailService = require('../services/integration/EmailService');
-      const DiscrepancyService = require('../services/itr/DiscrepancyService');
+      const EmailService = require('../../services/integration/EmailService');
+      const DiscrepancyService = require('../../services/itr/DiscrepancyService');
 
       // Verify user owns this filing
       const verifyQuery = `
         SELECT user_id FROM itr_filings WHERE id = $1
-      `;
+  `;
       const verifyResult = await dbQuery(verifyQuery, [filingId]);
 
       if (verifyResult.rows.length === 0) {
@@ -2822,7 +2841,7 @@ class ITRController {
       const discrepancyList = discrepancies.discrepancies || [];
 
       // Generate report URL
-      const reportUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/filings/${filingId}/discrepancies`;
+      const reportUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'} /filings/${filingId}/discrepancies`;
 
       // Send email
       await EmailService.sendDiscrepancyReportEmail(email, filingId, discrepancyList, reportUrl);
@@ -2863,8 +2882,8 @@ class ITRController {
         });
       }
 
-      const EmailService = require('../services/integration/EmailService');
-      const User = require('../models/User');
+      const EmailService = require('../../services/integration/EmailService');
+      const User = require('../../models/User');
 
       // Verify user owns this filing
       const verifyQuery = `
@@ -2887,7 +2906,7 @@ class ITRController {
       }
 
       // Generate secure share token
-      const { generateShareToken } = require('../utils/tokenGenerator');
+      const { generateShareToken } = require('../../utils/tokenGenerator');
       const shareToken = generateShareToken(filingId, userId, 168); // 7 days expiration
       const shareLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/filing/${filingId}/review?token=${shareToken}`;
 
@@ -3029,7 +3048,7 @@ class ITRController {
 
       // Validate ITR type - Capital Gains is only allowed for ITR-2 (using Domain Core)
       const itrType = verifyResult.rows[0].itr_type;
-      const domainCore = require('../domain/ITRDomainCore');
+      const domainCore = require('../../domain/ITRDomainCore');
       // Capital gains is part of income section, but only ITR-2 explicitly supports it
       // For now, we check if income section is applicable (ITR-2 has income section)
       // In future, we can add a more specific check for capital gains
@@ -3080,7 +3099,7 @@ class ITRController {
 
       // Validate ITR type - Capital Gains is only allowed for ITR-2 (using Domain Core)
       const itrType = verifyResult.rows[0].itr_type;
-      const domainCore = require('../domain/ITRDomainCore');
+      const domainCore = require('../../domain/ITRDomainCore');
       // Capital gains is part of income section, but only ITR-2 explicitly supports it
       // For now, we check if income section is applicable (ITR-2 has income section)
       // In future, we can add a more specific check for capital gains
@@ -3140,7 +3159,7 @@ class ITRController {
       const filingAssessmentYear = verifyResult.rows[0].assessment_year || assessmentYear;
 
       // Fetch AIS rental income using AIS service
-      const AISService = require('../services/integration/AISService');
+      const AISService = require('../../services/integration/AISService');
       let rentalIncome = [];
       let source = 'manual';
 
@@ -3245,7 +3264,7 @@ class ITRController {
       }
 
       // Process receipts using real OCR service
-      const RentReceiptOCRService = require('../services/business/RentReceiptOCRService');
+      const RentReceiptOCRService = require('../../services/business/RentReceiptOCRService');
       const processedReceipts = [];
 
       for (const receipt of receipts) {
@@ -3389,7 +3408,7 @@ class ITRController {
       const filingAssessmentYear = verifyResult.rows[0].assessment_year || assessmentYear;
 
       // Fetch AIS capital gains using AIS service
-      const AISService = require('../services/integration/AISService');
+      const AISService = require('../../services/integration/AISService');
       let capitalGainsData = { stcgEntries: [], ltcgEntries: [], allGains: [] };
       let source = 'manual';
 
@@ -3520,7 +3539,7 @@ class ITRController {
       const filingAssessmentYear = verifyResult.rows[0].assessment_year || assessmentYear;
 
       // Fetch AIS business income using AIS service
-      const AISService = require('../services/integration/AISService');
+      const AISService = require('../../services/integration/AISService');
       let businessIncome = [];
       let source = 'manual';
 
@@ -3636,7 +3655,7 @@ class ITRController {
       const filingAssessmentYear = verifyResult.rows[0].assessment_year || assessmentYear;
 
       // Fetch AIS professional income using AIS service
-      const AISService = require('../services/integration/AISService');
+      const AISService = require('../../services/integration/AISService');
       let professionalIncome = [];
       let source = 'manual';
 
@@ -3742,7 +3761,7 @@ class ITRController {
 
       // Validate ITR type - Business Income is allowed for ITR-3 and ITR-4
       const itrType = verifyResult.rows[0].itr_type;
-      const domainCore = require('../domain/ITRDomainCore');
+      const domainCore = require('../../domain/ITRDomainCore');
       // Business income is part of 'income' section, but only ITR-3 and ITR-4 support it
       // Check if income section is applicable and ITR type is ITR-3 or ITR-4
       if (!domainCore.isSectionApplicable(itrType, 'income') ||
@@ -3788,7 +3807,7 @@ class ITRController {
 
       // Validate ITR type - Business Income is allowed for ITR-3 and ITR-4
       const itrType = verifyResult.rows[0].itr_type;
-      const domainCore = require('../domain/ITRDomainCore');
+      const domainCore = require('../../domain/ITRDomainCore');
       // Business income is part of 'income' section, but only ITR-3 and ITR-4 support it
       // Check if income section is applicable and ITR type is ITR-3 or ITR-4
       if (!domainCore.isSectionApplicable(itrType, 'income') ||
@@ -3834,7 +3853,7 @@ class ITRController {
 
       // Validate ITR type - Professional Income is only allowed for ITR-3
       const itrType = verifyResult.rows[0].itr_type;
-      const domainCore = require('../domain/ITRDomainCore');
+      const domainCore = require('../../domain/ITRDomainCore');
       // Professional income is part of 'income' section, but only ITR-3 supports it
       if (!domainCore.isSectionApplicable(itrType, 'income') ||
         (itrType !== 'ITR-3' && itrType !== 'ITR3')) {
@@ -3879,7 +3898,7 @@ class ITRController {
 
       // Validate ITR type - Professional Income is only allowed for ITR-3
       const itrType = verifyResult.rows[0].itr_type;
-      const domainCore = require('../domain/ITRDomainCore');
+      const domainCore = require('../../domain/ITRDomainCore');
       // Professional income is part of 'income' section, but only ITR-3 supports it
       if (!domainCore.isSectionApplicable(itrType, 'income') ||
         (itrType !== 'ITR-3' && itrType !== 'ITR3')) {
@@ -3911,7 +3930,7 @@ class ITRController {
       const userId = req.targetUserId || req.user.userId;
       const { filingId } = req.params;
 
-      const BalanceSheetService = require('../services/itr/BalanceSheetService');
+      const BalanceSheetService = require('../../services/itr/BalanceSheetService');
 
       // Verify user owns this filing
       const verifyQuery = `
@@ -3929,7 +3948,7 @@ class ITRController {
 
       // Validate ITR type - Balance Sheet is only allowed for ITR-3
       const itrType = verifyResult.rows[0].itr_type;
-      const domainCore = require('../domain/ITRDomainCore');
+      const domainCore = require('../../domain/ITRDomainCore');
       if (!domainCore.isSectionApplicable(itrType, 'balanceSheet')) {
         return validationErrorResponse(res, {
           itrType: `Balance sheet is not applicable for ${itrType}. This feature is only available for ITR-3.`,
@@ -3959,7 +3978,7 @@ class ITRController {
       const userId = req.targetUserId || req.user.userId;
       const { filingId } = req.params;
 
-      const AuditInformationService = require('../services/itr/AuditInformationService');
+      const AuditInformationService = require('../../services/itr/AuditInformationService');
 
       // Verify user owns this filing
       const verifyQuery = `
@@ -3977,7 +3996,7 @@ class ITRController {
 
       // Validate ITR type - Audit Information is only allowed for ITR-3
       const itrType = verifyResult.rows[0].itr_type;
-      const domainCore = require('../domain/ITRDomainCore');
+      const domainCore = require('../../domain/ITRDomainCore');
       if (!domainCore.isSectionApplicable(itrType, 'auditInfo')) {
         return validationErrorResponse(res, {
           itrType: `Audit information is not applicable for ${itrType}. This feature is only available for ITR-3.`,
@@ -4011,7 +4030,7 @@ class ITRController {
       const { filingId } = req.params;
       const auditData = req.body;
 
-      const AuditInformationService = require('../services/itr/AuditInformationService');
+      const AuditInformationService = require('../../services/itr/AuditInformationService');
 
       // Verify user owns this filing
       const verifyQuery = `
@@ -4029,7 +4048,7 @@ class ITRController {
 
       // Validate ITR type - Audit Information is only allowed for ITR-3
       const itrType = verifyResult.rows[0].itr_type;
-      const domainCore = require('../domain/ITRDomainCore');
+      const domainCore = require('../../domain/ITRDomainCore');
       if (!domainCore.isSectionApplicable(itrType, 'auditInfo')) {
         return validationErrorResponse(res, {
           itrType: `Audit information is not applicable for ${itrType}. This feature is only available for ITR-3.`,
@@ -4061,7 +4080,7 @@ class ITRController {
       const userId = req.targetUserId || req.user.userId;
       const { filingId } = req.params;
 
-      const AuditInformationService = require('../services/itr/AuditInformationService');
+      const AuditInformationService = require('../../services/itr/AuditInformationService');
 
       // Verify user owns this filing
       const verifyQuery = `
@@ -4105,7 +4124,7 @@ class ITRController {
       const { filingId } = req.params;
       const balanceSheetData = req.body;
 
-      const BalanceSheetService = require('../services/itr/BalanceSheetService');
+      const BalanceSheetService = require('../../services/itr/BalanceSheetService');
 
       // Verify user owns this filing
       const verifyQuery = `
@@ -4123,7 +4142,7 @@ class ITRController {
 
       // Validate ITR type - Balance Sheet is only allowed for ITR-3
       const itrType = verifyResult.rows[0].itr_type;
-      const domainCore = require('../domain/ITRDomainCore');
+      const domainCore = require('../../domain/ITRDomainCore');
       if (!domainCore.isSectionApplicable(itrType, 'balanceSheet')) {
         return validationErrorResponse(res, {
           itrType: `Balance sheet is not applicable for ${itrType}. This feature is only available for ITR-3.`,
@@ -4155,7 +4174,7 @@ class ITRController {
       const userId = req.targetUserId || req.user.userId;
       const { filingId } = req.params;
 
-      const PDFGenerationService = require('../services/core/PDFGenerationService');
+      const PDFGenerationService = require('../../services/core/PDFGenerationService');
 
       // Verify user owns this filing
       const verifyQuery = `
@@ -4325,6 +4344,30 @@ class ITRController {
       });
       return errorResponse(res, error, 500);
     }
+  }
+
+  /**
+   * Change ITR type (Stubbed)
+   */
+  async changeITRType(req, res) {
+    const { errorResponse } = require('../../utils/responseFormatter');
+    return errorResponse(res, { message: 'Not implemented' }, 501);
+  }
+
+  /**
+   * Get Financial Blueprint (Stubbed)
+   */
+  async getFinancialBlueprint(req, res) {
+    const { successResponse } = require('../../utils/responseFormatter');
+    return successResponse(res, { blueprint: null }, 'Financial Blueprint (Stub)');
+  }
+
+  /**
+   * Submit to CA (Stubbed)
+   */
+  async submitToCA(req, res) {
+    const { errorResponse } = require('../../utils/responseFormatter');
+    return errorResponse(res, { message: 'Not implemented' }, 501);
   }
 
 }

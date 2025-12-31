@@ -4,7 +4,7 @@
  */
 
 const caInboxService = require('../services/ca/CAInboxService');
-const errorResponse = require('../utils/errorResponse');
+const { errorResponse } = require('../utils/responseFormatter');
 
 exports.getInbox = async (req, res, next) => {
     try {
@@ -38,6 +38,15 @@ exports.getFiling = async (req, res, next) => {
             success: true,
             data: result
         });
+    } catch (error) {
+        next(error);
+    }
+};
+
+exports.resolveRequest = async (req, res, next) => {
+    try {
+        const { errorResponse } = require('../utils/responseFormatter');
+        return errorResponse(res, { message: 'Not implemented' }, 501);
     } catch (error) {
         next(error);
     }

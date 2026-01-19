@@ -1,43 +1,21 @@
 // =====================================================
 // UNIFIED FRONTEND SERVICES EXPORTS
-// All frontend services organized by category
+// Minimal services for User Onboarding and ITR Detection
 // =====================================================
 
 // Core services
 import apiClient from './core/APIClient';
-import cacheService from './core/CacheService';
 import errorHandler from './core/ErrorHandler';
 
 // API services
 import authService from './api/authService';
 import itrService from './api/itrService';
-import documentService from './api/documentService';
-import paymentService from './api/paymentService';
+import itrDeterminationService from './api/itrDeterminationService';
 
-// Utility services
-import validationService from '../utils/validationService';
-import storageService from '../utils/storageService';
-
-// Tax and financial services
-import { itrJsonExportService } from './itrJsonExportService';
-import { form16ExtractionService } from './form16ExtractionService';
-import { bankStatementService } from './bankStatementService';
-import { taxSavingsService } from './taxSavingsService';
-
-// Data integration services
-import { dataIntegrationService } from './DataIntegrationService';
-import { financialProfileService } from './FinancialProfileService';
-import { aisForm26ASService } from './AISForm26ASService';
-import { documentProcessingService } from './DocumentProcessingService';
-import { autoPopulationITRService } from './AutoPopulationITRService';
-
-// Broker integration
-import BrokerAPIService, { createBrokerService } from './BrokerAPIService';
-
-// Specialized services
-import BankAPIService from './BankAPIService';
-import DeductionOCRService from './DeductionOCRService';
-import CABotService from './CABotService';
+// ITR services
+import ITRAutoDetector from './ITRAutoDetector';
+import surepassService from './surepassService';
+import gstinService from './gstinService';
 
 // =====================================================
 // EXPORTS
@@ -46,7 +24,6 @@ import CABotService from './CABotService';
 // Core services
 export {
   apiClient,
-  cacheService,
   errorHandler,
 };
 
@@ -54,90 +31,37 @@ export {
 export {
   authService,
   itrService,
-  documentService,
-  paymentService,
+  itrDeterminationService,
 };
 
-// Utility services
+// ITR services
 export {
-  validationService,
-  storageService,
-  itrJsonExportService,
-  form16ExtractionService,
-  bankStatementService,
-  taxSavingsService,
-};
-
-// Data integration services
-export {
-  dataIntegrationService,
-  financialProfileService,
-  aisForm26ASService,
-  documentProcessingService,
-  autoPopulationITRService,
-};
-
-// Broker integration
-export {
-  BrokerAPIService,
-  createBrokerService,
-};
-
-// Specialized services
-export {
-  BankAPIService,
-  DeductionOCRService,
-  CABotService,
+  ITRAutoDetector,
+  surepassService,
+  gstinService,
 };
 
 // Service categories
 export const core = {
   apiClient,
-  cacheService,
   errorHandler,
 };
 
 export const api = {
   authService,
   itrService,
-  documentService,
-  paymentService,
+  itrDeterminationService,
 };
 
-export const utils = {
-  validationService,
-  storageService,
-  itrJsonExportService,
-  form16ExtractionService,
-  bankStatementService,
-  taxSavingsService,
-};
-
-export const dataIntegration = {
-  dataIntegrationService,
-  financialProfileService,
-  aisForm26ASService,
-  documentProcessingService,
-  autoPopulationITRService,
-};
-
-export const brokerIntegration = {
-  BrokerAPIService,
-  createBrokerService,
-};
-
-export const specialized = {
-  BankAPIService,
-  DeductionOCRService,
-  CABotService,
+export const itr = {
+  ITRAutoDetector,
+  surepassService,
+  gstinService,
 };
 
 // Default export
 export default {
   ...core,
   ...api,
-  ...utils,
-  ...dataIntegration,
-  ...brokerIntegration,
-  ...specialized,
+  ...itr,
 };

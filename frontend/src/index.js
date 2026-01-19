@@ -5,10 +5,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import './index.css';
 import './styles/globals.css'; // Design system global styles
-import { setupGlobalErrorHandler } from './utils/errorHandler';
 import { AuthProvider } from './contexts/AuthContext';
 import App from './App';
-import wsService from './services/websocketService';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -18,9 +16,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-// Initialize WebSocket service with QueryClient for cache invalidation
-wsService.setQueryClient(queryClient);
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
@@ -51,6 +46,3 @@ root.render(
     </BrowserRouter>
   </React.StrictMode>,
 );
-
-// Initialize global error handling
-setupGlobalErrorHandler();

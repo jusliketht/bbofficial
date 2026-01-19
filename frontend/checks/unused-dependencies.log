@@ -1,0 +1,27 @@
+Unused dependencies
+* @tanstack/react-query-devtools
+* ajv
+* autoprefixer
+* postcss
+* socket.io-client
+* styled-components
+* zod
+Unused devDependencies
+* @babel/eslint-parser
+* @babel/preset-react
+* @storybook/addon-a11y
+* @storybook/addon-essentials
+* @storybook/react
+* @testing-library/jest-dom
+* @testing-library/react
+* @testing-library/user-event
+* @types/react-dom
+* eslint-plugin-react
+* eslint-plugin-react-hooks
+* eslint-plugin-unused-imports
+Missing dependencies
+* eslint-config-react-app: ./.eslintrc.js
+* uuid: ./src/pages/Filing/AddCapitalGain.js
+* prop-types: ./src/components/common/ValidatedNumberInput.jsx
+* xlsx: ./src/_deprecated/pages_pre_s28/Admin/AdminAnalytics.js
+* glob: ./scripts/migrate-imports.js

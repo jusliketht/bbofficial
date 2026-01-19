@@ -1,38 +1,42 @@
 import React from 'react';
+import { tokens } from '../../styles/tokens';
 
 /**
- * SectionCard - S29 Pattern
+ * SectionCard - Design System Pattern
  * "One Thought Per Screen" container.
+ * Migrated from S29 to unified design tokens.
  */
 const SectionCard = ({ title, description, children, footer }) => {
     return (
         <div
-            className="s29-section-card"
+            className="section-card"
             style={{
-                backgroundColor: 'var(--s29-bg-card)',
-                borderRadius: 'var(--s29-radius-large)',
-                border: '1px solid var(--s29-border-light)',
-                boxShadow: 'var(--s29-shadow-mild)',
-                padding: '32px',
+                backgroundColor: tokens.colors.neutral.white,
+                borderRadius: tokens.borderRadius.lg,
+                border: `${tokens.borderWidth.thin} solid ${tokens.colors.neutral[200]}`,
+                boxShadow: tokens.shadows.md,
+                padding: tokens.spacing.xl,
                 maxWidth: '600px',
-                margin: '24px auto',
+                margin: `${tokens.spacing.lg} auto`,
                 animation: 'slideUp 250ms ease-out',
             }}
         >
             {title && (
                 <h2 style={{
-                    fontSize: 'var(--s29-font-size-h2)',
-                    marginBottom: description ? '8px' : '24px',
-                    fontWeight: '600',
+                    fontSize: tokens.typography.fontSize['2xl'],
+                    marginBottom: description ? tokens.spacing.sm : tokens.spacing.lg,
+                    fontWeight: tokens.typography.fontWeight.semibold,
+                    color: tokens.colors.neutral[900],
                 }}>
                     {title}
                 </h2>
             )}
             {description && (
                 <p style={{
-                    color: 'var(--s29-text-muted)',
-                    fontSize: 'var(--s29-font-size-body)',
-                    marginBottom: '24px',
+                    color: tokens.colors.neutral[500],
+                    fontSize: tokens.typography.fontSize.base,
+                    marginBottom: tokens.spacing.lg,
+                    lineHeight: tokens.typography.lineHeight.normal,
                 }}>
                     {description}
                 </p>
@@ -42,9 +46,9 @@ const SectionCard = ({ title, description, children, footer }) => {
             </div>
             {footer && (
                 <div style={{
-                    marginTop: '32px',
-                    paddingTop: '24px',
-                    borderTop: '1px solid var(--s29-border-light)',
+                    marginTop: tokens.spacing.xl,
+                    paddingTop: tokens.spacing.lg,
+                    borderTop: `${tokens.borderWidth.thin} solid ${tokens.colors.neutral[200]}`,
                 }}>
                     {footer}
                 </div>

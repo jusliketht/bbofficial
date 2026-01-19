@@ -28,7 +28,7 @@ const itrDeterminationService = {
             console.error('Failed to fetch ITR forms:', error);
             throw error;
         }
-    }
+    },
 };
 
 export default itrDeterminationService;

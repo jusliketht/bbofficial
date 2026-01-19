@@ -1,0 +1,1204 @@
+src/components/index.js:12 - AtomButton
+src/components/index.js:13 - AtomInput
+src/components/index.js:14 - AtomCard
+src/components/index.js:15 - AtomIcon
+src/components/index.js:16 - AtomBadge
+src/components/index.js:19 - FormField
+src/components/index.js:20 - OTPInput
+src/components/index.js:21 - UploadZone
+src/components/index.js:24 - FilingEntrySelector
+src/components/index.js:27 - tokens
+src/components/index.js:30 - AuthLayout
+src/components/index.js:31 - Layout
+src/components/index.js:34 - ErrorBoundary
+src/components/index.js:37 - BreakdownInput
+src/constants/designTokens.js:66 - TYPOGRAPHY (used in module)
+src/constants/designTokens.js:90 - SPACING (used in module)
+src/constants/designTokens.js:119 - ELEVATION (used in module)
+src/constants/designTokens.js:127 - ANIMATIONS (used in module)
+src/constants/designTokens.js:145 - BREATHING_GRID (used in module)
+src/constants/designTokens.js:170 - GRADIENTS (used in module)
+src/constants/designTokens.js:174 - default
+src/constants/index.js:6 - API_ENDPOINTS
+src/constants/index.js:56 - ITR_TYPES
+src/constants/index.js:64 - SECTION_80C_TYPES
+src/constants/index.js:81 - SECTION_80D_TYPES
+src/constants/index.js:89 - INCOME_TYPES
+src/constants/index.js:99 - DOCUMENT_TYPES
+src/constants/index.js:120 - TAX_SLABS
+src/constants/index.js:159 - HTTP_STATUS
+src/constants/index.js:198 - SUCCESS_MESSAGES
+src/constants/navigation.js:5 - ROUTES
+src/constants/navigation.js:29 - FILING_CONTEXT
+src/constants/navigation.js:34 - MEMBER_TYPE
+src/constants/panVerification.js:5 - PAN_STATUS
+src/constants/panVerification.js:11 - PAN_STATUS_MESSAGES
+src/constants/panVerification.js:17 - PAN_FORMAT_REGEX
+src/constants/panVerification.js:19 - PAN_LENGTH
+src/constants/roles.js:27 - ROLE_LABELS (used in module)
+src/constants/roles.js:48 - ROLE_HIERARCHY (used in module)
+src/constants/roles.js:69 - ROLE_DASHBOARD_ROUTES (used in module)
+src/constants/roles.js:115 - ROLE_PERMISSIONS (used in module)
+src/constants/roles.js:258 - hasRole
+src/constants/roles.js:262 - hasPermission
+src/constants/roles.js:266 - hasModulePermission
+src/constants/roles.js:271 - canManageStaff
+src/constants/roles.js:280 - canGrantTemporaryAccess
+src/constants/roles.js:286 - getRoleLabel
+src/constants/roles.js:290 - getDashboardRoute
+src/constants/roles.js:294 - isAdmin (used in module)
+src/constants/roles.js:298 - isCAFirmAdmin
+src/constants/roles.js:302 - isIndependentCA (used in module)
+src/constants/roles.js:306 - isFirmCA (used in module)
+src/constants/roles.js:310 - isCA
+src/constants/roles.js:319 - isEndUser (used in module)
+src/constants/roles.js:323 - getRoleCategory
+src/constants/roles.js:331 - getAvailableRolesForCA
+src/constants/roles.js:351 - default
+src/contexts/AppContext.js:347 - default
+src/contexts/AuthContext.js:255 - default
+src/contexts/index.js:16 - ContextProvider (used in module)
+src/contexts/index.js:35 - AuthProvider (used in module)
+src/contexts/index.js:36 - ITRProvider (used in module)
+src/contexts/index.js:37 - AppProvider (used in module)
+src/contexts/index.js:38 - NotificationProvider (used in module)
+src/contexts/index.js:39 - DocumentProvider (used in module)
+src/contexts/index.js:44 - useAuth
+src/contexts/index.js:46 - useApp
+src/contexts/index.js:47 - useNotificationContext
+src/contexts/index.js:48 - useDocumentContext
+src/contexts/index.js:53 - CONTEXT_TYPES
+src/contexts/index.js:63 - default
+src/contexts/ITRContext.js:254 - default
+src/contexts/NotificationContext.js:303 - default
+src/hocs/withNotifications.js:10 - withNotifications (used in module)
+src/hocs/withNotifications.js:22 - useNotificationContext
+src/hocs/withNotifications.js:24 - default
+src/hooks/index.js:2 - useTaxComputation
+src/hooks/index.js:3 - useErrorRecovery
+src/hooks/index.js:4 - useMemoryOptimization
+src/hooks/index.js:5 - useAutoSave
+src/hooks/index.js:6 - useChatbot
+src/hooks/index.js:7 - useIntakeStore
+src/hooks/index.js:8 - useDashboard
+src/hooks/index.js:9 - useFilingStatistics
+src/hooks/index.js:10 - useFilingList
+src/hooks/index.js:11 - useBulkUpdateFilings
+src/hooks/useAdminDashboardRealtime.js:15 - useAdminDashboardRealtime (used in module)
+src/hooks/useAutoSave.js:338 - AutoSaveIndicator
+src/hooks/useChat.js:8 - useChat (used in module)
+src/hooks/useChat.js:262 - default
+src/hooks/useDataPrefetch.js:374 - default
+src/hooks/useDebounce.js:30 - default
+src/hooks/useErrorRecovery.js:9 - useErrorRecovery (used in module)
+src/hooks/useErrorRecovery.js:141 - useAPIRetry
+src/hooks/useErrorRecovery.js:148 - useFileUploadRetry
+src/hooks/useErrorRecovery.js:155 - useAuthRetry
+src/hooks/useErrorRecovery.js:162 - useCircuitBreakerMonitor
+src/hooks/useMemoryOptimization.js:4 - useMemoryOptimization (used in module)
+src/hooks/useMemoryOptimization.js:31 - useDebounce (used in module)
+src/hooks/useMemoryOptimization.js:48 - MemoizedComponent (used in module)
+src/hooks/useMemoryOptimization.js:53 - useLazyLoad (used in module)
+src/hooks/useMemoryOptimization.js:75 - useMemoryMonitor (used in module)
+src/hooks/useOnboarding.js:3 - useOnboarding
+src/hooks/useRealTimeValidation.js:161 - default
+src/hooks/useTaxComputation.js:7 - useTaxComputation (used in module)
+src/lib/format.js:69 - formatPercentage
+src/lib/format.js:81 - formatIndianDate (used in module)
+src/lib/format.js:125 - formatCompactCurrency
+src/lib/itrSchemaValidator.js:643 - quickValidateITRJson (used in module)
+src/lib/itrSchemaValidator.js:672 - default
+src/lib/motion.js:623 - getVariantWithDelay (used in module)
+src/lib/motion.js:655 - createStaggerContainer (used in module)
+src/lib/motion.js:679 - withReducedMotion (used in module)
+src/lib/motion.js:698 - shouldReduceMotion (used in module)
+src/lib/motion.js:706 - createHoverProps (used in module)
+src/lib/motion.js:29 - easings (used in module)
+src/lib/motion.js:46 - transitions (used in module)
+src/lib/motion.js:80 - microInteractions (used in module)
+src/lib/motion.js:504 - pageTransitions (used in module)
+src/lib/motion.js:525 - slideTransitions
+src/lib/motion.js:729 - default
+src/lib/taxEngine.js:230 - computeTax (used in module)
+src/lib/taxEngine.js:415 - compareRegimes (used in module)
+src/lib/taxEngine.js:444 - formatCurrency (used in module)
+src/lib/taxEngine.js:452 - formatCompactCurrency (used in module)
+src/lib/taxEngine.js:471 - default
+src/lib/tooltip-helpers.js:9 - getFieldHelpText
+src/lib/tooltip-helpers.js:42 - getSectionHelpContent
+src/lib/tooltip-helpers.js:100 - getTaxTermDefinition
+src/lib/tooltip-helpers.js:144 - shouldShowFirstTimeTooltip
+src/lib/tooltip-helpers.js:153 - markFirstTimeTooltipAsSeen
+src/lib/validation-patterns.js:11 - validatePAN
+src/lib/validation-patterns.js:53 - validateAadhaar
+src/lib/validation-patterns.js:82 - validateDateRange
+src/lib/validation-patterns.js:113 - validateAmount
+src/lib/validation-patterns.js:146 - getFormatHint
+src/lib/validation-patterns.js:163 - validateRequired
+src/lib/validation-patterns.js:173 - validateEmail
+src/lib/validation-patterns.js:191 - validatePhone
+src/mocks/prefillData.js:9 - mockPrefillData (used in module)
+src/mocks/prefillData.js:209 - mockTaxCalculation (used in module)
+src/mocks/prefillData.js:243 - mockAISuggestions (used in module)
+src/mocks/prefillData.js:278 - default
+src/pages/FilingDemo.jsx:136 - default
+src/routes/financialStoryRoutes.js:9 - FilingOverview
+src/routes/financialStoryRoutes.js:10 - IncomeStory
+src/routes/financialStoryRoutes.js:11 - TaxBreakdown
+src/routes/financialStoryRoutes.js:12 - FilingReadiness
+src/routes/financialStoryRoutes.js:13 - UserDashboardV2
+src/routes/financialStoryRoutes.js:16 - SalaryDetails
+src/routes/financialStoryRoutes.js:17 - CapitalGainsStory
+src/routes/financialStoryRoutes.js:18 - AddCapitalGain
+src/services/AIRecommendationEngine.js:109 - default
+src/services/auditService.js:187 - auditService
+src/services/AutoPopulationITRService.js:864 - default
+src/services/AutoPopulationService.js:384 - default
+src/services/bankStatementService.js:626 - default
+src/services/BrokerFileProcessor.js:9 - BrokerFileProcessor (used in module)
+src/services/BrokerFileProcessor.js:235 - default
+src/services/dashboardService.js:8 - dashboardService (used in module)
+src/services/DataIntegrationService.js:754 - default
+src/services/DocumentProcessingService.js:841 - default
+src/services/eriService.js:226 - eriService (used in module)
+src/services/eriService.js:227 - default
+src/services/filingService.js:392 - default
+src/services/FinancialProfileService.js:684 - default
+src/services/form16ExtractionService.js:505 - default
+src/services/gstinService.js:28 - getGSTINServiceHealth (used in module)
+src/services/gstinService.js:37 - default
+src/services/index.js:49 - cacheService (used in module)
+src/services/index.js:50 - errorHandler (used in module)
+src/services/index.js:57 - documentService (used in module)
+src/services/index.js:58 - paymentService (used in module)
+src/services/index.js:64 - storageService (used in module)
+src/services/index.js:82 - BrokerAPIService (used in module)
+src/services/index.js:83 - createBrokerService (used in module)
+src/services/index.js:88 - BankAPIService (used in module)
+src/services/index.js:89 - DeductionOCRService (used in module)
+src/services/index.js:90 - CABotService (used in module)
+src/services/index.js:94 - core (used in module)
+src/services/index.js:100 - api (used in module)
+src/services/index.js:107 - utils (used in module)
+src/services/index.js:116 - dataIntegration (used in module)
+src/services/index.js:124 - brokerIntegration (used in module)
+src/services/index.js:129 - specialized (used in module)
+src/services/itrJsonExportService.js:1172 - default
+src/services/newFilingService.js:8 - newFilingService (used in module)
+src/services/permissionEngine.js:449 - default
+src/services/realtimeSync.js:58 - realtimeSyncService (used in module)
+src/services/realtimeSync.js:59 - default
+src/services/surepassService.js:175 - default
+src/services/taxComputation.js:62 - taxComputationService (used in module)
+src/services/taxComputation.js:63 - default
+src/services/userPreferencesService.js:240 - default
+src/services/websocketService.js:395 - useFilingUpdates
+src/services/websocketService.js:419 - useSystemAlerts
+src/services/websocketService.js:436 - useERIUpdates
+src/store/index.js:91 - useFilingListStore (used in module)
+src/store/index.js:187 - useServiceTicketStore (used in module)
+src/store/index.js:279 - useDashboardStore (used in module)
+src/store/index.js:351 - useAppStore (used in module)
+src/store/index.js:416 - queryClient (used in module)
+src/store/index.js:434 - QueryProvider (used in module)
+src/store/index.js:445 - useAuth
+src/store/index.js:463 - useFilingList
+src/store/index.js:486 - useServiceTickets
+src/store/index.js:509 - useDashboard
+src/store/index.js:525 - useApp
+src/store/index.js:547 - useAuthStore (used in module)
+src/store/index.js:561 - default
+src/store/intakeStore.js:97 - useIntakeStore (used in module)
+src/styles/designTokens.js:72 - colors
+src/styles/designTokens.js:94 - breakpoints
+src/styles/designTokens.js:102 - responsive
+src/styles/themes.js:2 - lightTheme (used in module)
+src/styles/themes.js:97 - darkTheme (used in module)
+src/styles/themes.js:120 - getTheme (used in module)
+src/styles/themes.js:124 - getColor (used in module)
+src/styles/themes.js:139 - getSpacing (used in module)
+src/styles/themes.js:143 - getBorderRadius (used in module)
+src/styles/themes.js:147 - getShadow (used in module)
+src/styles/themes.js:151 - getFontSize (used in module)
+src/styles/themes.js:155 - getFontWeight (used in module)
+src/styles/themes.js:159 - getTransition (used in module)
+src/styles/themes.js:163 - getZIndex (used in module)
+src/styles/themes.js:168 - breakpoints (used in module)
+src/styles/themes.js:178 - mediaQueries (used in module)
+src/styles/themes.js:188 - animations (used in module)
+src/styles/themes.js:230 - componentStyles (used in module)
+src/styles/themes.js:317 - default
+src/styles/tokens.js:204 - default
+src/types/filing.ts:78 - isLockedState
+src/types/filing.ts:10 - DomainState (used in module)
+src/types/filing.ts:24 - ITRType (used in module)
+src/types/filing.ts:30 - DomainAction (used in module)
+src/types/filing.ts:61 - FilingUIContext
+src/types/filing.ts:73 - LOCKED_STATES (used in module)
+src/utils/accessibility.js:37 - handleKeyboardNavigation (used in module)
+src/utils/accessibility.js:79 - trapFocus (used in module)
+src/utils/accessibility.js:108 - getFocusableElements (used in module)
+src/utils/accessibility.js:124 - restoreFocus (used in module)
+src/utils/accessibility.js:133 - announceToScreenReader (used in module)
+src/utils/accessibility.js:151 - checkColorContrast (used in module)
+src/utils/accessibility.js:161 - createSkipLink (used in module)
+src/utils/accessibility.js:172 - generateFieldId (used in module)
+src/utils/accessibility.js:179 - isVisibleToScreenReader (used in module)
+src/utils/accessibility.js:194 - default
+src/utils/analyticsEvents.js:17 - getSessionId (used in module)
+src/utils/analyticsEvents.js:29 - getJourneyId (used in module)
+src/utils/analyticsEvents.js:41 - resetJourney
+src/utils/analyticsEvents.js:62 - msSinceJourneyStart (used in module)
+src/utils/apiConfig.js:46 - default
+src/utils/apiRetry.js:17 - fetchWithRetry (used in module)
+src/utils/apiRetry.js:76 - withRetry
+src/utils/apiRetry.js:95 - default
+src/utils/cn.js:109 - default
+src/utils/colorUtils.js:11 - getPrimaryColorClasses (used in module)
+src/utils/colorUtils.js:42 - getSuccessColorClasses (used in module)
+src/utils/colorUtils.js:65 - getErrorColorClasses (used in module)
+src/utils/colorUtils.js:88 - getWarningColorClasses (used in module)
+src/utils/colorUtils.js:111 - getInfoColorClasses (used in module)
+src/utils/colorUtils.js:133 - getGoldColorClasses (used in module)
+src/utils/colorUtils.js:156 - colorMap (used in module)
+src/utils/colorUtils.js:210 - getActivityIconColors (used in module)
+src/utils/colorUtils.js:221 - default (used in module)
+src/utils/errorHandler.js:4 - ERROR_TYPES (used in module)
+src/utils/errorHandler.js:16 - ERROR_SEVERITY (used in module)
+src/utils/errorHandler.js:23 - AppError (used in module)
+src/utils/errorHandler.js:60 - ERROR_MESSAGES (used in module)
+src/utils/errorHandler.js:112 - HTTP_STATUS_MAPPING (used in module)
+src/utils/errorHandler.js:126 - parseError (used in module)
+src/utils/errorHandler.js:163 - getErrorDisplay (used in module)
+src/utils/errorHandler.js:176 - createRetryFunction (used in module)
+src/utils/errorHandler.js:204 - logError (used in module)
+src/utils/errorHandler.js:271 - showErrorToast (used in module)
+src/utils/errorHandler.js:284 - showSuccessToast (used in module)
+src/utils/errorHandler.js:291 - handleFileUploadError (used in module)
+src/utils/errorHandler.js:306 - handleValidationError (used in module)
+src/utils/errorHandler.js:318 - handleApiError (used in module)
+src/utils/errorUtils.js:16 - getErrorMessage (used in module)
+src/utils/errorUtils.js:86 - getErrorCode (used in module)
+src/utils/errorUtils.js:100 - getErrorDetails (used in module)
+src/utils/errorUtils.js:114 - isNetworkError (used in module)
+src/utils/errorUtils.js:121 - isAuthError (used in module)
+src/utils/errorUtils.js:130 - default
+src/utils/filingErrors.js:13 - getActionErrorMessage
+src/utils/filingErrors.js:53 - getUnsupportedStateMessage
+src/utils/index.js:6 - formatIndianCurrency
+src/utils/index.js:6 - formatIndianNumber
+src/utils/index.js:6 - parseIndianNumber
+src/utils/index.js:6 - numberToWords
+src/utils/index.js:9 - storageService
+src/utils/index.js:10 - validationService
+src/utils/index.js:12 - validateNumber
+src/utils/index.js:23 - validateString
+src/utils/index.js:33 - validateArray
+src/utils/index.js:43 - validateObject
+src/utils/index.js:52 - validateDashboardStats
+src/utils/index.js:80 - validateFilings
+src/utils/index.js:100 - validateRefunds
+src/utils/index.js:127 - safeGet
+src/utils/index.js:11 - sanitizeString
+src/utils/index.js:37 - sanitizeEmail
+src/utils/index.js:57 - sanitizePassword
+src/utils/index.js:79 - sanitizePhone
+src/utils/itrDataMigration.js:15 - migrateFormDataStructure
+src/utils/itrDataMigration.js:60 - getBusinessIncome
+src/utils/itrDataMigration.js:70 - getProfessionalIncome
+src/utils/itrDataMigration.js:81 - setBusinessIncome
+src/utils/itrDataMigration.js:99 - setProfessionalIncome
+src/utils/ITRDeterminationRules.js:8 - ITRProfile (used in module)
+src/utils/itrTypeDetector.js:6 - ITR_TYPES (used in module)
+src/utils/itrTypeDetector.js:53 - detectITRType (used in module)
+src/utils/itrTypeDetector.js:124 - willITRTypeChange (used in module)
+src/utils/itrTypeDetector.js:146 - getITRChangeReason (used in module)
+src/utils/itrTypeDetector.js:163 - getAvailableIncomeSources (used in module)
+src/utils/itrTypeDetector.js:171 - isIncomeSourceAvailable (used in module)
+src/utils/itrTypeDetector.js:179 - migrateDataBetweenITRTypes (used in module)
+src/utils/itrTypeDetector.js:224 - getITRDescription (used in module)
+src/utils/itrTypeDetector.js:232 - getITRName (used in module)
+src/utils/itrTypeDetector.js:237 - default
+src/utils/logger.js:43 - default
+src/utils/performance.js:38 - withPerformanceOptimization
+src/utils/performance.js:66 - OptimizedList
+src/utils/performance.js:104 - createLazyComponent (used in module)
+src/utils/performance.js:123 - LazyDashboard
+src/utils/performance.js:128 - LazyITRForm
+src/utils/performance.js:133 - LazyDocuments
+src/utils/performance.js:138 - LazySettings
+src/utils/performance.js:144 - loadRouteComponent
+src/utils/performance.js:149 - useInfiniteScroll
+src/utils/performance.js:172 - useDebounce
+src/utils/performance.js:197 - useVirtualScroll
+src/utils/performance.js:226 - LazyImage (used in module)
+src/utils/performance.js:294 - useRenderCount
+src/utils/performance.js:303 - useMemoizedFetch
+src/utils/performance.js:338 - useBundleSizeMonitor
+src/utils/performanceMonitor.js:17 - mark (used in module)
+src/utils/performanceMonitor.js:27 - measure (used in module)
+src/utils/performanceMonitor.js:46 - getMarks (used in module)
+src/utils/performanceMonitor.js:53 - getMeasures (used in module)
+src/utils/performanceMonitor.js:60 - getNavigationTiming (used in module)
+src/utils/performanceMonitor.js:85 - getResourceTiming (used in module)
+src/utils/performanceMonitor.js:102 - getLCP (used in module)
+src/utils/performanceMonitor.js:128 - getFID (used in module)
+src/utils/performanceMonitor.js:155 - getCLS (used in module)
+src/utils/performanceMonitor.js:250 - default
+src/utils/responsive.js:12 - BREAKPOINTS (used in module)
+src/utils/responsive.js:61 - isMobile (used in module)
+src/utils/responsive.js:70 - isTablet (used in module)
+src/utils/responsive.js:80 - isDesktop (used in module)
+src/utils/responsive.js:90 - getResponsiveValue
+src/utils/responsive.js:108 - useResponsiveValue
+src/utils/submissionGate.js:12 - canSubmitFiling
+src/utils/validation.js:6 - VALIDATION_RULES (used in module)
+src/utils/validation.js:182 - ValidationEngine (used in module)
+src/utils/validation.js:438 - useValidation
+src/utils/validation.js:534 - formatValidationMessage
+src/utils/validation.js:542 - getValidationIcon
+src/utils/validation.js:553 - isValidPAN
+src/utils/validation.js:557 - isValidAadhaar
+src/utils/validation.js:561 - isValidMobile
+src/utils/validation.js:566 - validationEngine
+src/utils/validationRules.js:99 - validatePAN
+src/utils/validationRules.js:178 - calculateIndexedCost
+src/utils/validationRules.js:188 - validateSection80C
+src/utils/validationRules.js:205 - validateSection80D
+src/utils/validationRules.js:264 - validateCashTransaction
+src/utils/validationRules.js:275 - default
+src/utils/validators.js:11 - fieldValidators (used in module)
+src/utils/validators.js:82 - sectionValidators (used in module)
+src/utils/validators.js:188 - formValidators (used in module)
+src/utils/validators.js:267 - validationHelpers (used in module)
+src/utils/validators.js:326 - default
+src/utils/webVitals.js:70 - getPerformanceBudgets (used in module)
+src/utils/webVitals.js:82 - checkPerformanceBudget (used in module)
+src/utils/webVitals.js:96 - getPerformanceScore (used in module)
+src/utils/webVitals.js:122 - default
+src/__tests__/validation/validationScript.js:213 - validateArchitectureImplementation (used in module)
+src/_deprecated/pages_pre_s28/Acknowledgment.js:388 - default
+src/_deprecated/pages_pre_s28/HomeRedirect.js:67 - default
+src/components/Admin/AdminNavigation.js:157 - default
+src/components/Admin/AdminRoute.js:64 - default
+src/components/auth/AuthLayout.js:54 - default
+src/components/CABot/CABot.tsx:593 - default
+src/components/common/Button.js:154 - PrimaryButton
+src/components/common/Button.js:155 - SecondaryButton
+src/components/common/Button.js:156 - SuccessButton
+src/components/common/Button.js:157 - DangerButton
+src/components/common/Button.js:158 - WarningButton
+src/components/common/Button.js:159 - InfoButton
+src/components/common/Button.js:160 - OutlineButton
+src/components/common/Button.js:161 - GhostButton
+src/components/common/Button.js:162 - LinkButton
+src/components/common/Button.js:165 - SmallButton
+src/components/common/Button.js:166 - MediumButton
+src/components/common/Button.js:167 - LargeButton
+src/components/common/Button.js:168 - XLargeButton
+src/components/common/Button.js:171 - IconButton
+src/components/common/Button.js:178 - LoadingButton
+src/components/common/Button.js:185 - FullWidthButton
+src/components/common/Button.js:187 - default
+src/components/common/Card.js:103 - CardHeader (used in module)
+src/components/common/Card.js:116 - CardBody (used in module)
+src/components/common/Card.js:129 - CardFooter
+src/components/common/Card.js:142 - CardTitle (used in module)
+src/components/common/Card.js:157 - CardSubtitle (used in module)
+src/components/common/Card.js:170 - CardText
+src/components/common/Card.js:183 - CardImage
+src/components/common/Card.js:200 - CardActions
+src/components/common/Card.js:215 - PrimaryCard
+src/components/common/Card.js:216 - SuccessCard
+src/components/common/Card.js:217 - DangerCard
+src/components/common/Card.js:218 - WarningCard
+src/components/common/Card.js:219 - InfoCard
+src/components/common/Card.js:220 - OutlineCard
+src/components/common/Card.js:221 - GhostCard
+src/components/common/Card.js:224 - SmallCard
+src/components/common/Card.js:225 - MediumCard
+src/components/common/Card.js:226 - LargeCard
+src/components/common/Card.js:227 - XLargeCard
+src/components/common/Card.js:230 - HoverCard
+src/components/common/Card.js:233 - ClickableCard
+src/components/common/Card.js:236 - StatCard
+src/components/common/InlineHint.js:26 - default
+src/components/common/Modal.js:137 - ModalFooter (used in module)
+src/components/common/Modal.js:163 - ModalSubtitle
+src/components/common/Modal.js:176 - ModalActions (used in module)
+src/components/common/Modal.js:191 - PrimaryModal
+src/components/common/Modal.js:192 - SuccessModal
+src/components/common/Modal.js:193 - DangerModal
+src/components/common/Modal.js:194 - WarningModal
+src/components/common/Modal.js:195 - InfoModal
+src/components/common/Modal.js:198 - SmallModal
+src/components/common/Modal.js:199 - MediumModal
+src/components/common/Modal.js:200 - LargeModal
+src/components/common/Modal.js:201 - XLargeModal
+src/components/common/Modal.js:202 - FullScreenModal
+src/components/common/Modal.js:205 - ConfirmationModal
+src/components/common/Modal.js:250 - AlertModal
+src/components/common/Tooltip.js:222 - TopTooltip
+src/components/common/Tooltip.js:223 - BottomTooltip
+src/components/common/Tooltip.js:224 - LeftTooltip
+src/components/common/Tooltip.js:225 - RightTooltip
+src/components/common/Tooltip.js:228 - HoverTooltip
+src/components/common/Tooltip.js:229 - FocusTooltip
+src/components/common/Tooltip.js:230 - ClickTooltip
+src/components/common/Tooltip.js:231 - HoverFocusTooltip
+src/components/common/Tooltip.js:234 - DelayedTooltip
+src/components/common/Tooltip.js:239 - InfoTooltip
+src/components/common/Tooltip.js:246 - HelpTooltip
+src/components/common/Tooltip.js:253 - WarningTooltip
+src/components/common/Tooltip.js:260 - ErrorTooltip
+src/components/common/Tooltip.js:267 - SuccessTooltip
+src/components/Dashboard/ActiveFilingCard.js:131 - default
+src/components/Dashboard/ChartComponents.js:72 - LineChartComponent (used in module)
+src/components/Dashboard/ChartComponents.js:117 - AreaChartComponent (used in module)
+src/components/Dashboard/ChartComponents.js:162 - BarChartComponent (used in module)
+src/components/Dashboard/ChartComponents.js:204 - PieChartComponent (used in module)
+src/components/Dashboard/ChartComponents.js:245 - MultiLineChartComponent (used in module)
+src/components/Dashboard/ChartComponents.js:292 - ProgressChartComponent (used in module)
+src/components/Dashboard/ChartComponents.js:319 - MetricCard (used in module)
+src/components/Dashboard/ChartComponents.js:370 - COLORS (used in module)
+src/components/Dashboard/ChartComponents.js:371 - CHART_COLORS (used in module)
+src/components/Dashboard/ChartComponents.js:374 - default
+src/components/Dashboard/DashboardKPI.jsx:41 - default
+src/components/Dashboard/DashboardWidgets.js:85 - default
+src/components/Dashboard/DataIntegrationDashboard.js:595 - default
+src/components/Dashboard/DetailedStoryModal.js:152 - default
+src/components/Dashboard/EnhancedDashboard.js:285 - default
+src/components/Dashboard/FilingLaunchpad.js:77 - default
+src/components/Dashboard/FilingStatusTracker.js:151 - default
+src/components/Dashboard/FinancialStoryChart.jsx:89 - default
+src/components/Dashboard/FinancialStoryHero.js:65 - default
+src/components/Dashboard/MiniTimeline.js:83 - default
+src/components/Dashboard/QuickActionCard.js:102 - default
+src/components/Dashboard/StatsWidget.js:29 - default
+src/components/DesignSystem/Animations.js:8 - default
+src/components/DesignSystem/DesignSystem.js:8 - Button (used in module)
+src/components/DesignSystem/DesignSystem.js:9 - Input (used in module)
+src/components/DesignSystem/DesignSystem.js:11 - Badge (used in module)
+src/components/DesignSystem/DesignSystem.js:25 - CardFooter (used in module)
+src/components/DesignSystem/DesignSystem.js:41 - LoadingState
+src/components/DesignSystem/DesignSystem.js:42 - InlineLoader
+src/components/DesignSystem/DesignSystem.js:44 - default
+src/components/DesignSystem/EnterpriseComponents.js:4 - EnterpriseTable (used in module)
+src/components/DesignSystem/EnterpriseComponents.js:6 - default
+src/components/DesignSystem/index.js:6 - Badge
+src/components/DesignSystem/index.js:11 - CardHeader
+src/components/DesignSystem/index.js:12 - CardTitle
+src/components/DesignSystem/index.js:13 - CardContent
+src/components/DesignSystem/index.js:14 - CardFooter
+src/components/DesignSystem/index.js:15 - Typography
+src/components/DesignSystem/index.js:16 - LoadingSpinner
+src/components/DesignSystem/index.js:17 - Skeleton
+src/components/DesignSystem/index.js:18 - Modal
+src/components/DesignSystem/index.js:19 - SecurityBadge
+src/components/DesignSystem/index.js:20 - TrustIndicator
+src/components/DesignSystem/index.js:22 - DeadlineCountdown
+src/components/DesignSystem/index.js:23 - RefundEstimator
+src/components/DesignSystem/index.js:24 - SocialProof
+src/components/DesignSystem/index.js:25 - MicroCelebration
+src/components/DesignSystem/index.js:26 - SuccessCelebration
+src/components/DesignSystem/index.js:27 - EmotionalStateIndicator
+src/components/DesignSystem/index.js:32 - DESIGN_TOKENS
+src/components/DesignSystem/index.js:33 - COLORS
+src/components/DesignSystem/index.js:34 - TYPOGRAPHY
+src/components/DesignSystem/index.js:35 - SPACING
+src/components/DesignSystem/index.js:36 - ANIMATIONS
+src/components/DesignSystem/Skeleton.js:6 - default
+src/components/Discrepancy/DiscrepancyHandlingPattern.jsx:228 - default
+src/components/Documents/DocumentUpload.js:205 - default
+src/components/Filing/StartFilingModal.jsx:446 - default
+src/components/Finance/FinancePanel.js:162 - default
+src/components/Forms/index.js:661 - ITRSelection (used in module)
+src/components/Forms/index.js:662 - SmartPrompt (used in module)
+src/components/Forms/index.js:663 - ITRSelectionCard (used in module)
+src/components/Forms/index.js:664 - StepIndicator (used in module)
+src/components/Forms/index.js:665 - DynamicFormField (used in module)
+src/components/Forms/index.js:666 - IncomeSourceCard (used in module)
+src/components/Forms/index.js:667 - TaxSummaryCard (used in module)
+src/components/Forms/index.js:668 - MobileSummaryDashboard (used in module)
+src/components/Forms/index.js:669 - MobileNavigation (used in module)
+src/components/Forms/index.js:670 - SmartPromptingEngine (used in module)
+src/components/Forms/PersonalInfoForm.js:626 - default
+src/components/Forms/ValidatedNumberInput.js:347 - default
+src/components/Forms/ValidatedSelect.js:348 - default
+src/components/ITR/AddSourcePattern.js:227 - default
+src/components/ITR/AICopilot.js:392 - default
+src/components/ITR/AISuggestionChip.js:110 - default
+src/components/ITR/AutoPopulationProgress.js:99 - default
+src/components/ITR/BelatedReturnIndicator.js:64 - default
+src/components/ITR/ComplianceAlerts.js:101 - default
+src/components/ITR/ComputationSheet.js:463 - default
+src/components/ITR/DataSourceSelector.js:64 - default
+src/components/ITR/DeductionsTable.js:83 - default
+src/components/ITR/EducationRail.js:136 - InlineEducation
+src/components/ITR/EducationRail.js:175 - default
+src/components/ITR/EVerificationModal.js:313 - default
+src/components/ITR/FieldVerificationStatus.js:45 - default
+src/components/ITR/FilingHeader.js:201 - default
+src/components/ITR/FilingPersonSelector.js:621 - default
+src/components/ITR/FinalActions.js:341 - default
+src/components/ITR/FinancialBlueprintOverview.js:292 - default
+src/components/ITR/FinancialBlueprintSection.js:260 - default
+src/components/ITR/FinancialYearEvents.js:133 - default
+src/components/ITR/FinancialYearSummary.js:117 - default
+src/components/ITR/FinancialYearTimeline.js:245 - default
+src/components/ITR/IncomeForm.js:588 - default
+src/components/ITR/index.js:8 - ITRFormRenderer (used in module)
+src/components/ITR/index.js:9 - ITRValidationEngine (used in module)
+src/components/ITR/index.js:10 - ITRComputationEngine (used in module)
+src/components/ITR/index.js:13 - ITR1_CONFIG (used in module)
+src/components/ITR/index.js:22 - EnhancedITRForm (used in module)
+src/components/ITR/index.js:24 - default (used in module)
+src/components/ITR/ITRComputationContent.js:256 - default
+src/components/ITR/ITRComputationHeader.js:246 - default
+src/components/ITR/ITRFormRecommender.js:345 - default
+src/components/ITR/ITRFormSelector.js:244 - default
+src/components/ITR/ITRTypeDetector.js:339 - default
+src/components/ITR/LiveComputation.js:306 - default
+src/components/ITR/LiveTaxSummary.js:195 - default
+src/components/ITR/PersonalInfoForm.js:682 - default (used in module)
+src/components/ITR/RefundHistoryTable.js:169 - default
+src/components/ITR/RefundStatusCard.js:171 - default
+src/components/ITR/ResumeFilingModal.js:118 - default
+src/components/ITR/ReviewForm.js:310 - default
+src/components/ITR/ReviewValidation.js:489 - default
+src/components/ITR/SectionCard.js:435 - default
+src/components/ITR/SubmitToCAModal.jsx:63 - default
+src/components/ITR/TabularIncomeDisplay.js:112 - default
+src/components/ITR/TaxCalculationDisplay.js:144 - default
+src/components/ITR/TaxComputationBar.js:595 - default
+src/components/ITR/TaxCreditSection.js:104 - default
+src/components/ITR/TaxOpportunitiesCard.js:102 - default
+src/components/ITR/TaxRegimeToggle.js:111 - default
+src/components/ITR/TaxSummaryPanel.js:361 - default
+src/components/ITR/ValidationMessages.js:72 - default
+src/components/ITR/ValidationSummary.js:184 - default
+src/components/ITR/VisualLimitGauge.js:141 - default
+src/components/ITR/YearSelector.js:135 - default
+src/components/Layout/index.js:3 - AppShell (used in module)
+src/components/Layout/index.js:4 - PageContainer
+src/components/Layout/index.js:5 - PageHeader
+src/components/Layout/index.js:7 - Sidebar
+src/components/Layout/index.js:8 - Header
+src/components/Layout/index.js:9 - Footer
+src/components/Layout/JourneyCompletion.jsx:738 - default
+src/components/Layout/OnboardingWizard.js:471 - default
+src/components/molecules/FinancialYearSelector.js:74 - FINANCIAL_YEARS (used in module)
+src/components/molecules/IncomeSourceCard.js:76 - default
+src/components/Notifications/NotificationBadge.jsx:41 - default
+src/components/Payment/PaymentModal.js:551 - default
+src/components/Performance/OptimizedComponent.jsx:80 - default
+src/components/Staff/PermissionCustomizer.js:666 - default
+src/components/templates/index.js:12 - AuthLayout (used in module)
+src/components/UI/Alert.js:99 - default
+src/components/UI/dialog.js:4 - Dialog
+src/components/UI/dialog.js:13 - DialogTrigger
+src/components/UI/dialog.js:19 - DialogContent
+src/components/UI/dialog.js:25 - DialogHeader
+src/components/UI/dialog.js:31 - DialogTitle
+src/components/UI/index.js:1 - CardBody
+src/components/UI/index.js:4 - Heading1
+src/components/UI/index.js:5 - Heading2
+src/components/UI/index.js:6 - Heading3
+src/components/UI/index.js:7 - Heading4
+src/components/UI/index.js:8 - Body
+src/components/UI/index.js:9 - BodyLarge
+src/components/UI/index.js:10 - BodySmall
+src/components/UI/index.js:11 - Label
+src/components/UI/index.js:12 - Amount
+src/components/UI/index.js:16 - UIButton
+src/components/UI/index.js:17 - UICard
+src/components/UI/input.js:41 - default
+src/components/UI/InteractiveCard.js:289 - default
+src/components/UI/label.js:14 - default
+src/components/UI/Modal.js:106 - default
+src/components/UI/progress.js:172 - default
+src/components/UI/ProgressBar.js:210 - default
+src/components/UI/ProgressIndicator.js:29 - default
+src/components/UI/select.js:14 - default
+src/components/UI/table.js:4 - Table
+src/components/UI/table.js:12 - TableHeader
+src/components/UI/table.js:18 - TableBody
+src/components/UI/table.js:24 - TableRow
+src/components/UI/table.js:30 - TableHead
+src/components/UI/table.js:36 - TableCell
+src/components/UI/tabs.js:4 - Tabs
+src/components/UI/tabs.js:10 - TabsList
+src/components/UI/tabs.js:16 - TabsTrigger
+src/components/UI/tabs.js:25 - TabsContent
+src/components/UI/TextInput.js:38 - default
+src/components/UI/WelcomeModal.js:141 - default
+src/features/bank-details/index.js:12 - bankDetailsService
+src/features/bank-details/index.js:22 - useBankDetails
+src/features/bank-details/index.js:34 - useUpdateBankDetails
+src/features/bank-details/index.js:52 - useVerifyBankAccount
+src/features/bank-details/index.js:71 - usePreValidateBankAccount
+src/features/bank-details/index.js:13 - bankDetailsKeys
+src/features/bank-details/index.js:8 - bankAccountSchema
+src/features/bank-details/index.js:23 - bankDetailsSchema
+src/features/ca-marketplace/index.js:6 - caMarketplaceService
+src/features/ca-marketplace/index.js:6 - marketplaceService
+src/features/ca-marketplace/index.js:24 - useCAFirms
+src/features/ca-marketplace/index.js:36 - useCAFirmDetails
+src/features/ca-marketplace/index.js:48 - useCAFirmReviews
+src/features/ca-marketplace/index.js:60 - useAvailableSlots
+src/features/ca-marketplace/index.js:72 - useSendInquiry
+src/features/ca-marketplace/index.js:92 - useBookConsultation
+src/features/ca-marketplace/index.js:13 - caMarketplaceKeys
+src/features/computation/index.js:7 - ComputationSheet
+src/features/computation/index.js:13 - computationService
+src/features/computation/index.js:26 - useTaxComputation
+src/features/computation/index.js:46 - useRegimeComparison
+src/features/computation/index.js:58 - useTaxBreakdown
+src/features/computation/index.js:70 - useInterestCalculation
+src/features/computation/index.js:15 - computationKeys
+src/features/deductions/index.js:26 - DeductionUtilizationDashboard
+src/features/deductions/index.js:29 - AIDeductionSuggestions
+src/features/deductions/index.js:32 - DocumentUploader
+src/features/deductions/index.js:36 - useAISuggestions
+src/features/deductions/index.js:39 - deductionService
+src/features/deductions/index.js:40 - deductionLimitsService
+src/features/deductions/index.js:43 - DEDUCTION_LIMITS
+src/features/deductions/index.js:43 - AGE_THRESHOLDS
+src/features/deductions/index.js:43 - INCOME_THRESHOLDS
+src/features/deductions/index.js:43 - VALIDATION_RULES
+src/features/deductions/index.js:30 - useDeductions
+src/features/deductions/index.js:42 - useCreateDeduction
+src/features/deductions/index.js:61 - useUpdateDeduction
+src/features/deductions/index.js:81 - useDeleteDeduction
+src/features/deductions/index.js:101 - useUploadProof
+src/features/deductions/index.js:120 - useDeductionLimits
+src/features/deductions/index.js:13 - deductionKeys
+src/features/deductions/index.js:11 - validatePAN
+src/features/deductions/index.js:23 - validateAmount
+src/features/deductions/index.js:37 - validateSection80G
+src/features/deductions/index.js:70 - validateSection80GG
+src/features/deductions/index.js:108 - validateSection80GGA
+src/features/deductions/index.js:138 - validateSection80GGC
+src/features/deductions/index.js:169 - validateSection80TTA
+src/features/deductions/index.js:200 - validateSection80U
+src/features/refund/index.js:7 - RefundStatus
+src/features/refund/index.js:8 - RefundTimeline
+src/features/refund/index.js:14 - refundService
+src/features/refund/index.js:23 - useRefund
+src/features/refund/index.js:36 - useRefundHistory
+src/features/refund/index.js:48 - useUpdateRefundAccount
+src/features/refund/index.js:66 - useRequestRefundReissue
+src/features/refund/index.js:13 - refundKeys
+src/features/submission/index.js:7 - EVerifyOptions
+src/features/submission/index.js:8 - ValidationRunner
+src/features/submission/index.js:9 - CompletionStatus
+src/features/submission/index.js:10 - ReviewSummary
+src/features/submission/index.js:11 - SubmissionSuccess
+src/features/submission/index.js:12 - FilingConfirmationPanel
+src/features/submission/index.js:20 - submissionService
+src/features/submission/index.js:21 - useEVerification
+src/features/submission/index.js:13 - eVerificationKeys
+src/features/submission/index.js:13 - usePreSubmissionValidation
+src/features/submission/index.js:14 - useSubmitITR
+src/features/tools/index.js:2 - CapitalGainsTaxCalculator
+src/features/tools/index.js:3 - AdvanceTaxCalculator
+src/features/tools/index.js:4 - TDSCalculator
+src/features/tools/index.js:2 - AISReader
+src/features/tools/index.js:3 - Form26ASReader
+src/features/tools/index.js:239 - aisIntegrationService
+src/features/tools/index.js:6 - investmentPlanningService
+src/features/tools/index.js:10 - useInvestmentRecommendations
+src/features/tools/index.js:11 - useNPSCalculator
+src/features/tools/index.js:16 - Section80CPlanner
+src/features/tools/index.js:17 - NPSCalculator
+src/features/tools/index.js:18 - HealthInsurancePlanner
+src/features/tools/index.js:19 - TaxSavingSuggestions
+src/features/tools/index.js:6 - deadlinesService
+src/features/tools/index.js:10 - useDeadlines
+src/features/tools/index.js:11 - useCreateReminder
+src/features/tools/index.js:12 - useUpdateReminder
+src/features/tools/index.js:13 - useDeleteReminder
+src/features/tools/index.js:19 - DeadlineCard
+src/features/tools/index.js:20 - ReminderSettings
+src/features/tools/index.js:6 - knowledgeBaseService
+src/features/tools/index.js:10 - useSearchKnowledgeBase
+src/features/tools/index.js:11 - useTopic
+src/features/tools/index.js:12 - useSectionExplanation
+src/features/tools/index.js:17 - SearchBar
+src/features/tools/index.js:18 - TopicGuide
+src/features/tools/index.js:19 - SectionExplainer
+src/features/tools/index.js:20 - ITRFormGuide
+src/features/tools/index.js:21 - TaxTips
+src/pages/Admin/AdminAddUser.js:594 - default
+src/pages/Admin/AdminPlatformOverview.js:244 - default
+src/pages/Admin/AdminUserGroups.js:387 - default
+src/pages/Admin/AdminUserTemplates.js:436 - default
+src/pages/Admin/AdminVerificationQueue.js:340 - default
+src/pages/Admin/CAFirmClientPortfolio.js:746 - default
+src/pages/Admin/CAFirmStaffManagement.js:733 - default
+src/pages/Admin/PlatformCAFirms.js:798 - default
+src/pages/Admin/PlatformSystemHealth.js:640 - default
+src/pages/Admin/PlatformUserManagement.js:658 - default
+src/pages/Admin/PricingControl.js:514 - default
+src/pages/Admin/UserManagement.js:511 - default
+src/pages/CABot/CABotPage.js:482 - default
+src/pages/Documents/DocumentUpload.js:299 - default
+src/pages/Filing/Deductions.js:335 - default
+src/pages/Filing/HousePropertiesDetails.js:433 - default
+src/pages/Filing/IncomeSources.js:367 - default
+src/pages/Filing/ReviewSubmit.js:457 - default
+src/pages/Filing/SalaryIncomePage.js:334 - default
+src/pages/Filing/TaxCalculation.js:502 - default
+src/pages/Income/BusinessIncomePage.js:471 - default
+src/pages/Income/IncomePage.js:310 - default
+src/pages/Income/InvestmentIncomePage.js:402 - default
+src/pages/Income/RentalIncomePage.js:455 - default
+src/pages/Income/SalaryIncomePage.js:379 - default
+src/pages/Invite/AcceptInvite.js:294 - default
+src/pages/ITR/sectionFlow.js:144 - shouldShowSection
+src/pages/ITR/sectionFlow.js:232 - orderSections
+src/pages/ITR/sectionFlow.js:242 - getMissingRequired (used in module)
+src/pages/ITR/sectionFlow.js:282 - canProceedFromSection
+src/pages/ITR/sectionFlow.js:286 - getNextSectionId
+src/pages/ITR/sectionFlow.js:293 - getPrevSectionId
+src/pages/Members/MemberManagement.js:484 - default
+src/pages/Profile/ProfilePage.js:421 - default
+src/pages/Service/BillingInvoicing.js:710 - default
+src/pages/Service/ClientManagement.js:590 - default
+src/pages/Upgrade/UpgradeToProfessional.js:333 - default
+src/pages/User/Documents.js:578 - default
+src/pages/User/FamilyManagement.js:594 - default
+src/pages/User/Members.js:441 - default
+src/pages/User/Notifications.js:389 - default
+src/pages/User/Services.js:472 - default
+src/pages/User/UserProfile.js:473 - default
+src/services/api/analyticsService.js:8 - analyticsService (used in module)
+src/services/api/analyticsService.js:70 - default
+src/services/api/itrDeterminationService.js:34 - default
+src/_deprecated/pages_pre_s28/Admin/AdminActivityLogs.js:136 - default
+src/_deprecated/pages_pre_s28/Admin/AdminAddUser.js:599 - default
+src/_deprecated/pages_pre_s28/Admin/AdminAnalytics.js:1031 - default
+src/_deprecated/pages_pre_s28/Admin/AdminAuditLogs.js:132 - default
+src/_deprecated/pages_pre_s28/Admin/AdminCAFirms.js:652 - default
+src/_deprecated/pages_pre_s28/Admin/AdminCAPayouts.js:402 - default
+src/_deprecated/pages_pre_s28/Admin/AdminCAPerformance.js:320 - default
+src/_deprecated/pages_pre_s28/Admin/AdminCAVerificationQueue.js:353 - default
+src/_deprecated/pages_pre_s28/Admin/AdminControlPanel.js:457 - default
+src/_deprecated/pages_pre_s28/Admin/AdminCouponManagement.js:697 - default
+src/_deprecated/pages_pre_s28/Admin/AdminDashboard.js:591 - default
+src/_deprecated/pages_pre_s28/Admin/AdminDocuments.jsx:413 - default
+src/_deprecated/pages_pre_s28/Admin/AdminFilingDetails.jsx:543 - default
+src/_deprecated/pages_pre_s28/Admin/AdminFilings.js:595 - default
+src/_deprecated/pages_pre_s28/Admin/AdminKnowledgeBase.js:258 - default
+src/_deprecated/pages_pre_s28/Admin/AdminLogin.js:287 - default
+src/_deprecated/pages_pre_s28/Admin/AdminPlatformOverview.js:239 - default
+src/_deprecated/pages_pre_s28/Admin/AdminPricingPlans.js:572 - default
+src/_deprecated/pages_pre_s28/Admin/AdminRefundManagement.js:489 - default
+src/_deprecated/pages_pre_s28/Admin/AdminReports.js:442 - default
+src/_deprecated/pages_pre_s28/Admin/AdminSecurityLogs.js:170 - default
+src/_deprecated/pages_pre_s28/Admin/AdminSettings.js:93 - default
+src/_deprecated/pages_pre_s28/Admin/AdminSystemHealth.js:525 - default
+src/_deprecated/pages_pre_s28/Admin/AdminTicketQueue.js:611 - default
+src/_deprecated/pages_pre_s28/Admin/AdminTransactionManagement.js:997 - default
+src/_deprecated/pages_pre_s28/Admin/AdminUserDetails.js:1059 - default
+src/_deprecated/pages_pre_s28/Admin/AdminUserGroups.js:382 - default
+src/_deprecated/pages_pre_s28/Admin/AdminUserManagement.js:578 - default
+src/_deprecated/pages_pre_s28/Admin/AdminUserSegments.js:593 - default
+src/_deprecated/pages_pre_s28/Admin/AdminUserTemplates.js:433 - default
+src/_deprecated/pages_pre_s28/Admin/AdminVerificationQueue.js:340 - default
+src/_deprecated/pages_pre_s28/Admin/CAFirmClientPortfolio.js:747 - default
+src/_deprecated/pages_pre_s28/Admin/CAFirmStaffManagement.js:734 - default
+src/_deprecated/pages_pre_s28/Admin/InvoiceManagement.js:601 - default
+src/_deprecated/pages_pre_s28/Admin/PlatformCAFirms.js:797 - default
+src/_deprecated/pages_pre_s28/Admin/PlatformCompliance.js:582 - default
+src/_deprecated/pages_pre_s28/Admin/PlatformSystemHealth.js:644 - default
+src/_deprecated/pages_pre_s28/Admin/PlatformUserManagement.js:657 - default
+src/_deprecated/pages_pre_s28/Admin/PricingControl.js:509 - default
+src/_deprecated/pages_pre_s28/Admin/UserManagement.js:508 - default
+src/_deprecated/pages_pre_s28/Auth/EmailVerification.js:280 - default
+src/_deprecated/pages_pre_s28/Auth/ForgotPassword.js:247 - default
+src/_deprecated/pages_pre_s28/Auth/GoogleOAuthError.js:36 - default
+src/_deprecated/pages_pre_s28/Auth/GoogleOAuthLinkRequired.js:37 - default
+src/_deprecated/pages_pre_s28/Auth/GoogleOAuthSuccess.js:53 - default
+src/_deprecated/pages_pre_s28/Auth/LoginPage.js:293 - default
+src/_deprecated/pages_pre_s28/Auth/MobileOTPSignup.js:389 - default
+src/_deprecated/pages_pre_s28/Auth/MobileVerification.js:274 - default
+src/_deprecated/pages_pre_s28/Auth/ResetPassword.js:355 - default
+src/_deprecated/pages_pre_s28/Auth/SignupPage.js:398 - default
+src/_deprecated/pages_pre_s28/CA/CAAnalytics.js:487 - default
+src/_deprecated/pages_pre_s28/CA/CAClientManagement.js:466 - default
+src/_deprecated/pages_pre_s28/CA/CAFilingReview.js:142 - default
+src/_deprecated/pages_pre_s28/CA/CAInbox.js:64 - default
+src/_deprecated/pages_pre_s28/CA/CAProfile.js:325 - default
+src/_deprecated/pages_pre_s28/CA/Checkout.js:621 - default
+src/_deprecated/pages_pre_s28/CA/Marketplace.js:362 - default
+src/_deprecated/pages_pre_s28/CA/RegisterCAFirm.js:944 - default
+src/_deprecated/pages_pre_s28/CA/RegistrationSuccess.js:267 - default
+src/_deprecated/pages_pre_s28/CA/SubscriptionPlans.js:392 - default
+src/_deprecated/pages_pre_s28/CABot/CABotPage.js:483 - default
+src/_deprecated/pages_pre_s28/Dashboard/CAFirmAdminDashboard.js:410 - default
+src/_deprecated/pages_pre_s28/Dashboard/CAStaffDashboard.js:847 - default
+src/_deprecated/pages_pre_s28/Dashboard/UserDashboard.js:177 - default
+src/_deprecated/pages_pre_s28/Documents/DocumentUpload.js:304 - default
+src/_deprecated/pages_pre_s28/Documents/DocumentUploadPage.js:328 - default
+src/_deprecated/pages_pre_s28/Filing/AddCapitalGain.js:491 - default
+src/_deprecated/pages_pre_s28/Filing/AddHouseProperty.js:342 - default
+src/_deprecated/pages_pre_s28/Filing/AddPresumptiveIncome.js:271 - default
+src/_deprecated/pages_pre_s28/Filing/CapitalGainsStory.js:383 - default
+src/_deprecated/pages_pre_s28/Filing/DeductionsOverview.js:216 - default
+src/_deprecated/pages_pre_s28/Filing/DividendIncomeDetails.js:298 - default
+src/_deprecated/pages_pre_s28/Filing/EVerificationSetup.js:126 - default
+src/_deprecated/pages_pre_s28/Filing/FamilyPensionDetails.js:168 - default
+src/_deprecated/pages_pre_s28/Filing/FilingOverview.js:495 - default
+src/_deprecated/pages_pre_s28/Filing/FilingReadiness.js:202 - default
+src/_deprecated/pages_pre_s28/Filing/FinalSubmission.js:98 - default
+src/_deprecated/pages_pre_s28/Filing/ForeignIncomeDetails.js:454 - default
+src/_deprecated/pages_pre_s28/Filing/GoodsCarriageDetails.js:398 - default
+src/_deprecated/pages_pre_s28/Filing/HousePropertiesDetails.js:441 - default
+src/_deprecated/pages_pre_s28/Filing/HousePropertyStory.js:228 - default
+src/_deprecated/pages_pre_s28/Filing/IncomeStory.js:233 - default
+src/_deprecated/pages_pre_s28/Filing/InterestIncomeDetails.js:316 - default
+src/_deprecated/pages_pre_s28/Filing/ITR3AssetsLiabilities.js:252 - default
+src/_deprecated/pages_pre_s28/Filing/ITR3AuditInformation.js:270 - default
+src/_deprecated/pages_pre_s28/Filing/ITR3BalanceSheet.js:302 - default
+src/_deprecated/pages_pre_s28/Filing/ITR3BookReconciliation.js:325 - default
+src/_deprecated/pages_pre_s28/Filing/ITR3BusinessProfile.js:275 - default
+src/_deprecated/pages_pre_s28/Filing/ITR3DepreciationSchedule.js:416 - default
+src/_deprecated/pages_pre_s28/Filing/ITR3ProfitLoss.js:283 - default
+src/_deprecated/pages_pre_s28/Filing/ITRPreview.js:158 - default
+src/_deprecated/pages_pre_s28/Filing/OtherDeductionsDetails.js:193 - default
+src/_deprecated/pages_pre_s28/Filing/OtherIncomeDetails.js:235 - default
+src/_deprecated/pages_pre_s28/Filing/OtherIncomeSourcesDetails.js:210 - default
+src/_deprecated/pages_pre_s28/Filing/PresumptiveIncomeStory.js:257 - default
+src/_deprecated/pages_pre_s28/Filing/PropertySaleDetails.js:309 - default
+src/_deprecated/pages_pre_s28/Filing/RegimeComparison.js:200 - default
+src/_deprecated/pages_pre_s28/Filing/SalaryDetails.js:479 - default
+src/_deprecated/pages_pre_s28/Filing/Section80CDetails.js:251 - default
+src/_deprecated/pages_pre_s28/Filing/Section80DDetails.js:347 - default
+src/_deprecated/pages_pre_s28/Filing/Section80GDetails.js:267 - default
+src/_deprecated/pages_pre_s28/Filing/SubmissionStatus.js:261 - default
+src/_deprecated/pages_pre_s28/Filing/TaxBreakdown.js:223 - default
+src/_deprecated/pages_pre_s28/Filing/TaxPaymentGate.js:297 - default
+src/_deprecated/pages_pre_s28/FinancialProfile/FinancialProfilePage.js:536 - default
+src/_deprecated/pages_pre_s28/Firm/CAReviewQueue.js:243 - default
+src/_deprecated/pages_pre_s28/Firm/ClientList.js:205 - default
+src/_deprecated/pages_pre_s28/Firm/ClientOnboardingForm.js:355 - default
+src/_deprecated/pages_pre_s28/Firm/FirmDashboard.js:249 - default
+src/_deprecated/pages_pre_s28/Help/ArticleView.js:224 - default
+src/_deprecated/pages_pre_s28/Help/ContactSupport.js:399 - default
+src/_deprecated/pages_pre_s28/Help/FAQs.js:277 - default
+src/_deprecated/pages_pre_s28/Help/FeatureRequest.js:197 - default
+src/_deprecated/pages_pre_s28/Help/HelpCenter.js:189 - default
+src/_deprecated/pages_pre_s28/Help/ReportBug.js:278 - default
+src/_deprecated/pages_pre_s28/Help/TaxGlossary.js:304 - default
+src/_deprecated/pages_pre_s28/Invite/AcceptInvite.js:294 - default
+src/_deprecated/pages_pre_s28/ITR/AssessmentNotices.js:406 - default
+src/_deprecated/pages_pre_s28/ITR/EVerification.js:683 - default
+src/_deprecated/pages_pre_s28/ITR/FilingAnalytics.js:284 - default
+src/_deprecated/pages_pre_s28/ITR/FilingHistory.js:225 - default
+src/_deprecated/pages_pre_s28/ITR/IncomeSourcesSelection.js:476 - default
+src/_deprecated/pages_pre_s28/ITR/ITR3EntryCeremony.js:154 - default
+src/_deprecated/pages_pre_s28/ITR/ITRDetermination.js:223 - default
+src/_deprecated/pages_pre_s28/ITR/ITRVTracking.js:318 - default
+src/_deprecated/pages_pre_s28/ITR/PANVerification.js:387 - default
+src/_deprecated/pages_pre_s28/ITR/RefundTracking.js:223 - default
+src/_deprecated/pages_pre_s28/ITR/sectionFlow.js:144 - shouldShowSection
+src/_deprecated/pages_pre_s28/ITR/sectionFlow.js:232 - orderSections
+src/_deprecated/pages_pre_s28/ITR/sectionFlow.js:242 - getMissingRequired (used in module)
+src/_deprecated/pages_pre_s28/ITR/sectionFlow.js:282 - canProceedFromSection
+src/_deprecated/pages_pre_s28/ITR/sectionFlow.js:286 - getNextSectionId
+src/_deprecated/pages_pre_s28/ITR/sectionFlow.js:293 - getPrevSectionId
+src/_deprecated/pages_pre_s28/ITR/StartFilingGate.js:75 - default
+src/_deprecated/pages_pre_s28/ITR/TaxDemands.js:503 - default
+src/_deprecated/pages_pre_s28/Landing/LandingPage.js:589 - default
+src/_deprecated/pages_pre_s28/Legal/PrivacyPage.js:135 - default
+src/_deprecated/pages_pre_s28/Legal/TermsPage.js:109 - default
+src/_deprecated/pages_pre_s28/Members/AddMembers.js:564 - default
+src/_deprecated/pages_pre_s28/Members/MemberManagement.js:486 - default
+src/_deprecated/pages_pre_s28/Notifications/NotificationsCenter.js:216 - default
+src/_deprecated/pages_pre_s28/Service/BillingInvoicing.js:717 - default
+src/_deprecated/pages_pre_s28/Service/ClientManagement.js:594 - default
+src/_deprecated/pages_pre_s28/Service/ServiceTicketManagement.js:537 - default
+src/_deprecated/pages_pre_s28/Settings/Preferences.js:79 - default
+src/_deprecated/pages_pre_s28/Tools/ToolsPage.js:94 - default
+src/_deprecated/pages_pre_s28/Upgrade/UpgradeToProfessional.js:339 - default
+src/_deprecated/pages_pre_s28/User/Documents.js:577 - default
+src/_deprecated/pages_pre_s28/User/FamilyManagement.js:598 - default
+src/_deprecated/pages_pre_s28/User/Members.js:439 - default
+src/_deprecated/pages_pre_s28/User/Notifications.js:389 - default
+src/_deprecated/pages_pre_s28/User/ProfileSettings.js:2796 - default
+src/_deprecated/pages_pre_s28/User/Services.js:469 - default
+src/_deprecated/pages_pre_s28/User/SessionManagement.js:289 - default
+src/_deprecated/pages_pre_s28/User/UserProfile.js:428 - default
+src/_deprecated/pages_pre_s28/User/UserSettings.js:318 - default
+src/components/CA/CANotes/index.js:1 - default
+src/components/CA/ClientCommunication/index.js:1 - default
+src/components/CA/DocumentChecklist/index.js:1 - default
+src/components/ITR/config/ITR1Config.js:7 - ITR1_CONFIG (used in module)
+src/components/ITR/config/ITR2Config.js:7 - ITR2_CONFIG (used in module)
+src/components/ITR/config/ITR3Config.js:7 - ITR3_CONFIG (used in module)
+src/components/ITR/config/ITR4Config.js:7 - ITR4_CONFIG (used in module)
+src/components/ITR/config/ITRConfigRegistry.js:23 - getITRConfig (used in module)
+src/components/ITR/config/ITRConfigRegistry.js:35 - getAvailableITRTypes
+src/components/ITR/config/ITRConfigRegistry.js:45 - getSectionConfig (used in module)
+src/components/ITR/config/ITRConfigRegistry.js:57 - getFieldConfig
+src/components/ITR/config/ITRConfigRegistry.js:69 - getSections
+src/components/ITR/config/ITRConfigRegistry.js:80 - shouldDisplayField
+src/components/ITR/config/ITRConfigRegistry.js:103 - getRequiredFields
+src/components/ITR/config/ITRConfigRegistry.js:118 - default
+src/components/ITR/core/ITRValidationEngine.js:1047 - itrValidationEngine
+src/components/ITR/DataProvenance/index.js:1 - default
+src/components/ITR/DiscrepancyPanel/index.js:1 - default
+src/components/ITR/intelligence/CARequestCard.jsx:74 - default
+src/components/ITR/intelligence/SmartInsightsPanel.jsx:107 - default
+src/components/ITR/sections/BankDetailsSection.jsx:60 - default
+src/components/ITR/sections/BusinessSection.jsx:142 - default
+src/components/ITR/sections/CapitalGainsSection.jsx:44 - default
+src/components/ITR/sections/DeductionsSection.jsx:184 - default
+src/components/ITR/sections/ExemptIncomeSection.jsx:55 - default
+src/components/ITR/sections/ForeignAssetsSection.jsx:33 - default
+src/components/ITR/sections/IncomeSection.jsx:403 - default
+src/components/ITR/sections/PersonalInfoSection.jsx:112 - default
+src/components/ITR/sections/ReviewSection.jsx:77 - default
+src/components/ITR/sections/TaxOutcomeSection.jsx:23 - default
+src/components/ITR/VerificationBadge/index.js:1 - default
+src/components/UI/AISuggestionCard/index.js:1 - default
+src/components/UI/AISuggestionCard/index.js:1 - AISuggestionCard
+src/components/UI/AnimatedNumber/AnimatedNumber.js:171 - SpringNumber
+src/components/UI/AnimatedNumber/AnimatedNumber.js:212 - TrendNumber
+src/components/UI/AnimatedNumber/AnimatedNumber.js:252 - CompareNumber
+src/components/UI/AuditTrail/index.js:1 - default
+src/components/UI/AuditTrail/index.js:1 - AuditTrail
+src/components/UI/AutoFillIndicator/index.js:2 - default
+src/components/UI/AutoFillIndicator/index.js:3 - FieldAutoFillIndicator
+src/components/UI/AutoFillIndicator/index.js:4 - SectionAutoFillBanner
+src/components/UI/AutoFillIndicator/index.js:5 - MixedSourcesDisplay
+src/components/UI/BottomSheet/index.js:1 - default
+src/components/UI/BreakdownList/index.js:1 - default
+src/components/UI/Checkbox/index.js:1 - default
+src/components/UI/ComparisonTable/index.js:1 - default
+src/components/UI/ConfirmationDialog/index.js:2 - default
+src/components/UI/ConfirmationDialog/index.js:4 - DeleteConfirmationDialog
+src/components/UI/ContextualHelpPanel/index.js:1 - default
+src/components/UI/ContextualHelpPanel/index.js:1 - ContextualHelpPanel
+src/components/UI/ContextualHelpPanel/index.js:1 - HelpLink
+src/components/UI/CurrencyInput/index.js:1 - default
+src/components/UI/Dialog/index.js:1 - ConfirmDialog
+src/components/UI/Disclaimer/index.js:1 - default
+src/components/UI/Disclaimer/index.js:1 - Disclaimer
+src/components/UI/DocumentVerification/index.js:1 - default
+src/components/UI/DocumentVerification/index.js:1 - DocumentVerification
+src/components/UI/DropdownMenu/index.js:1 - default
+src/components/UI/EditConfirmationDialog/index.js:1 - default
+src/components/UI/EditConfirmationDialog/index.js:1 - EditConfirmationDialog
+src/components/UI/FieldVerification/index.js:1 - default
+src/components/UI/FieldVerification/index.js:1 - FieldVerification
+src/components/UI/FieldVerification/index.js:1 - FieldVerificationBadge
+src/components/UI/FileUpload/index.js:1 - default
+src/components/UI/FirstTimeTooltip/index.js:1 - default
+src/components/UI/FirstTimeTooltip/index.js:1 - FirstTimeTooltip
+src/components/UI/FirstTimeTooltip/index.js:1 - useFirstTimeTour
+src/components/UI/HelpIcon/index.js:1 - default
+src/components/UI/HelpIcon/index.js:1 - HelpIcon
+src/components/UI/HelpIcon/index.js:1 - FieldLabelWithHelp
+src/components/UI/InlineValidation/index.js:2 - default
+src/components/UI/InlineValidation/index.js:3 - InlineValidation
+src/components/UI/InlineValidation/index.js:4 - ValidationSummary
+src/components/UI/SectionVerification/index.js:1 - default
+src/components/UI/SectionVerification/index.js:1 - SectionVerification
+src/components/UI/Select/index.js:1 - default
+src/components/UI/Skeletons/ActivityFeedSkeleton.js:25 - default
+src/components/UI/Skeletons/FilingCardSkeleton.js:25 - default
+src/components/UI/Skeletons/index.js:5 - ITRComputationSkeleton
+src/components/UI/Skeletons/index.js:6 - ProfileSkeleton
+src/components/UI/Skeletons/index.js:7 - DashboardSkeleton
+src/components/UI/Skeletons/index.js:8 - DataSourceSkeleton
+src/components/UI/Skeletons/index.js:9 - SelectPersonSkeleton
+src/components/UI/SmartDefaults/index.js:2 - default
+src/components/UI/SmartDefaults/index.js:3 - SmartDefaultSuggestion
+src/components/UI/SmartDefaults/index.js:4 - CorrectionSuggestion
+src/components/UI/SmartDefaults/index.js:5 - SmartDefaultHint
+src/components/UI/SourceChip/index.js:1 - default
+src/components/UI/TaxTermGlossary/index.js:1 - default
+src/components/UI/TaxTermGlossary/index.js:1 - TaxTerm
+src/components/UI/TaxTermGlossary/index.js:1 - TaxTermGlossary
+src/components/UI/TaxTermGlossary/index.js:1 - useTaxTerm
+src/components/UI/Toast/index.js:1 - default
+src/components/UI/Toast/index.js:1 - ToastContainer
+src/components/UI/Tooltip/index.js:1 - default
+src/components/UI/VerificationState/index.js:1 - default
+src/features/admin/analytics/index.js:1 - adminAnalyticsService
+src/features/admin/analytics/index.js:10 - useAdminDashboardStats
+src/features/admin/analytics/index.js:23 - useAdminChartData
+src/features/admin/analytics/index.js:32 - useAdminSystemAlerts
+src/features/admin/analytics/index.js:41 - useAdminRecentActivity
+src/features/admin/analytics/index.js:50 - useAdminUserAnalytics
+src/features/admin/analytics/index.js:58 - useAdminRevenueAnalytics
+src/features/admin/analytics/index.js:66 - useAdminAnalytics
+src/features/admin/analytics/index.js:93 - useAdminCAAnalytics
+src/features/admin/documents/index.js:1 - adminDocumentsService
+src/features/admin/documents/index.js:10 - useAdminDocuments
+src/features/admin/documents/index.js:18 - useAdminDocumentDetails
+src/features/admin/documents/index.js:27 - useAdminDocumentExtractedData
+src/features/admin/documents/index.js:35 - useAdminDocumentTemplates
+src/features/admin/documents/index.js:43 - useAdminStorageStats
+src/features/admin/documents/index.js:51 - useDeleteAdminDocument
+src/features/admin/documents/index.js:65 - useReprocessAdminDocument
+src/features/admin/documents/index.js:80 - useUpdateAdminDocumentExtractedData
+src/features/admin/documents/index.js:95 - useCreateAdminDocumentTemplate
+src/features/admin/documents/index.js:109 - useUpdateAdminDocumentTemplate
+src/features/admin/filings/index.js:1 - adminFilingsService
+src/features/admin/filings/index.js:10 - useAdminFilings
+src/features/admin/filings/index.js:18 - useAdminFilingDetails
+src/features/admin/filings/index.js:27 - useAdminFilingAuditLog
+src/features/admin/filings/index.js:35 - useAdminFilingDocuments
+src/features/admin/filings/index.js:43 - useAdminFilingIssues
+src/features/admin/filings/index.js:50 - useAdminFilingStats
+src/features/admin/filings/index.js:58 - useAdminFilingAnalytics
+src/features/admin/filings/index.js:66 - useUpdateAdminFiling
+src/features/admin/filings/index.js:81 - useReprocessAdminFiling
+src/features/admin/filings/index.js:96 - useCancelAdminFiling
+src/features/admin/filings/index.js:111 - useOverrideAdminFilingValidation
+src/features/admin/filings/index.js:125 - useFlagAdminFilingForReview
+src/features/admin/filings/index.js:139 - useAddAdminFilingNotes
+src/features/admin/filings/index.js:153 - useExportAdminFilings
+src/features/admin/users/index.js:5 - adminUsersService
+src/features/admin/users/index.js:7 - useAdminUsers
+src/features/admin/users/index.js:8 - useAdminUserDetails
+src/features/admin/users/index.js:9 - useAdminUserActivity
+src/features/admin/users/index.js:10 - useAdminUserFilings
+src/features/admin/users/index.js:11 - useAdminUserTransactions
+src/features/admin/users/index.js:12 - useUpdateAdminUser
+src/features/admin/users/index.js:13 - useUpdateAdminUserStatus
+src/features/admin/users/index.js:14 - useActivateAdminUser
+src/features/admin/users/index.js:15 - useDeactivateAdminUser
+src/features/admin/users/index.js:16 - useSuspendAdminUser
+src/features/admin/users/index.js:17 - useResetAdminUserPassword
+src/features/admin/users/index.js:18 - useInvalidateAdminUserSessions
+src/features/admin/users/index.js:19 - useBulkAdminUserOperations
+src/features/admin/users/index.js:20 - useExportAdminUsers
+src/features/deductions/types/deduction.types.ts:6 - DeductionBase (used in module)
+src/features/deductions/types/deduction.types.ts:16 - Section80G (used in module)
+src/features/deductions/types/deduction.types.ts:29 - Section80GG (used in module)
+src/features/deductions/types/deduction.types.ts:38 - Section80GGA (used in module)
+src/features/deductions/types/deduction.types.ts:49 - Section80GGC (used in module)
+src/features/deductions/types/deduction.types.ts:60 - Section80TTA (used in module)
+src/features/deductions/types/deduction.types.ts:68 - Section80U (used in module)
+src/features/deductions/types/deduction.types.ts:77 - Deduction
+src/features/deductions/types/deduction.types.ts:85 - DeductionLimits (used in module)
+src/features/deductions/types/deduction.types.ts:93 - DeductionUtilization
+src/features/deductions/types/deduction.types.ts:100 - AISuggestion
+src/features/help/hooks/use-help-search.js:13 - helpKeys (used in module)
+src/features/income/agricultural/index.js:6 - AgriculturalIncomeForm
+src/features/income/business/index.js:6 - businessIncomeService
+src/features/income/business/index.js:7 - balanceSheetService
+src/features/income/business/index.js:8 - auditInformationService
+src/features/income/business/index.js:12 - useBusinessIncome
+src/features/income/business/index.js:13 - useUpdateBusinessIncome
+src/features/income/business/index.js:14 - useAddBusiness
+src/features/income/business/index.js:15 - useRemoveBusiness
+src/features/income/business/index.js:16 - usePresumptiveTaxCalculation
+src/features/income/business/index.js:19 - useBalanceSheet
+src/features/income/business/index.js:20 - useUpdateBalanceSheet
+src/features/income/business/index.js:23 - useAuditInformation
+src/features/income/business/index.js:24 - useUpdateAuditInformation
+src/features/income/business/index.js:25 - useCheckAuditApplicability
+src/features/income/business/index.js:29 - BusinessIncomeForm
+src/features/income/business/index.js:30 - BusinessIncomeBreakdown
+src/features/income/business/index.js:31 - PresumptiveTaxCalculator
+src/features/income/business/index.js:32 - BalanceSheetForm
+src/features/income/business/index.js:33 - AuditInformationForm
+src/features/income/business/index.js:36 - businessIncomeSchema
+src/features/income/business/index.js:37 - balanceSheetSchema
+src/features/income/business/index.js:38 - auditInformationSchema
+src/features/income/capital-gains/index.js:10 - capitalGainsService
+src/features/income/capital-gains/index.js:11 - capitalGainsAISService
+src/features/income/capital-gains/index.js:17 - CapitalGainsBreakdown
+src/features/income/capital-gains/index.js:18 - CapitalGainsCalculator
+src/features/income/capital-gains/index.js:19 - TaxHarvestingHelper
+src/features/income/capital-gains/index.js:20 - AISCapitalGainsPopup
+src/features/income/capital-gains/index.js:23 - useCapitalGains
+src/features/income/capital-gains/index.js:35 - useUpdateCapitalGains
+src/features/income/capital-gains/index.js:53 - useCalculateCapitalGains
+src/features/income/capital-gains/index.js:62 - useTaxHarvestingSuggestions
+src/features/income/capital-gains/index.js:72 - useAddSTCGEntry
+src/features/income/capital-gains/index.js:89 - useRemoveSTCGEntry
+src/features/income/capital-gains/index.js:106 - useAddLTCGEntry
+src/features/income/capital-gains/index.js:123 - useRemoveLTCGEntry
+src/features/income/capital-gains/index.js:13 - capitalGainsKeys
+src/features/income/capital-gains/index.js:19 - useAISCapitalGains
+src/features/income/capital-gains/index.js:31 - useApplyAISCapitalGains
+src/features/income/capital-gains/index.js:51 - useCompareAISWithForm
+src/features/income/capital-gains/index.js:11 - aisCapitalGainsKeys
+src/features/income/capital-gains/index.js:8 - capitalGainsEntrySchema
+src/features/income/capital-gains/index.js:26 - capitalGainsSchema
+src/features/income/exempt-income/index.js:6 - ExemptIncomeForm
+src/features/income/house-property/index.js:2 - HousePropertyForm
+src/features/income/house-property/index.js:3 - HousePropertyBreakdown
+src/features/income/house-property/index.js:4 - PreConstructionCalculator
+src/features/income/house-property/index.js:5 - AISRentalIncomePopup
+src/features/income/house-property/index.js:22 - useHouseProperty
+src/features/income/house-property/index.js:34 - useUpdateHouseProperty
+src/features/income/house-property/index.js:52 - useAddProperty
+src/features/income/house-property/index.js:70 - usePreConstructionInterest
+src/features/income/house-property/index.js:79 - usePropertyIncomeCalculation
+src/features/income/house-property/index.js:13 - housePropertyKeys
+src/features/income/house-property/index.js:19 - useAISRentalIncome
+src/features/income/house-property/index.js:31 - useApplyAISRentalIncome
+src/features/income/house-property/index.js:50 - useCompareAISWithForm
+src/features/income/house-property/index.js:11 - aisHousePropertyKeys
+src/features/income/house-property/index.js:179 - housePropertyService
+src/features/income/house-property/index.js:177 - housePropertyAISService
+src/features/income/house-property/index.js:8 - propertySchema
+src/features/income/house-property/index.js:36 - housePropertySchema
+src/features/income/other-sources/index.js:6 - OtherSourcesForm
+src/features/income/professional/index.js:2 - ProfessionalIncomeForm
+src/features/income/professional/index.js:3 - ProfessionalIncomeBreakdown
+src/features/income/professional/index.js:22 - useProfessionalIncome
+src/features/income/professional/index.js:34 - useUpdateProfessionalIncome
+src/features/income/professional/index.js:52 - useNetIncomeCalculation
+src/features/income/professional/index.js:13 - professionalIncomeKeys
+src/features/income/professional/index.js:85 - professionalIncomeService
+src/features/income/professional/index.js:8 - professionalActivitySchema
+src/features/income/professional/index.js:25 - professionalIncomeSchema
+src/features/income/salary/index.js:6 - SalaryForm
+src/features/income/salary/index.js:7 - SalaryBreakdown
+src/features/income/salary/index.js:8 - HRACalculator
+src/features/income/salary/index.js:14 - salaryService
+src/features/income/salary/index.js:22 - useSalary
+src/features/income/salary/index.js:34 - useUpdateSalary
+src/features/income/salary/index.js:52 - useAddEmployer
+src/features/income/salary/index.js:70 - useHRACalculation
+src/features/income/salary/index.js:13 - salaryKeys
+src/features/income/salary/index.js:8 - employerSchema
+src/features/income/salary/index.js:31 - salarySchema
+src/features/notifications/hooks/use-notifications.js:13 - notificationKeys (used in module)
+src/features/notifications/services/notifications.service.js:129 - default
+src/pages/Filing/components/AgriculturalIncomeForm.jsx:167 - default
+src/pages/Filing/components/CapitalGainsForm.jsx:419 - default
+src/pages/Filing/components/DividendIncomeForm.jsx:132 - default
+src/pages/Filing/components/HousePropertyForm.jsx:318 - default
+src/pages/Filing/components/InterestIncomeForm.jsx:195 - default
+src/pages/Filing/components/OtherIncomeForm.jsx:181 - default
+src/pages/Filing/components/SalaryDetailsForm.jsx:201 - default
+src/pages/Filing/components/Section80CForm.jsx:111 - default
+src/pages/Filing/ITRForm/ITRFormContainer.js:308 - default
+src/features/admin/analytics/services/analytics.service.js:92 - default
+src/features/admin/documents/services/documents.service.js:69 - default
+src/features/admin/filings/services/filings.service.js:155 - default
+src/features/admin/users/services/users.service.js:386 - default
+src/features/income/business/hooks/use-ais-integration.js:11 - aisBusinessIncomeKeys (used in module)
+src/features/income/business/hooks/use-audit-information.js:10 - auditInformationKeys (used in module)
+src/features/income/business/hooks/use-balance-sheet.js:10 - balanceSheetKeys (used in module)
+src/features/income/business/hooks/use-business-income.js:61 - useNetProfitCalculation
+src/features/income/business/schema/audit-information.schema.js:37 - default
+src/features/income/business/schema/balance-sheet.schema.js:79 - default
+src/features/income/business/schema/business-income.schema.js:8 - pnlSchema (used in module)
+src/features/income/business/schema/business-income.schema.js:40 - businessSchema (used in module)
+src/features/income/business/schema/business-income.schema.js:62 - default (used in module)
+src/features/income/business/services/ais-integration.service.js:228 - default
+src/features/income/professional/hooks/use-ais-integration.js:11 - aisProfessionalIncomeKeys (used in module)
+src/features/income/professional/services/ais-integration.service.js:212 - default
+src/features/tools/deadlines/hooks/use-deadlines.js:10 - deadlinesKeys (used in module)
+src/features/tools/investment-planning/hooks/use-investment-planning.js:10 - investmentPlanningKeys (used in module)
+src/features/tools/knowledge-base/hooks/use-knowledge-base.js:9 - knowledgeBaseKeys (used in module)

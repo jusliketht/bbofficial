@@ -1,0 +1,7 @@
+Processed 1017 files (7.4s) (144 warnings)
+
+1) services/index.js > services/itrJsonExportService.js
+2) features/deductions/index.js > features/deductions/components/DeductionsManager.js
+3) store/authStore.js
+
+✖ Found 3 circular dependencies!

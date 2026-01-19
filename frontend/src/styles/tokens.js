@@ -130,14 +130,74 @@ export const tokens = {
     // SPACING
     // =====================================================
     spacing: {
+        '2xs': '2px',
         xs: '4px',
+        'xs-plus': '6px',   // For fine-grained spacing
         sm: '8px',
+        'sm-plus': '12px',  // Between sm and md
+        'md-minus': '14px', // Slightly less than md
         md: '16px',
         lg: '24px',
         xl: '32px',
         '2xl': '48px',
         '3xl': '64px',
         '4xl': '96px',
+    },
+
+    // =====================================================
+    // COMPONENT SIZES
+    // =====================================================
+    componentSizes: {
+        // Button heights
+        button: {
+            sm: '36px',
+            md: '44px',
+            lg: '52px',
+        },
+        // Input heights (match buttons for consistency)
+        input: {
+            sm: '36px',
+            md: '44px',
+            lg: '52px',
+        },
+        // Icon sizes
+        icon: {
+            xs: '12px',
+            sm: '16px',
+            md: '20px',
+            lg: '24px',
+            xl: '32px',
+            '2xl': '40px',
+            '3xl': '48px',
+            '4xl': '56px',
+        },
+        // Icon container (for backgrounds/circles)
+        iconContainer: {
+            sm: '32px',
+            md: '40px',
+            lg: '48px',
+            xl: '56px',
+        },
+        // Avatar sizes
+        avatar: {
+            xs: '24px',
+            sm: '32px',
+            md: '40px',
+            lg: '48px',
+            xl: '64px',
+        },
+        // Touch target minimum (accessibility)
+        touchTarget: '44px',
+    },
+
+    // =====================================================
+    // BORDER WIDTHS
+    // =====================================================
+    borderWidth: {
+        none: '0',
+        thin: '1px',
+        medium: '2px',
+        thick: '4px',
     },
 
     // =====================================================
